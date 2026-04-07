@@ -19,50 +19,59 @@
 
     <div class="mb-3">
         <h6 class="fw-bold mb-3">Itens do checklist</h6>
-        {% for resposta in checklist.respostas|sort(attribute='item.ordem') %}
-        <div class="card mb-3">
-            <div class="card-body py-3">
-                <div class="d-flex justify-content-between align-items-center mb-2">
-                    <span class="fw-semibold">{{ resposta.item.descricao }}</span>
-                    {% if resposta.item.obrigatorio %}
-                    <span class="badge bg-danger">Obrigatório</span>
-                    {% endif %}
-                </div>
-
-                {% if resposta.item.tipo == 'text' %}
-                <div class="mb-2">
-                    <textarea class="form-control" name="resposta_{{ resposta.id }}"
-                              rows="2" {% if resposta.item.obrigatorio %}required{% endif %}>{{ resposta.resposta or '' }}</textarea>
-                </div>
-                {% elif resposta.item.tipo == 'checkbox' %}
-                <div class="mb-2">
-                    <div class="form-check">
-                        <input class="form-check-input" type="checkbox" name="resposta_{{ resposta.id }}"
-                               value="1" id="resp_cb_{{ resposta.id }}"
-                               {% if resposta.resposta == '1' %}checked{% endif %}
-                               {% if resposta.item.obrigatorio %}required{% endif %}>
-                        <label class="form-check-label" for="resp_cb_{{ resposta.id }}">Conforme</label>
-                    </div>
-                </div>
-                {% elif resposta.item.tipo == 'select' %}
-                <div class="mb-2">
-                    <select class="form-select" name="resposta_{{ resposta.id }}"
-                            {% if resposta.item.obrigatorio %}required{% endif %}>
-                        <option value="">Selecione...</option>
-                        <option value="conforme" {% if resposta.resposta == 'conforme' %}selected{% endif %}>Conforme</option>
-                        <option value="nao_conforme" {% if resposta.resposta == 'nao_conforme' %}selected{% endif %}>Não conforme</option>
-                        <option value="nao_aplicavel" {% if resposta.resposta == 'nao_aplicavel' %}selected{% endif %}>Não aplicável</option>
-                    </select>
-                </div>
-                {% endif %}
-
-                <div class="mb-0">
-                    <label class="form-label small mb-1">Observação</label>
-                    <textarea class="form-control form-control-sm" name="observacao_{{ resposta.id }}" rows="1">{{ resposta.observacao or '' }}</textarea>
-                </div>
-            </div>
+        <div class="table-responsive">
+            <table class="table table-bordered table-hover table-sm align-middle mb-0">
+                <thead class="table-light">
+                    <tr>
+                        <th scope="col" class="text-center" style="width: 3rem;">#</th>
+                        <th scope="col">Item</th>
+                        <th scope="col" class="text-center" style="width: 7rem;">Obrigatório</th>
+                        <th scope="col" style="min-width: 12rem;">Resposta</th>
+                        <th scope="col" style="min-width: 10rem;">Observação</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for resposta in checklist.respostas|sort(attribute='item.ordem') %}
+                    <tr>
+                        <td class="text-center text-muted">{{ loop.index }}</td>
+                        <td class="fw-semibold">{{ resposta.item.descricao }}</td>
+                        <td class="text-center">
+                            {% if resposta.item.obrigatorio %}
+                            <span class="badge bg-danger">Sim</span>
+                            {% else %}
+                            <span class="text-muted">—</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if resposta.item.tipo == 'text' %}
+                            <textarea class="form-control form-control-sm" name="resposta_{{ resposta.id }}"
+                                      rows="2" {% if resposta.item.obrigatorio %}required{% endif %}>{{ resposta.resposta or '' }}</textarea>
+                            {% elif resposta.item.tipo == 'checkbox' %}
+                            <div class="form-check mb-0">
+                                <input class="form-check-input" type="checkbox" name="resposta_{{ resposta.id }}"
+                                       value="1" id="resp_cb_{{ resposta.id }}"
+                                       {% if resposta.resposta == '1' %}checked{% endif %}
+                                       {% if resposta.item.obrigatorio %}required{% endif %}>
+                                <label class="form-check-label" for="resp_cb_{{ resposta.id }}">Conforme</label>
+                            </div>
+                            {% elif resposta.item.tipo == 'select' %}
+                            <select class="form-select form-select-sm" name="resposta_{{ resposta.id }}"
+                                    {% if resposta.item.obrigatorio %}required{% endif %}>
+                                <option value="">Selecione...</option>
+                                <option value="conforme" {% if resposta.resposta == 'conforme' %}selected{% endif %}>Conforme</option>
+                                <option value="nao_conforme" {% if resposta.resposta == 'nao_conforme' %}selected{% endif %}>Não conforme</option>
+                                <option value="nao_aplicavel" {% if resposta.resposta == 'nao_aplicavel' %}selected{% endif %}>Não aplicável</option>
+                            </select>
+                            {% endif %}
+                        </td>
+                        <td>
+                            <textarea class="form-control form-control-sm" name="observacao_{{ resposta.id }}" rows="2" placeholder="Opcional">{{ resposta.observacao or '' }}</textarea>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
-        {% endfor %}
     </div>
 
     <div class="d-flex justify-content-end gap-2 pt-2 border-top">

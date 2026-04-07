@@ -1,4 +1,4 @@
-"""Patrimônio, fotos (Upload) e modelo de checklist padrão em dados_adicionais (JSON)."""
+"""Patrimônio, fotos (Upload), modelo de checklist, NF e vínculo a material em dados_adicionais (JSON)."""
 from __future__ import annotations
 
 import json
@@ -28,6 +28,7 @@ def _extras_vazios() -> Dict[str, Any]:
         "fotos": [],
         "checklist_modelo_id": None,
         "nota_fiscal_id": None,
+        "material_id": None,
     }
 
 
@@ -41,6 +42,15 @@ def _normaliza_checklist_modelo_id(val: Any) -> int | None:
 
 
 def _normaliza_nota_fiscal_id(val: Any) -> int | None:
+    if val is None:
+        return None
+    s = str(val).strip()
+    if not s.isdigit():
+        return None
+    return int(s)
+
+
+def _normaliza_material_id(val: Any) -> int | None:
     if val is None:
         return None
     s = str(val).strip()
@@ -74,6 +84,7 @@ def parse_extras(text: str | None) -> Dict[str, Any]:
             out.get("checklist_modelo_id")
         )
         out["nota_fiscal_id"] = _normaliza_nota_fiscal_id(out.get("nota_fiscal_id"))
+        out["material_id"] = _normaliza_material_id(out.get("material_id"))
         return out
     except (json.JSONDecodeError, TypeError):
         return _extras_vazios()
@@ -100,6 +111,11 @@ def dump_extras(data: Dict[str, Any]) -> str:
         base["nota_fiscal_id"] = nf
     else:
         base.pop("nota_fiscal_id", None)
+    mid = _normaliza_material_id(base.get("material_id"))
+    if mid is not None:
+        base["material_id"] = mid
+    else:
+        base.pop("material_id", None)
     return json.dumps(base, ensure_ascii=False)
 
 

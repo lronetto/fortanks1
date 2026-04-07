@@ -15,6 +15,15 @@ def parse_date(s):
         return None
 
 
+def parse_peso(s):
+    if s is None or not str(s).strip():
+        return 0.0
+    try:
+        return float(str(s).replace(',', '.').strip())
+    except ValueError:
+        return 0.0
+
+
 def requer_cronograma():
     if not current_user.is_authenticated:
         return redirect(url_for('auth.login'))
@@ -31,3 +40,7 @@ def _before_cronograma():
 
 
 from . import routes  # noqa: E402,F401
+from . import item_routes  # noqa: E402,F401
+from . import matriz_routes  # noqa: E402,F401
+from . import calendario_routes  # noqa: E402,F401
+from . import vinculo_calendario_routes  # noqa: E402,F401

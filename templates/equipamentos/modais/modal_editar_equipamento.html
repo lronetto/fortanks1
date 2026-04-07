@@ -22,11 +22,20 @@
                                     <div class="invalid-feedback">Informe o nome do equipamento.</div>
                                     <div class="equipamento-busca-material-dropdown list-group shadow-sm d-none" role="listbox" aria-label="Materiais sugeridos"></div>
                                 </div>
-                                <div class="form-text">Busca cadastros de material com categoria Equipamento ou Ferramenta.</div>
+                                <div class="form-text">Sugestões alinhadas ao cadastro de materiais (Equipamento/Ferramenta).</div>
                             </div>
                             <div class="col-md-6">
                                 <label for="editar_eq_patrimonio" class="form-label">Patrimônio</label>
                                 <input type="text" class="form-control" id="editar_eq_patrimonio" name="patrimonio" placeholder="Nº tombamento / patrimônio">
+                            </div>
+                        </div>
+                        <div class="row mb-3">
+                            <div class="col-12">
+                                <label for="editar_eq_material_select" class="form-label">Material vinculado</label>
+                                <select class="form-select equipamento-select-material" id="editar_eq_material_select" name="material_id" data-busca-url="{{ url_for('equipamento.busca_materiais_equipamento') }}" data-placeholder="Buscar material (Equipamento/Ferramenta)...">
+                                    <option value=""></option>
+                                </select>
+                                <div class="form-text">Opcional. Gravado em dados adicionais (<code>material_id</code>). Ao escolher no campo Nome acima, este select é preenchido.</div>
                             </div>
                         </div>
                         <div class="row mb-3">
@@ -169,6 +178,11 @@
                 .then(function (data) {
                     document.getElementById('editar_eq_id').value = data.id;
                     document.getElementById('editar_eq_nome').value = data.nome || '';
+                    var wrapNome = document.getElementById('editar_eq_nome');
+                    var wrBusca = wrapNome && wrapNome.closest('.equipamento-busca-material-wrap');
+                    if (wrBusca) {
+                        delete wrBusca.dataset.materialNomeVinculado;
+                    }
                     document.getElementById('editar_eq_patrimonio').value = data.patrimonio || '';
                     var selChk = document.getElementById('editar_eq_checklist_modelo_id');
                     if (selChk) {
@@ -179,6 +193,15 @@
                     document.getElementById('editar_eq_propriedade').value = data.propriedade || '';
                     document.getElementById('editar_eq_modelo').value = data.modelo || '';
                     document.getElementById('editar_eq_numero_serie').value = data.numero_serie || '';
+                    var $mat = window.jQuery && window.jQuery('#editar_eq_material_select');
+                    if ($mat && $mat.length) {
+                        $mat.empty().append(new Option('', '', false, false));
+                        if (data.material_id) {
+                            var ml = data.material_nome || ('Material #' + data.material_id);
+                            $mat.append(new Option(ml, String(data.material_id), true, true));
+                        }
+                        $mat.trigger('change');
+                    }
                     var $nf = window.jQuery && window.jQuery('#editar_eq_nota_fiscal_id');
                     if ($nf && $nf.length) {
                         $nf.empty().append(new Option('', '', false, false));
@@ -279,6 +302,13 @@
         modalEl.addEventListener('hidden.bs.modal', function () {
             if (fields) fields.style.display = 'none';
             if (loading) loading.style.display = 'block';
+            var $mat = window.jQuery && window.jQuery('#editar_eq_material_select');
+            if ($mat && $mat.length && $mat.data('select2')) {
+                $mat.empty().append(new Option('', '', false, false)).val(null).trigger('change');
+            }
+            var en = document.getElementById('editar_eq_nome');
+            var wr = en && en.closest('.equipamento-busca-material-wrap');
+            if (wr) delete wr.dataset.materialNomeVinculado;
             var $nf = window.jQuery && window.jQuery('#editar_eq_nota_fiscal_id');
             if ($nf && $nf.length && $nf.data('select2')) {
                 $nf.empty().append(new Option('', '', false, false)).val(null).trigger('change');

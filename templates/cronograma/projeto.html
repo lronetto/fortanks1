@@ -12,7 +12,7 @@
     </nav>
 
     <h1 class="h3 mb-2 text-gray-800"><i class="fas fa-calendar-week"></i> {{ contrato.nome }}</h1>
-    <p class="text-muted mb-4">Planejamento por tanque. Utilize feriados cadastrados para evitar datas inadequadas.</p>
+    <p class="text-muted mb-4">Defina as linhas do cronograma (índice hierárquico, peso, predecessor opcional, tanque opcional, data de início opcional). Abaixo, ajuste as datas por tanque.</p>
 
     {% with messages = get_flashed_messages(with_categories=true) %}
         {% if messages %}
@@ -27,16 +27,73 @@
 
     <div class="card shadow mb-4">
         <div class="card-header py-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <h6 class="m-0 font-weight-bold text-primary">Itens do cronograma</h6>
+            <button type="button" class="btn btn-sm btn-primary" id="btnNovoItemCron">
+                <i class="fas fa-plus"></i> Novo item
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm" id="tabelaItensCron" width="100%">
+                    <thead>
+                        <tr>
+                            <th>Índice</th>
+                            <th>Nome</th>
+                            <th>Peso</th>
+                            <th>Predecessor</th>
+                            <th>Tanque</th>
+                            <th>Início</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
+            <h6 class="m-0 font-weight-bold text-primary">Calendário por índice</h6>
+            <button type="button" class="btn btn-sm btn-primary" id="btnNovoVinculoCal">
+                <i class="fas fa-plus"></i> Novo vínculo
+            </button>
+        </div>
+        <div class="card-body">
+            <p class="text-muted small mb-3">
+                Associe um <a href="{{ url_for('cronograma.calendario') }}">calendário</a> a um índice raiz deste projeto.
+                Os itens desse índice e toda a subárvore (ex.: vínculo em <code>1</code> → afeta <code>1.1</code>, <code>1.2.1</code>…) usam dias úteis e feriados desse calendário na <a href="{{ url_for('cronograma.matriz_semanal', contrato_id=contrato.id) }}">matriz semanal</a>.
+            </p>
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm" id="tabelaVinculosCal" width="100%">
+                    <thead>
+                        <tr>
+                            <th>Índice (prefixo)</th>
+                            <th>Calendário</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex flex-wrap align-items-center justify-content-between gap-2">
             <h6 class="m-0 font-weight-bold text-primary">Tanques do projeto</h6>
             <div>
                 <button type="button" class="btn btn-sm btn-outline-primary" data-bs-toggle="modal" data-bs-target="#modalLinhaBase">
                     <i class="fas fa-camera"></i> Salvar linha de base
                 </button>
-                <a href="{{ url_for('cronograma.feriados') }}" class="btn btn-sm btn-outline-secondary">
-                    <i class="fas fa-umbrella-beach"></i> Feriados
+                <a href="{{ url_for('cronograma.calendario') }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="fas fa-calendar-day"></i> Calendário
                 </a>
                 <a href="{{ url_for('cronograma.linhas_base') }}?contrato_id={{ contrato.id }}" class="btn btn-sm btn-outline-secondary">
                     <i class="fas fa-history"></i> Linhas de base
+                </a>
+                <a href="{{ url_for('cronograma.projeto_calculo_pecas', contrato_id=contrato.id) }}" class="btn btn-sm btn-outline-info">
+                    <i class="fas fa-calculator"></i> Cálculo por peças
                 </a>
             </div>
         </div>
@@ -62,8 +119,10 @@
     </div>
 </div>
 
+{% include 'cronograma/modais/modal_item_cronograma.html' %}
 {% include 'cronograma/modais/modal_tanque_cronograma.html' %}
 {% include 'cronograma/modais/modal_linha_base.html' %}
+{% include 'cronograma/modais/modal_vinculo_calendario.html' %}
 {% endblock %}
 
 {% block scripts %}
@@ -72,7 +131,43 @@
     var contratoId = {{ contrato.id }};
     var urlDt = "{{ url_for('cronograma.api_projeto_tanques_datatables', contrato_id=contrato.id) }}";
     var urlSalvar = "{{ url_for('cronograma.projeto_tanque_salvar', contrato_id=contrato.id) }}";
+    var urlItensDt = "{{ url_for('cronograma.api_projeto_itens_datatables', contrato_id=contrato.id) }}";
+    var urlItemSalvar = "{{ url_for('cronograma.projeto_item_salvar', contrato_id=contrato.id) }}";
+    var urlTanquesOpts = "{{ url_for('cronograma.api_projeto_tanques_para_itens', contrato_id=contrato.id) }}";
+    var urlPredecessorOpts = "{{ url_for('cronograma.api_projeto_itens_para_predecessor', contrato_id=contrato.id) }}";
+    var urlItemDuplicarTpl = "{{ url_for('cronograma.projeto_item_duplicar', contrato_id=contrato.id, item_id=999999999) }}";
+    var urlItemExcluirTpl = "{{ url_for('cronograma.projeto_item_excluir', contrato_id=contrato.id, item_id=999999999) }}";
+    var urlVinculosDt = "{{ url_for('cronograma.api_projeto_vinculos_calendario_datatables', contrato_id=contrato.id) }}";
+    var urlVinculoExcTpl = "{{ url_for('cronograma.projeto_vinculo_calendario_excluir', contrato_id=contrato.id, vinculo_id=999999999) }}";
     var csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+
+    function abrirModalItemNovo() {
+        var form = document.getElementById('formItemCronograma');
+        if (form) form.reset();
+        $('#mic_item_id').val('');
+        $('#mic_indice').val('');
+        $('#mic_peso').val('0');
+        $('#mic_predecessor_id').val('');
+        $('#mic_data_inicio').val('');
+        $('#modalItemCronogramaLabel').text('Novo item do cronograma');
+        var el = document.getElementById('modalItemCronograma');
+        if (el && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            bootstrap.Modal.getOrCreateInstance(el).show();
+        }
+        preencherSelectTanques().catch(function() {});
+        preencherSelectPredecessor(null).catch(function() {});
+    }
+
+    function preencherSelectPredecessor(excetoId) {
+        var sel = $('#mic_predecessor_id');
+        sel.find('option:not(:first)').remove();
+        var url = urlPredecessorOpts + (excetoId ? ('?exceto_id=' + encodeURIComponent(excetoId)) : '');
+        return fetch(url, { credentials: 'same-origin' }).then(function(r) { return r.json(); }).then(function(list) {
+            (list || []).forEach(function(it) {
+                sel.append($('<option></option>').val(it.id).text((it.indice || '') + ' — ' + (it.nome || '')));
+            });
+        });
+    }
 
     function escAttr(s) {
         return String(s == null ? '' : s)
@@ -87,6 +182,198 @@
         if (p.length !== 3) return d;
         return p[2] + '/' + p[1] + '/' + p[0];
     }
+
+    function fmtPeso(n) {
+        if (n === null || n === undefined || n === '') return '0';
+        var x = Number(n);
+        if (isNaN(x)) return String(n);
+        return String(x).replace('.', ',');
+    }
+
+    function preencherSelectTanques() {
+        var sel = $('#mic_tanque_id');
+        sel.find('option:not(:first)').remove();
+        return fetch(urlTanquesOpts, { credentials: 'same-origin' }).then(function(r) { return r.json(); }).then(function(list) {
+            (list || []).forEach(function(t) {
+                sel.append($('<option></option>').val(t.id).text((t.un || '') + ' — ' + (t.nome || '')));
+            });
+        });
+    }
+
+    $(document).ready(function() {
+        preencherSelectTanques().catch(function() {});
+
+        $('#btnNovoItemCron').on('click', function(e) {
+            e.preventDefault();
+            abrirModalItemNovo();
+        });
+
+    var tableItens = $('#tabelaItensCron').DataTable({
+        processing: true,
+        serverSide: true,
+        searching: true,
+        ajax: { url: urlItensDt, type: 'GET' },
+        language: { url: '{{ url_for("static", filename="js/datatables-pt-BR-1.13.json") }}' },
+        order: [[0, 'asc']],
+        pageLength: 25,
+        responsive: true,
+        columns: [
+            { data: 'indice', className: 'font-monospace' },
+            { data: 'nome' },
+            { data: 'peso', render: function(d) { return fmtPeso(d); } },
+            { data: 'predecessor_label' },
+            { data: 'tanque_label' },
+            { data: 'data_inicio', render: function(d) { return fmt(d); } },
+            {
+                data: null,
+                orderable: false,
+                searchable: false,
+                className: 'text-center',
+                render: function(_d, _t, row) {
+                    return '<button type="button" class="btn btn-sm btn-primary btn-editar-item-cron me-1" ' +
+                        'data-item-id="' + row.item_id + '" data-indice="' + escAttr(String(row.indice || '')) + '" ' +
+                        'data-nome="' + escAttr(row.nome) + '" data-peso="' + escAttr(String(row.peso)) + '" ' +
+                        'data-predecessor-id="' + escAttr(String(row.predecessor_id || '')) + '" ' +
+                        'data-tanque-id="' + escAttr(String(row.tanque_id || '')) + '" ' +
+                        'data-data-inicio="' + escAttr(String(row.data_inicio || '')) + '">' +
+                        '<i class="fas fa-edit"></i></button>' +
+                        '<button type="button" class="btn btn-sm btn-outline-secondary btn-duplicar-item-cron me-1" data-item-id="' + row.item_id + '" title="Duplicar">' +
+                        '<i class="fas fa-copy"></i></button>' +
+                        '<button type="button" class="btn btn-sm btn-danger btn-excluir-item-cron" data-item-id="' + row.item_id + '">' +
+                        '<i class="fas fa-trash"></i></button>';
+                }
+            }
+        ]
+    });
+
+    var tableVinculos = $('#tabelaVinculosCal').DataTable({
+        processing: true,
+        serverSide: true,
+        searching: true,
+        ajax: { url: urlVinculosDt, type: 'GET' },
+        language: { url: '{{ url_for("static", filename="js/datatables-pt-BR-1.13.json") }}' },
+        order: [[0, 'asc']],
+        pageLength: 25,
+        responsive: true,
+        columns: [
+            { data: 'indice_prefixo', className: 'font-monospace' },
+            { data: 'calendario_nome' },
+            {
+                data: null,
+                orderable: false,
+                searchable: false,
+                className: 'text-center',
+                render: function(_d, _t, row) {
+                    return '<button type="button" class="btn btn-sm btn-primary btn-editar-vinculo-cal me-1" ' +
+                        'data-row=\'' + JSON.stringify(row).replace(/'/g, '&#39;') + '\'>' +
+                        '<i class="fas fa-edit"></i></button>' +
+                        '<button type="button" class="btn btn-sm btn-danger btn-excluir-vinculo-cal" data-id="' + row.id + '">' +
+                        '<i class="fas fa-trash"></i></button>';
+                }
+            }
+        ]
+    });
+    window.reloadVinculosCalDt = function() { tableVinculos.ajax.reload(null, false); };
+
+    $('#btnNovoVinculoCal').on('click', function() {
+        if (typeof window.abrirModalNovoVinculoCal === 'function') window.abrirModalNovoVinculoCal();
+    });
+    $(document).on('click', '.btn-editar-vinculo-cal', function() {
+        var raw = $(this).attr('data-row');
+        var row = JSON.parse(raw.replace(/&#39;/g, "'"));
+        if (typeof window.abrirModalEditarVinculoCal === 'function') window.abrirModalEditarVinculoCal(row);
+    });
+    $(document).on('click', '.btn-excluir-vinculo-cal', function() {
+        if (!confirm('Excluir este vínculo?')) return;
+        var id = $(this).data('id');
+        var fd = new FormData();
+        fd.append('csrf_token', csrf);
+        fetch(urlVinculoExcTpl.replace('999999999', String(id)), {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrf },
+            body: fd,
+            credentials: 'same-origin'
+        }).then(function(r) { return r.json(); }).then(function(j) {
+            if (j.ok) tableVinculos.ajax.reload(null, false);
+            else alert(j.error || 'Não foi possível excluir.');
+        }).catch(function() { alert('Erro ao excluir.'); });
+    });
+
+    $(document).on('click', '.btn-editar-item-cron', function() {
+        var $b = $(this);
+        var iid = $b.attr('data-item-id');
+        $('#mic_item_id').val(iid);
+        $('#mic_nome').val($b.attr('data-nome') || '');
+        $('#mic_indice').val($b.attr('data-indice') || '');
+        $('#mic_peso').val(($b.attr('data-peso') || '0').replace('.', ','));
+        $('#modalItemCronogramaLabel').text('Editar item do cronograma');
+        var elItem = document.getElementById('modalItemCronograma');
+        if (elItem && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+            bootstrap.Modal.getOrCreateInstance(elItem).show();
+        }
+        Promise.all([
+            preencherSelectTanques(),
+            preencherSelectPredecessor(iid)
+        ]).then(function() {
+            var tid = $b.attr('data-tanque-id');
+            $('#mic_tanque_id').val(tid ? tid : '');
+            var pid = $b.attr('data-predecessor-id');
+            $('#mic_predecessor_id').val(pid ? pid : '');
+            $('#mic_data_inicio').val($b.attr('data-data-inicio') || '');
+        }).catch(function() {});
+    });
+
+    $(document).on('click', '.btn-duplicar-item-cron', function() {
+        var id = $(this).data('item-id');
+        var fd = new FormData();
+        fd.append('csrf_token', csrf);
+        fetch(urlItemDuplicarTpl.replace('999999999', String(id)), {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrf },
+            body: fd,
+            credentials: 'same-origin'
+        }).then(function(r) { return r.json(); }).then(function(j) {
+            if (j.ok) tableItens.ajax.reload(null, false);
+            else alert(j.message || 'Não foi possível duplicar.');
+        }).catch(function() { alert('Erro ao duplicar.'); });
+    });
+
+    $(document).on('click', '.btn-excluir-item-cron', function() {
+        if (!confirm('Excluir este item do cronograma?')) return;
+        var id = $(this).data('item-id');
+        var fd = new FormData();
+        fd.append('csrf_token', csrf);
+        fetch(urlItemExcluirTpl.replace('999999999', String(id)), {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrf },
+            body: fd,
+            credentials: 'same-origin'
+        }).then(function(r) { return r.json(); }).then(function(j) {
+            if (j.ok) tableItens.ajax.reload(null, false);
+            else alert(j.message || 'Não foi possível excluir.');
+        }).catch(function() { alert('Erro ao excluir.'); });
+    });
+
+    $('#formItemCronograma').on('submit', function(e) {
+        e.preventDefault();
+        var fd = new FormData(this);
+        fetch(urlItemSalvar, {
+            method: 'POST',
+            headers: { 'X-CSRFToken': csrf },
+            body: fd,
+            credentials: 'same-origin'
+        }).then(function(r) { return r.json(); }).then(function(j) {
+            if (j.ok) {
+                var mElItem = document.getElementById('modalItemCronograma');
+                if (mElItem && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                    bootstrap.Modal.getOrCreateInstance(mElItem).hide();
+                }
+                tableItens.ajax.reload(null, false);
+            } else {
+                alert(j.message || 'Não foi possível salvar.');
+            }
+        }).catch(function() { alert('Erro de rede ao salvar.'); });
+    });
 
     var table = $('#tabelaTanques').DataTable({
         processing: true,
@@ -158,6 +445,8 @@
             alert('Erro de rede ao salvar.');
         });
     });
+
+    }); /* fim document.ready */
 })();
 </script>
 {% endblock %}

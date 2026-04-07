@@ -1,0 +1,33 @@
+<div class="modal fade" id="modalNovoCalFeriado" tabindex="-1" aria-labelledby="modalNovoCalFeriadoLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" id="formNovoCalFeriado" action="">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalNovoCalFeriadoLabel">Novo feriado</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-2">
+                        <div class="col-md-5">
+                            <label class="form-label">Data</label>
+                            <input type="date" class="form-control" name="data" required>
+                        </div>
+                        <div class="col-md-7">
+                            <label class="form-label">Nome</label>
+                            <input type="text" class="form-control" name="nome" required maxlength="200" placeholder="Ex.: Tiradentes">
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label">Observação</label>
+                            <textarea class="form-control" name="observacao" rows="2"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

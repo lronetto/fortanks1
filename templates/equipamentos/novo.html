@@ -30,7 +30,7 @@
                             </div>
                             <div class="equipamento-busca-material-dropdown list-group shadow-sm d-none" role="listbox" aria-label="Materiais sugeridos"></div>
                         </div>
-                        <div class="form-text">Busca cadastros de material com categoria Equipamento ou Ferramenta.</div>
+                        <div class="form-text">Sugestões alinhadas ao cadastro de materiais (Equipamento/Ferramenta).</div>
                     </div>
                     <div class="col-md-6">
                         <label for="tipo" class="form-label">Tipo *</label>
@@ -43,6 +43,16 @@
                         <div class="invalid-feedback">
                             Por favor, selecione o tipo do equipamento.
                         </div>
+                    </div>
+                </div>
+
+                <div class="row mb-3">
+                    <div class="col-12">
+                        <label for="novo_pagina_material_select" class="form-label">Material vinculado</label>
+                        <select class="form-select equipamento-select-material" id="novo_pagina_material_select" name="material_id" data-busca-url="{{ url_for('equipamento.busca_materiais_equipamento') }}" data-placeholder="Buscar material (Equipamento/Ferramenta)...">
+                            <option value=""></option>
+                        </select>
+                        <div class="form-text">Opcional. Gravado em dados adicionais (<code>material_id</code>).</div>
                     </div>
                 </div>
 
@@ -123,6 +133,7 @@
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/equipamento_busca_material_nome.js') }}"></script>
 <script src="{{ url_for('static', filename='js/equipamento_nota_fiscal_select2.js') }}"></script>
+<script src="{{ url_for('static', filename='js/equipamento_material_select2.js') }}"></script>
 <script>
     // Validação do formulário
     document.addEventListener('DOMContentLoaded', function () {

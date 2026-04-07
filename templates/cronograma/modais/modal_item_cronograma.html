@@ -1,0 +1,54 @@
+<div class="modal fade" id="modalItemCronograma" tabindex="-1" aria-labelledby="modalItemCronogramaLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="formItemCronograma">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="item_id" id="mic_item_id" value="">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalItemCronogramaLabel">Item do cronograma</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nome</label>
+                        <input type="text" class="form-control" name="nome" id="mic_nome" required maxlength="200" placeholder="Ex.: Fundação, Montagem de anéis…">
+                    </div>
+                    <div class="row g-2">
+                        <div class="col-md-4">
+                            <label class="form-label">Índice (indentação)</label>
+                            <input type="text" class="form-control font-monospace" name="indice" id="mic_indice" maxlength="50" placeholder="1 ou 1.1 ou 1.1.1" autocomplete="off">
+                            <div class="form-text">Numeração hierárquica (apenas dígitos e pontos). Novo item vazio = próximo nível 1 (ex.: 1, 2, 3…).</div>
+                        </div>
+                        <div class="col-md-8">
+                            <label class="form-label">Peso</label>
+                            <input type="text" class="form-control" name="peso" id="mic_peso" inputmode="decimal" placeholder="0" value="0">
+                            <div class="form-text">Peso para ponderação (use vírgula ou ponto).</div>
+                        </div>
+                    </div>
+                    <div class="mb-3 mt-3">
+                        <label class="form-label">Índice predecessor (opcional)</label>
+                        <select class="form-select font-monospace" name="predecessor_id" id="mic_predecessor_id">
+                            <option value="">— Nenhum —</option>
+                        </select>
+                        <div class="form-text">Outro item deste cronograma que deve anteceder este (evita dependência circular).</div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Tanque (opcional)</label>
+                        <select class="form-select" name="tanque_id" id="mic_tanque_id">
+                            <option value="">— Sem tanque —</option>
+                        </select>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">Data de início (opcional)</label>
+                        <input type="date" class="form-control" name="data_inicio" id="mic_data_inicio">
+                        <div class="form-text">Se preenchida, tem prioridade sobre a data de início prevista do tanque na matriz.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary"><i class="fas fa-save"></i> Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

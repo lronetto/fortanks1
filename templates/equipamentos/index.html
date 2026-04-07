@@ -34,6 +34,7 @@
                 <table class="table table-bordered table-hover w-100" id="equipamentosTable" cellspacing="0">
                     <thead>
                         <tr>
+                            <th class="text-center" title="Imagem do material vinculado">Img</th>
                             <th>Nome</th>
                             <th>Modelo</th>
                             <th>Patrimônio</th>
@@ -48,6 +49,7 @@
         </div>
     </div>
 
+    {% include 'materiais/modais/modal_imagem_material_ampliada.html' %}
     {% include 'equipamentos/modais/modal_novo_equipamento.html' %}
     {% include 'equipamentos/modais/modal_editar_equipamento.html' %}
     {% include 'equipamentos/modais/modal_excluir_equipamento.html' %}
@@ -65,12 +67,20 @@
 {% block extra_js %}
 <script src="{{ url_for('static', filename='js/equipamento_busca_material_nome.js') }}"></script>
 <script src="{{ url_for('static', filename='js/equipamento_nota_fiscal_select2.js') }}"></script>
+<script src="{{ url_for('static', filename='js/equipamento_material_select2.js') }}"></script>
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var urlDatatables = "{{ url_for('equipamento.equipamentos_datatables') }}";
     var tplDuplicar = "{{ url_for('equipamento.duplicar_equipamento', id=999001) }}";
     var csrf = "{{ csrf_token() }}";
     var podeGerenciar = {{ current_user.is_gerente_ou_superior | tojson }};
+    function escAttr(s) {
+        return String(s == null ? '' : s)
+            .replace(/&/g, '&amp;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&#39;')
+            .replace(/</g, '&lt;');
+    }
     function renderStatus(status) {
         var map = {
             'Ativo': '<span class="badge bg-success">Ativo</span>',
@@ -102,10 +112,29 @@ document.addEventListener('DOMContentLoaded', function () {
                     d.csrf_token = csrf;
                 }
             },
-            order: [[0, 'asc']],
+            order: [[1, 'asc']],
             pageLength: 25,
             language: { url: '{{ url_for("static", filename="js/datatables-pt-BR-1.13.json") }}' },
             columns: [
+                {
+                    data: 'material_imagem_url',
+                    orderable: false,
+                    searchable: false,
+                    className: 'text-center align-middle',
+                    render: function (data, type, row) {
+                        if (type !== 'display') {
+                            return data || '';
+                        }
+                        if (!data) {
+                            return '<span class="text-muted small">—</span>';
+                        }
+                        var nome = row.material_nome || '';
+                        return '<img src="' + escAttr(data) + '" alt="" role="button" tabindex="0" title="Clique para ampliar" ' +
+                            'class="img-thumbnail rounded materiais-thumb-img materiais-thumb-ampliar" ' +
+                            'data-full-src="' + escAttr(data) + '" data-nome-material="' + escAttr(nome) + '" ' +
+                            'style="width:48px;height:48px;object-fit:cover;cursor:zoom-in;">';
+                    }
+                },
                 { data: 'nome' },
                 { data: 'modelo', defaultContent: '' },
                 {

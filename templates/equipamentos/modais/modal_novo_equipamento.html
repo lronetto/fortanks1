@@ -16,7 +16,7 @@
                                 <div class="invalid-feedback">Por favor, informe o nome do equipamento.</div>
                                 <div class="equipamento-busca-material-dropdown list-group shadow-sm d-none" role="listbox" aria-label="Materiais sugeridos"></div>
                             </div>
-                            <div class="form-text">Busca cadastros de material com categoria Equipamento ou Ferramenta.</div>
+                            <div class="form-text">Sugestões alinhadas ao cadastro de materiais (Equipamento/Ferramenta).</div>
                         </div>
                         <div class="col-md-6">
                             <label for="novo_eq_tipo" class="form-label">Tipo *</label>
@@ -27,6 +27,15 @@
                                 <option value="Ferramentas">Ferramentas</option>
                             </select>
                             <div class="invalid-feedback">Por favor, selecione o tipo do equipamento.</div>
+                        </div>
+                    </div>
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <label for="novo_eq_material_select" class="form-label">Material vinculado</label>
+                            <select class="form-select equipamento-select-material" id="novo_eq_material_select" name="material_id" data-busca-url="{{ url_for('equipamento.busca_materiais_equipamento') }}" data-placeholder="Buscar material (Equipamento/Ferramenta)...">
+                                <option value=""></option>
+                            </select>
+                            <div class="form-text">Opcional. Gravado em dados adicionais (<code>material_id</code>). Ao escolher no campo Nome acima, este select é preenchido.</div>
                         </div>
                     </div>
                     <div class="row mb-3">
@@ -178,6 +187,13 @@
         modalEl.addEventListener('hidden.bs.modal', function () {
             form.reset();
             form.classList.remove('was-validated');
+            var $mat = window.jQuery && window.jQuery('#novo_eq_material_select');
+            if ($mat && $mat.length && $mat.data('select2')) {
+                $mat.empty().append(new Option('', '', false, false)).val(null).trigger('change');
+            }
+            var ne = document.getElementById('novo_eq_nome');
+            var wr = ne && ne.closest('.equipamento-busca-material-wrap');
+            if (wr) delete wr.dataset.materialNomeVinculado;
             var $nf = window.jQuery && window.jQuery('#novo_eq_nota_fiscal_id');
             if ($nf && $nf.length && $nf.data('select2')) {
                 $nf.val(null).trigger('change');

@@ -1,0 +1,197 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Curva S — {{ contrato.nome }}{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('cronograma.index') }}">Cronograma</a></li>
+            <li class="breadcrumb-item">
+                <a href="{{ url_for('cronograma.matriz_semanal', contrato_id=contrato.id, data_inicio=data_inicio.strftime('%Y-%m-%d'), data_fim=data_fim.strftime('%Y-%m-%d')) }}">Matriz semanal</a>
+            </li>
+            <li class="breadcrumb-item active" aria-current="page">Curva S</li>
+        </ol>
+    </nav>
+
+    <h1 class="h3 mb-2 text-gray-800"><i class="fas fa-chart-line"></i> Curva S — {{ contrato.nome }}</h1>
+    <p class="text-muted mb-3">
+        Acumulado de <strong>placas</strong> no projeto (soma dos itens da matriz). O eixo vertical em <strong>%</strong> usa como referência 100% o
+        <strong>previsto acumulado no fim do intervalo</strong> (última semana do período filtrado). O real é comparado à mesma base.
+    </p>
+
+    <div class="row mb-3">
+        <div class="col-md-4">
+            <div class="card border-left-primary shadow h-100 py-2">
+                <div class="card-body py-2">
+                    <div class="text-xs font-weight-bold text-primary text-uppercase">Previsto acum. (fim)</div>
+                    <div class="h5 mb-0">{{ '%.2f'|format(total_previsto_placas) }} placas</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="card border-left-success shadow h-100 py-2">
+                <div class="card-body py-2">
+                    <div class="text-xs font-weight-bold text-success text-uppercase">Real acum. (fim)</div>
+                    <div class="h5 mb-0">{{ '%.2f'|format(total_real_placas) }} placas</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4 d-flex align-items-end">
+            <a href="{{ url_for('cronograma.matriz_semanal', contrato_id=contrato.id, data_inicio=data_inicio.strftime('%Y-%m-%d'), data_fim=data_fim.strftime('%Y-%m-%d')) }}" class="btn btn-outline-secondary">
+                <i class="fas fa-table"></i> Voltar à matriz
+            </a>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Curva S (% acumulado)</h6>
+        </div>
+        <div class="card-body">
+            <div style="max-width: 100%; height: 420px;">
+                <canvas id="chartCurvaS"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Placas acumuladas (quantidade)</h6>
+        </div>
+        <div class="card-body">
+            <div style="max-width: 100%; height: 360px;">
+                <canvas id="chartCurvaSPlacas"></canvas>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{# Scripts no final do body (base.extra_js): no head o canvas ainda não existe e o gráfico ficava em branco. #}
+{% block extra_js %}
+<script>
+(function() {
+    var labels = {{ labels|tojson }};
+    var pctP = {{ pct_p|tojson }};
+    var pctR = {{ pct_r|tojson }};
+    var cumP = {{ cum_p|tojson }};
+    var cumR = {{ cum_r|tojson }};
+    var maxY = {{ max_y|tojson }};
+
+    if (typeof Chart === 'undefined') {
+        console.error('Chart.js não carregado.');
+        return;
+    }
+
+    var ctx = document.getElementById('chartCurvaS');
+    if (ctx) {
+        new Chart(ctx.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Previsto acumulado (% da meta no período)',
+                        data: pctP,
+                        borderColor: 'rgb(54, 162, 235)',
+                        backgroundColor: 'rgba(54, 162, 235, 0.06)',
+                        fill: false,
+                        lineTension: 0.25,
+                        pointRadius: 3
+                    },
+                    {
+                        label: 'Real acumulado (% da meta prevista)',
+                        data: pctR,
+                        borderColor: 'rgb(40, 167, 69)',
+                        backgroundColor: 'rgba(40, 167, 69, 0.06)',
+                        fill: false,
+                        lineTension: 0.25,
+                        pointRadius: 3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                title: {
+                    display: true,
+                    text: 'Curva S — percentual acumulado'
+                },
+                legend: { position: 'bottom' },
+                scales: {
+                    yAxes: [{
+                        ticks: {
+                            beginAtZero: true,
+                            max: maxY
+                        },
+                        scaleLabel: {
+                            display: true,
+                            labelString: '% (base = previsto final no intervalo)'
+                        }
+                    }],
+                    xAxes: [{
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 0
+                        }
+                    }]
+                }
+            }
+        });
+    }
+
+    var ctx2 = document.getElementById('chartCurvaSPlacas');
+    if (ctx2) {
+        new Chart(ctx2.getContext('2d'), {
+            type: 'line',
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: 'Previsto acumulado (placas)',
+                        data: cumP,
+                        borderColor: 'rgb(54, 162, 235)',
+                        fill: false,
+                        lineTension: 0.25,
+                        pointRadius: 3
+                    },
+                    {
+                        label: 'Real acumulado (placas)',
+                        data: cumR,
+                        borderColor: 'rgb(40, 167, 69)',
+                        fill: false,
+                        lineTension: 0.25,
+                        pointRadius: 3
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                title: {
+                    display: true,
+                    text: 'Curva S — placas acumuladas'
+                },
+                legend: { position: 'bottom' },
+                scales: {
+                    yAxes: [{
+                        ticks: { beginAtZero: true },
+                        scaleLabel: {
+                            display: true,
+                            labelString: 'Placas'
+                        }
+                    }],
+                    xAxes: [{
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 0
+                        }
+                    }]
+                }
+            }
+        });
+    }
+})();
+</script>
+{% endblock %}

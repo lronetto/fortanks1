@@ -215,6 +215,7 @@
                             <th>Tipo</th>
                             <th>Nome</th>
                             <th>Status</th>
+                            <th>Data de Concretagem</th>
                             <th>Data de Cadastro</th>
                             <th>Ações</th>
                         </tr>
@@ -650,7 +651,31 @@
                             return data; // Já vem formatado do servidor
                         }
                     },
-                    { data: 'data_cadastro' },
+                    {
+                        data: 'data_concretagem',
+                        render: function(data, type, row) {
+                            if (type === 'sort' || type === 'type') {
+                                return row.data_concretagem_sort != null && row.data_concretagem_sort !== ''
+                                    ? row.data_concretagem_sort
+                                    : '';
+                            }
+                            if (!data) {
+                                return '<span class="text-muted">—</span>';
+                            }
+                            return data;
+                        }
+                    },
+                    {
+                        data: 'data_cadastro',
+                        render: function(data, type, row) {
+                            if (type === 'sort' || type === 'type') {
+                                return row.data_cadastro_sort != null && row.data_cadastro_sort !== ''
+                                    ? row.data_cadastro_sort
+                                    : '';
+                            }
+                            return data || '';
+                        }
+                    },
                     { 
                         data: 'acoes',
                         orderable: false,
@@ -660,8 +685,8 @@
                     }
                 ],
                 columnDefs: [
-                    { orderable: false, targets: [5, 7] }, // Desabilitar ordenação nas colunas de status e ações
-                    { className: 'text-center', targets: [0] } // Centralizar número sequencial
+                    { orderable: false, targets: [5, 8] }, // Desabilitar ordenação nas colunas de status e ações
+                    { className: 'text-center', targets: [0, 6] } // Centralizar número sequencial e data de concretagem
                 ],
                 drawCallback: function(settings) {
                     // Adicionar eventos aos botões de exclusão após desenhar a tabela

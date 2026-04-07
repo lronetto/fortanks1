@@ -32,13 +32,13 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    jQuery(document).on('click', '#dataTable .materiais-thumb-ampliar', function(e) {
+    jQuery(document).on('click', '.materiais-thumb-ampliar', function(e) {
         e.preventDefault();
         e.stopPropagation();
         abrirAmpliada(jQuery(this));
     });
 
-    jQuery(document).on('keydown', '#dataTable .materiais-thumb-ampliar', function(e) {
+    jQuery(document).on('keydown', '.materiais-thumb-ampliar', function(e) {
         if (e.key === 'Enter' || e.key === ' ') {
             e.preventDefault();
             e.stopPropagation();

@@ -37,6 +37,10 @@
                 if (!url) {
                     return;
                 }
+                var formEl = input.closest('form');
+                var matSel = formEl
+                    ? formEl.querySelector('select.equipamento-select-material')
+                    : null;
 
                 function hide() {
                     dd.classList.add('d-none');
@@ -74,6 +78,34 @@
                         btn.addEventListener('mousedown', function (e) {
                             e.preventDefault();
                             input.value = it.nome;
+                            var label =
+                                (it.nome || '') +
+                                (it.codigo ? ' (' + it.codigo + ')' : '') +
+                                (it.categoria ? ' [' + it.categoria + ']' : '');
+                            if (
+                                matSel &&
+                                typeof jQuery !== 'undefined' &&
+                                jQuery(matSel).data('select2')
+                            ) {
+                                var $m = jQuery(matSel);
+                                var vid = String(it.id);
+                                var jaExiste = false;
+                                $m.find('option').each(function () {
+                                    if (String(this.value) === vid) {
+                                        jaExiste = true;
+                                        return false;
+                                    }
+                                });
+                                if (!jaExiste) {
+                                    $m.append(new Option(label, vid, true, true));
+                                } else {
+                                    $m.val(vid);
+                                }
+                                $m.trigger('change');
+                            } else if (matSel) {
+                                matSel.value = String(it.id);
+                            }
+                            wrap.dataset.materialNomeVinculado = it.nome || '';
                             hide();
                             input.dispatchEvent(new Event('input', { bubbles: true }));
                         });
@@ -103,6 +135,25 @@
                         });
                 }, 300);
 
+                if (matSel) {
+                    input.addEventListener('input', function () {
+                        if (!wrap.dataset.materialNomeVinculado) {
+                            return;
+                        }
+                        var vinc = wrap.dataset.materialNomeVinculado || '';
+                        if ((input.value || '').trim() !== (vinc || '').trim()) {
+                            if (
+                                typeof jQuery !== 'undefined' &&
+                                jQuery(matSel).data('select2')
+                            ) {
+                                jQuery(matSel).val(null).trigger('change');
+                            } else {
+                                matSel.value = '';
+                            }
+                            delete wrap.dataset.materialNomeVinculado;
+                        }
+                    });
+                }
                 input.addEventListener('input', runSearch);
                 input.addEventListener('focus', function () {
                     if ((input.value || '').trim().length >= 2) {

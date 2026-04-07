@@ -1,11 +1,11 @@
 -- =====================================================
 -- Módulo Cronograma (por projeto/contrato, tanques, linhas de base, feriados)
--- MySQL / InnoDB / utf8mb4
+-- MySQL / InnoDB / utf8mb4 — nomes de tabelas em PascalCase (CronogramaFeriados, etc.)
 -- Execute após backup. Ajuste se os nomes das tabelas Tanques/contratos/usuarios forem diferentes.
 -- =====================================================
 
 -- Feriados (cadastro geral; usados para planejamento e exibição)
-CREATE TABLE IF NOT EXISTS cronograma_feriados (
+CREATE TABLE IF NOT EXISTS CronogramaFeriados (
     id INT AUTO_INCREMENT PRIMARY KEY,
     data DATE NOT NULL,
     nome VARCHAR(200) NOT NULL,
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS cronograma_feriados (
 COMMENT='Feriados e pontos facultativos para o cronograma';
 
 -- Cronograma atual por tanque no projeto (contrato)
-CREATE TABLE IF NOT EXISTS cronograma_tanques (
+CREATE TABLE IF NOT EXISTS CronogramaTanques (
     id INT AUTO_INCREMENT PRIMARY KEY,
     contrato_id INT NOT NULL,
     tanque_id INT NOT NULL,
@@ -43,7 +43,7 @@ CREATE TABLE IF NOT EXISTS cronograma_tanques (
 COMMENT='Datas planejadas e reais do cronograma por tanque no contrato';
 
 -- Linha de base (snapshot nomeado do cronograma de um projeto)
-CREATE TABLE IF NOT EXISTS cronograma_linhas_base (
+CREATE TABLE IF NOT EXISTS CronogramaLinhasBase (
     id INT AUTO_INCREMENT PRIMARY KEY,
     contrato_id INT NOT NULL,
     nome VARCHAR(200) NOT NULL,
@@ -57,7 +57,7 @@ CREATE TABLE IF NOT EXISTS cronograma_linhas_base (
 COMMENT='Linhas de base (versões congeladas do cronograma)';
 
 -- Itens da linha de base por tanque
-CREATE TABLE IF NOT EXISTS cronograma_linhas_base_tanques (
+CREATE TABLE IF NOT EXISTS CronogramaLinhasBaseTanques (
     id INT AUTO_INCREMENT PRIMARY KEY,
     linha_base_id INT NOT NULL,
     tanque_id INT NOT NULL,
@@ -65,7 +65,7 @@ CREATE TABLE IF NOT EXISTS cronograma_linhas_base_tanques (
     data_fim_prevista DATE NULL,
     UNIQUE KEY uq_lb_tanque (linha_base_id, tanque_id),
     INDEX idx_lb_tanques_tanque (tanque_id),
-    CONSTRAINT fk_lb_tanques_linha FOREIGN KEY (linha_base_id) REFERENCES cronograma_linhas_base(id) ON DELETE CASCADE,
+    CONSTRAINT fk_lb_tanques_linha FOREIGN KEY (linha_base_id) REFERENCES CronogramaLinhasBase(id) ON DELETE CASCADE,
     CONSTRAINT fk_lb_tanques_tanque FOREIGN KEY (tanque_id) REFERENCES Tanques(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
 COMMENT='Datas previstas por tanque em cada linha de base';
@@ -82,3 +82,5 @@ ON DUPLICATE KEY UPDATE
 -- Conceda permissões pelo painel Admin (Permissões) ou insira em permissoes
 -- vinculando modulo_id = (SELECT id FROM modulos WHERE nome = 'cronograma' LIMIT 1)
 -- a usuário, departamento ou cargo conforme o padrão do sistema.
+
+-- Itens de linha do cronograma: execute também migrations/cronograma_itens_mysql.sql

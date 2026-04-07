@@ -1,0 +1,522 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Matriz semanal — Cronograma{% endblock %}
+
+{% block extra_css %}
+<style>
+  .cron-matriz-toggle { min-width: 1.25rem; line-height: 1; }
+  .cron-matriz-toggle .cron-matriz-chevron { transition: transform 0.15s ease; font-size: 0.7rem; }
+  /* Colunas fixas à esquerda ao rolar horizontalmente */
+  .cron-matriz-scroll {
+    --cron-matriz-w1: 9rem;
+    --cron-matriz-w2: 12rem;
+    --cron-matriz-w3: 5.75rem;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .cron-matriz-sticky-1 {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    width: var(--cron-matriz-w1);
+    min-width: var(--cron-matriz-w1);
+    max-width: 14rem;
+    background-color: var(--bs-body-bg, #fff);
+    box-shadow: 3px 0 0 rgba(0, 0, 0, 0.06);
+  }
+  .cron-matriz-sticky-2 {
+    position: sticky;
+    left: var(--cron-matriz-w1);
+    z-index: 2;
+    width: var(--cron-matriz-w2);
+    min-width: var(--cron-matriz-w2);
+    max-width: 22rem;
+    background-color: var(--bs-body-bg, #fff);
+    box-shadow: 3px 0 0 rgba(0, 0, 0, 0.06);
+  }
+  .cron-matriz-sticky-3 {
+    position: sticky;
+    left: calc(var(--cron-matriz-w1) + var(--cron-matriz-w2));
+    z-index: 2;
+    width: var(--cron-matriz-w3);
+    min-width: var(--cron-matriz-w3);
+    background-color: var(--bs-body-bg, #fff);
+    box-shadow: 3px 0 0 rgba(0, 0, 0, 0.06);
+  }
+  thead.table-light .cron-matriz-sticky-1,
+  thead.table-light .cron-matriz-sticky-2,
+  thead.table-light .cron-matriz-sticky-3 {
+    z-index: 7;
+    background-color: var(--bs-light, #f8f9fa) !important;
+  }
+  tbody .cron-matriz-sticky-1,
+  tbody .cron-matriz-sticky-2,
+  tbody .cron-matriz-sticky-3 {
+    background-color: var(--bs-body-bg, #fff);
+  }
+  thead.table-light {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+  }
+  /* Timeline: barras horizontais contínuas por bloco de semanas consecutivas com dias > 0 */
+  .cron-dias-timeline {
+    display: grid;
+    grid-template-columns: repeat(var(--n, 8), minmax(2rem, 1fr));
+    gap: 0;
+    min-width: max(100%, calc(var(--n, 8) * 2.75rem));
+  }
+  .cron-dias-timeline-week {
+    border-left: 1px solid rgba(0, 0, 0, 0.08);
+    min-width: 0;
+  }
+  .cron-dias-timeline-week:first-child {
+    border-left-color: transparent;
+  }
+  .cron-dias-timeline-header .cron-dias-timeline-week {
+    border-left-color: rgba(0, 0, 0, 0.06);
+  }
+  .cron-dias-runs-wrap {
+    min-width: max(100%, calc(var(--n, 8) * 2.75rem));
+  }
+  .cron-dias-runs-track {
+    position: relative;
+    min-height: 1.85rem;
+    margin-bottom: 0;
+  }
+  .cron-dias-h-run {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    box-sizing: border-box;
+    min-height: 4px;
+    background: rgba(54, 162, 235, 0.92);
+    border: 1px solid rgba(13, 110, 253, 0.4);
+    border-radius: 0.2rem;
+    pointer-events: auto;
+  }
+  .cron-dias-runs-axis {
+    height: 2px;
+    background: rgba(108, 117, 125, 0.45);
+    border-radius: 1px;
+    margin: 0 0 0.2rem 0;
+  }
+  .cron-dias-timeline-nums .cron-dias-timeline-week {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+  }
+  .cron-matriz-zoom-label {
+    min-width: 3.25rem;
+    text-align: center;
+    font-size: 0.75rem;
+    line-height: 1.25;
+    padding: 0.25rem 0.35rem;
+    user-select: none;
+  }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category if category in ['success', 'warning', 'danger', 'info'] else 'secondary' }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <h1 class="h3 mb-2 text-gray-800"><i class="fas fa-table"></i> Matriz semanal — previsto e real</h1>
+    <p class="text-muted mb-3">
+        <strong>Previsto:</strong> quantidade de <strong>placas</strong> (peças cadastradas no tanque), repartida pelas semanas a partir da <strong>data início prevista</strong> do tanque
+        (ou do início do intervalo abaixo se não houver data). Itens do mesmo tanque dividem o total pelo <strong>peso</strong> relativo.
+        Com <strong>predecessor</strong>, o início do previsto fica no dia seguinte ao término da semana de carga do predecessor (finish-to-start), respeitando a data base do tanque.
+        <strong>Realizado:</strong> quantidade de placas com <strong>data de concretagem</strong> na semana.
+        <strong>PA</strong> e <strong>RA</strong> são os totais <strong>acumulados</strong> de P e R ao longo das semanas (da esquerda para a direita).
+        Itens <strong>sem tanque</strong> somam as placas dos filhos na hierarquia de índices (ex.: 1.3 agrega 1.3.1, 1.3.2…).
+        A coluna <strong>Prazo (dias)</strong> é a soma de <strong>dias por peça × quantidade</strong> conforme os índices <code>TEMPO_*</code> do tanque (mesma base do cálculo por peças), rateada pelo <strong>peso</strong> entre itens do mesmo tanque e agregada nos níveis sem tanque.
+        As linhas aparecem em <strong>ordem cronológica</strong> pelo início efetivo do previsto (datas, predecessor e calendário). A tabela mantém a <strong>hierarquia do índice</strong> nas colunas; use as setas para <strong>recolher</strong> ou <strong>expandir</strong> ramos.
+        Se você não preencher <strong>Intervalo — início</strong>, o sistema usa a <strong>segunda-feira da semana da menor data</strong> entre as datas de início dos itens e as datas previstas dos tanques no cronograma, para a primeira coluna coincidir com o início planejado (ex.: 17/03 → semana que começa nessa segunda).
+        Após <strong>Aplicar</strong>, o <strong>intervalo — fim</strong> é ajustado para o <strong>último dia da última semana</strong> em que existir previsto ou realizado (considera o horizonte mais longo entre eles).
+    </p>
+
+    <div class="card shadow mb-4">
+        <div class="card-body">
+            <form method="get" action="{{ url_for('cronograma.matriz_semanal') }}" class="row g-3 align-items-end flex-wrap">
+                <div class="col-md-4">
+                    <label for="contrato_id" class="form-label">Projeto (contrato)</label>
+                    <select name="contrato_id" id="contrato_id" class="form-select" required>
+                        <option value="">— Selecione —</option>
+                        {% for c in contratos %}
+                        <option value="{{ c.id }}" {% if contrato_id == c.id %}selected{% endif %}>{{ c.nome }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-2">
+                    <label for="data_inicio" class="form-label">Intervalo — início</label>
+                    <input type="date" class="form-control" id="data_inicio" name="data_inicio"
+                           value="{{ data_inicio.strftime('%Y-%m-%d') }}">
+                </div>
+                <div class="col-md-2">
+                    <label for="data_fim" class="form-label">Intervalo — fim</label>
+                    <input type="date" class="form-control" id="data_fim" name="data_fim"
+                           value="{{ data_fim.strftime('%Y-%m-%d') }}">
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary w-100">
+                        <i class="fas fa-filter"></i> Aplicar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    {% if not contrato_id %}
+    <div class="alert alert-info">
+        Selecione um projeto e clique em <strong>Aplicar</strong> para carregar a matriz.
+    </div>
+    {% elif contrato and not linhas %}
+    <div class="alert alert-warning">
+        Não há itens cadastrados no cronograma deste projeto.
+        <a href="{{ url_for('cronograma.projeto', contrato_id=contrato.id) }}">Abrir cronograma do projeto</a>
+    </div>
+    {% elif contrato and semanas %}
+    <div class="card shadow" id="cron-matriz-card">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h6 class="m-0 font-weight-bold text-primary">{{ contrato.nome }}</h6>
+            <div class="d-flex flex-wrap gap-2 align-items-center">
+                <div class="btn-group btn-group-sm" role="group" aria-label="Expandir ou recolher índices">
+                    <button type="button" class="btn btn-outline-secondary" id="cron-matriz-expandir-tudo" title="Expandir todos os níveis">
+                        <i class="fas fa-expand"></i> Expandir tudo
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" id="cron-matriz-recolher-tudo" title="Recolher todos os ramos com filhos">
+                        <i class="fas fa-compress"></i> Recolher tudo
+                    </button>
+                </div>
+                <div class="btn-group btn-group-sm" role="group" aria-label="Zoom das tabelas (matriz e dias)">
+                    <button type="button" class="btn btn-outline-secondary" data-cron-zoom="out" title="Diminuir zoom">
+                        <i class="fas fa-search-minus"></i>
+                    </button>
+                    <span class="btn btn-outline-secondary disabled p-0 border-secondary text-secondary cron-matriz-zoom-label">100%</span>
+                    <button type="button" class="btn btn-outline-secondary" data-cron-zoom="in" title="Aumentar zoom">
+                        <i class="fas fa-search-plus"></i>
+                    </button>
+                    <button type="button" class="btn btn-outline-secondary" data-cron-zoom="reset" title="Zoom 100%">
+                        <i class="fas fa-undo-alt"></i>
+                    </button>
+                </div>
+                <a href="{{ url_for('cronograma.matriz_semanal_exportar_excel', contrato_id=contrato.id, data_inicio=data_inicio.strftime('%Y-%m-%d'), data_fim=data_fim.strftime('%Y-%m-%d')) }}" class="btn btn-sm btn-success" title="Exportar matriz e dias para Excel (cores por tempo e intensidade)">
+                    <i class="fas fa-file-excel"></i> Excel
+                </a>
+                <a href="{{ url_for('cronograma.projeto_curva_s', contrato_id=contrato.id, data_inicio=data_inicio.strftime('%Y-%m-%d'), data_fim=data_fim.strftime('%Y-%m-%d')) }}" class="btn btn-sm btn-outline-primary">
+                    <i class="fas fa-chart-line"></i> Curva S
+                </a>
+                <a href="{{ url_for('cronograma.projeto', contrato_id=contrato.id) }}" class="btn btn-sm btn-outline-secondary">
+                    <i class="fas fa-calendar-week"></i> Editar cronograma
+                </a>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            {% macro tr_linha_matriz(row, semanas) -%}
+                        {% set d = row.profundidade|default(0) %}
+                        {% set pad_rem = 0.35 + ([0, d - 1]|max) * 1.1 %}
+                        <tr class="cron-matriz-tr" data-cron-indice="{{ row.indice|e }}" data-cron-tem-filhos="{{ 1 if row.tem_filhos else 0 }}" data-cron-item-id="{{ row.item_id }}">
+                            <td class="text-nowrap font-monospace align-middle cron-matriz-col-indice cron-matriz-sticky-1" style="padding-left: {{ pad_rem }}rem">
+                                <div class="d-flex align-items-center gap-1">
+                                    {% if row.tem_filhos %}
+                                    <button type="button" class="btn btn-sm btn-link text-primary p-0 cron-matriz-toggle flex-shrink-0" data-cron-indice="{{ row.indice|e }}" aria-expanded="true" title="Recolher ou expandir filhos">
+                                        <i class="fas fa-chevron-down cron-matriz-chevron"></i>
+                                    </button>
+                                    {% else %}
+                                    <span class="flex-shrink-0 text-muted" style="width: 1.1rem; display: inline-block;" aria-hidden="true"></span>
+                                    {% endif %}
+                                    <span>{{ row.indice }}</span>
+                                </div>
+                            </td>
+                            <td class="cron-matriz-sticky-2">{{ row.nome }}</td>
+                            <td class="text-center cron-matriz-sticky-3 font-monospace small" title="Total de dias de trabalho (índices do tanque), rateado pelo peso">{{ '%.2f'|format(row.prazo_dias_total|default(0)|float) }}</td>
+                            {% for s in semanas %}
+                            {% set pv = row.previsto[s.key] %}
+                            {% set rv = row.real[s.key] %}
+                            {% set pav = row.previsto_acum[s.key] %}
+                            {% set rav = row.real_acum[s.key] %}
+                            <td class="text-center p-1">
+                                <div><span class="text-primary" title="Previsto (placas)">P</span> {{ '%.0f'|format(pv) }}</div>
+                                <div><span class="text-success" title="Realizado (placas concretadas)">R</span> {{ '%.0f'|format(rv) }}</div>
+                                <div><span class="text-info" title="Previsto acumulado">PA</span> {{ '%.0f'|format(pav) }}</div>
+                                <div><span class="text-secondary" title="Realizado acumulado">RA</span> {{ '%.0f'|format(rav) }}</div>
+                            </td>
+                            {% endfor %}
+                        </tr>
+            {%- endmacro %}
+            <div class="table-responsive cron-matriz-scroll" style="max-height: 75vh;">
+                <table class="table table-bordered table-sm mb-0 align-middle" style="font-size: 0.8rem;">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="text-nowrap cron-matriz-sticky-1">Índice</th>
+                            <th class="cron-matriz-sticky-2">Item</th>
+                            <th class="text-center cron-matriz-sticky-3" title="Dias totais (peça × TEMPO_*), rateado pelo peso">Prazo<br><span class="fw-normal text-muted" style="font-size: 0.7rem;">(dias)</span></th>
+                            {% for s in semanas %}
+                            <th class="text-center p-1" style="min-width: 6.25rem;">
+                                <div class="fw-bold">{{ s.label }}</div>
+                                <div class="text-muted fw-normal" style="font-size: 0.65rem; line-height: 1.2;">{{ s.label_full }}</div>
+                            </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody id="cron-matriz-tbody">
+                        {% for row in linhas %}
+                        {{ tr_linha_matriz(row, semanas) }}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% if linhas %}
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h6 class="m-0 font-weight-bold text-primary"><i class="fas fa-chart-bar"></i> Dias de trabalho previstos por semana</h6>
+            <div class="btn-group btn-group-sm" role="group" aria-label="Zoom das tabelas">
+                <button type="button" class="btn btn-outline-secondary" data-cron-zoom="out" title="Diminuir zoom">
+                    <i class="fas fa-search-minus"></i>
+                </button>
+                <span class="btn btn-outline-secondary disabled p-0 border-secondary text-secondary cron-matriz-zoom-label">100%</span>
+                <button type="button" class="btn btn-outline-secondary" data-cron-zoom="in" title="Aumentar zoom">
+                    <i class="fas fa-search-plus"></i>
+                </button>
+                <button type="button" class="btn btn-outline-secondary" data-cron-zoom="reset" title="Zoom 100%">
+                    <i class="fas fa-undo-alt"></i>
+                </button>
+            </div>
+        </div>
+        <div class="card-body p-0">
+            <p class="text-muted small px-3 pt-3 mb-2">
+                <strong>Linhas</strong> = itens (mesma ordem e recolher/expandir da matriz).
+                <strong>Faixa à direita</strong> = <strong>timeline</strong>: cada <strong>barra horizontal</strong> cobre, sem interrupção, todas as <strong>semanas consecutivas</strong> em que há dias previstos — a <strong>largura</strong> da barra é a <strong>duração</strong> nesse eixo; a <strong>espessura</strong> reflete o maior valor de dias naquele trecho (escala global da grade). Valores numéricos por semana abaixo do eixo.
+            </p>
+            <div class="table-responsive cron-matriz-scroll px-3 pb-3" style="max-height: 65vh;">
+                <table class="table table-bordered table-sm mb-0 align-middle" style="font-size: 0.8rem;">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="text-nowrap cron-matriz-sticky-1">Índice</th>
+                            <th class="cron-matriz-sticky-2">Item</th>
+                            <th class="text-center cron-matriz-sticky-3" title="Dias totais (peça × TEMPO_*)">Prazo<br><span class="fw-normal text-muted" style="font-size: 0.7rem;">(dias)</span></th>
+                            <th class="p-0 align-bottom" colspan="{{ semanas|length }}">
+                                <div class="text-center text-muted py-1 small" style="font-size: 0.7rem;">Linha do tempo (semanas →)</div>
+                                <div class="cron-dias-timeline cron-dias-timeline-header px-1 pb-2" style="--n: {{ semanas|length }};">
+                                    {% for s in semanas %}
+                                    <div class="cron-dias-timeline-week text-center px-1">
+                                        <div class="fw-bold">{{ s.label }}</div>
+                                        <div class="text-muted fw-normal" style="font-size: 0.6rem; line-height: 1.15;">{{ s.label_full }}</div>
+                                    </div>
+                                    {% endfor %}
+                                </div>
+                            </th>
+                        </tr>
+                    </thead>
+                    <tbody id="cron-barras-dias-tbody">
+                        {% set mx = max_dias_previsto_grid|default(1)|float %}
+                        {% for row in linhas %}
+                        {% set d = row.profundidade|default(0) %}
+                        {% set pad_rem = 0.35 + ([0, d - 1]|max) * 1.1 %}
+                        <tr class="cron-barras-tr cron-matriz-tr" data-cron-indice="{{ row.indice|e }}" data-cron-tem-filhos="{{ 1 if row.tem_filhos else 0 }}" data-cron-item-id="{{ row.item_id }}">
+                            <td class="text-nowrap font-monospace align-middle cron-matriz-sticky-1" style="padding-left: {{ pad_rem }}rem">
+                                <div class="d-flex align-items-center gap-1">
+                                    <span class="flex-shrink-0" style="width: 1.25rem;" aria-hidden="true"></span>
+                                    <span>{{ row.indice }}</span>
+                                </div>
+                            </td>
+                            <td class="cron-matriz-sticky-2">{{ row.nome }}</td>
+                            <td class="text-center cron-matriz-sticky-3 font-monospace small">{{ '%.2f'|format(row.prazo_dias_total|default(0)|float) }}</td>
+                            <td class="p-1 align-top" colspan="{{ semanas|length }}">
+                                {% set nsem = semanas|length %}
+                                <div class="cron-dias-runs-wrap" style="--n: {{ nsem }};" role="img" aria-label="Dias previstos ao longo das semanas">
+                                    <div class="cron-dias-runs-track">
+                                        {% for run in row.dias_previsto_runs|default([]) %}
+                                        {% set lfrac = (run.start * 100.0 / nsem)|round(4) %}
+                                        {% set wfrac = ((run.end - run.start + 1) * 100.0 / nsem)|round(4) %}
+                                        {% set thick = (4 + (run.max_dias / mx) * 18)|round(2) if mx > 0 else 4 %}
+                                        <div class="cron-dias-h-run" style="left: {{ lfrac }}%; width: {{ wfrac }}%; height: {{ thick }}px;" title="Semanas consecutivas {{ run.start + 1 }}–{{ run.end + 1 }}: até {{ '%.2f'|format(run.max_dias) }} dia(s) por semana (máx. no trecho)"></div>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="cron-dias-runs-axis" aria-hidden="true"></div>
+                                    <div class="cron-dias-timeline cron-dias-timeline-nums" style="--n: {{ nsem }};">
+                                        {% for s in semanas %}
+                                        {% set dv = (row.dias_previsto_semana|default({}))[s.key]|default(0)|float %}
+                                        <div class="cron-dias-timeline-week text-center py-1{% if not loop.first %} border-start border-light{% endif %}">
+                                            <span class="font-monospace small text-muted">{{ '%.2f'|format(dv) }}</span>
+                                        </div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                        {% if barras_dias_semana and semanas|length == barras_dias_semana|length %}
+                        {% set nsem = semanas|length %}
+                        {% set mxt = max_dias_barras_totais|default(1)|float %}
+                        <tr class="table-light fw-bold small cron-barras-total-row">
+                            <td class="cron-matriz-sticky-1 text-nowrap align-middle" colspan="3">Total (dias / semana)</td>
+                            <td class="p-1 align-middle" colspan="{{ semanas|length }}">
+                                <div class="cron-dias-runs-wrap" style="--n: {{ nsem }};">
+                                    <div class="cron-dias-runs-track">
+                                        {% for run in barras_dias_runs|default([]) %}
+                                        {% set lfrac = (run.start * 100.0 / nsem)|round(4) %}
+                                        {% set wfrac = ((run.end - run.start + 1) * 100.0 / nsem)|round(4) %}
+                                        {% set thick = (4 + (run.max_dias / mxt) * 18)|round(2) if mxt > 0 else 4 %}
+                                        <div class="cron-dias-h-run" style="left: {{ lfrac }}%; width: {{ wfrac }}%; height: {{ thick }}px; background: rgba(25, 135, 84, 0.88); border-color: rgba(25, 135, 84, 0.55);" title="Total projeto — trecho {{ run.start + 1 }}–{{ run.end + 1 }}"></div>
+                                        {% endfor %}
+                                    </div>
+                                    <div class="cron-dias-runs-axis" aria-hidden="true"></div>
+                                    <div class="cron-dias-timeline cron-dias-timeline-nums" style="--n: {{ nsem }};">
+                                        {% for v in barras_dias_semana %}
+                                        <div class="cron-dias-timeline-week text-center py-2 font-monospace{% if not loop.first %} border-start border-light{% endif %}">{{ '%.2f'|format(v|float) }}</div>
+                                        {% endfor %}
+                                    </div>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    {% endif %}
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  var tbody = document.getElementById('cron-matriz-tbody');
+  if (!tbody) return;
+
+  var collapsed = new Set();
+
+  function isHiddenByCollapsed(indice, collapsedSet) {
+    if (indice === undefined || indice === null) return false;
+    var ix = String(indice);
+    var it = collapsedSet.values();
+    var el;
+    while (!(el = it.next()).done) {
+      var c = el.value;
+      if (ix !== c && ix.indexOf(c + '.') === 0) return true;
+    }
+    return false;
+  }
+
+  function aplicarVisibilidade() {
+    document.querySelectorAll('#cron-matriz-tbody tr.cron-matriz-tr, #cron-barras-dias-tbody tr.cron-barras-tr').forEach(function (tr) {
+      var ix = tr.getAttribute('data-cron-indice') || '';
+      var hide = isHiddenByCollapsed(ix, collapsed);
+      tr.classList.toggle('d-none', hide);
+    });
+    tbody.querySelectorAll('.cron-matriz-toggle').forEach(function (btn) {
+      var ix = btn.getAttribute('data-cron-indice');
+      if (!ix) return;
+      var col = collapsed.has(ix);
+      btn.setAttribute('aria-expanded', col ? 'false' : 'true');
+      var ch = btn.querySelector('.cron-matriz-chevron');
+      if (ch) {
+        ch.classList.remove('fa-chevron-down', 'fa-chevron-right');
+        ch.classList.add(col ? 'fa-chevron-right' : 'fa-chevron-down');
+      }
+    });
+  }
+
+  tbody.addEventListener('click', function (e) {
+    var btn = e.target.closest('.cron-matriz-toggle');
+    if (!btn) return;
+    e.preventDefault();
+    var ix = btn.getAttribute('data-cron-indice');
+    if (!ix) return;
+    if (collapsed.has(ix)) collapsed.delete(ix);
+    else collapsed.add(ix);
+    aplicarVisibilidade();
+  });
+
+  var expandir = document.getElementById('cron-matriz-expandir-tudo');
+  var recolher = document.getElementById('cron-matriz-recolher-tudo');
+  if (expandir) {
+    expandir.addEventListener('click', function () {
+      collapsed.clear();
+      aplicarVisibilidade();
+    });
+  }
+  if (recolher) {
+    recolher.addEventListener('click', function () {
+      collapsed.clear();
+      tbody.querySelectorAll('tr[data-cron-tem-filhos="1"]').forEach(function (tr) {
+        var ix = tr.getAttribute('data-cron-indice');
+        if (ix) collapsed.add(ix);
+      });
+      aplicarVisibilidade();
+    });
+  }
+
+  aplicarVisibilidade();
+})();
+</script>
+<script>
+(function () {
+  var STORAGE = 'fortanks_cron_matriz_zoom_v1';
+  var MIN = 0.5;
+  var MAX = 2;
+  var STEP = 0.1;
+
+  var areas = document.querySelectorAll('.cron-matriz-scroll');
+  if (!areas.length) return;
+
+  var zoomAtual = 1;
+
+  function clamp(z) {
+    if (isNaN(z)) return 1;
+    return Math.max(MIN, Math.min(MAX, Math.round(z * 100) / 100));
+  }
+
+  function loadStored() {
+    try {
+      var v = parseFloat(sessionStorage.getItem(STORAGE), 10);
+      return clamp(v);
+    } catch (e) {
+      return 1;
+    }
+  }
+
+  function persist(z) {
+    try {
+      sessionStorage.setItem(STORAGE, String(z));
+    } catch (e) {}
+  }
+
+  function applyZoom(z) {
+    zoomAtual = clamp(z);
+    persist(zoomAtual);
+    areas.forEach(function (el) {
+      el.style.zoom = String(zoomAtual);
+    });
+    document.querySelectorAll('.cron-matriz-zoom-label').forEach(function (lab) {
+      lab.textContent = Math.round(zoomAtual * 100) + '%';
+    });
+  }
+
+  applyZoom(loadStored());
+
+  document.body.addEventListener('click', function (e) {
+    var btn = e.target.closest('[data-cron-zoom]');
+    if (!btn) return;
+    var act = btn.getAttribute('data-cron-zoom');
+    if (act === 'in') applyZoom(zoomAtual + STEP);
+    else if (act === 'out') applyZoom(zoomAtual - STEP);
+    else if (act === 'reset') applyZoom(1);
+  });
+})();
+</script>
+{% endblock %}

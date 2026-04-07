@@ -1,6 +1,6 @@
 <!-- Modal de Novo Contrato -->
 <div class="modal fade" id="modalNovoContrato" tabindex="-1" aria-labelledby="modalNovoContratoLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title" id="modalNovoContratoLabel">
@@ -101,13 +101,75 @@
                     </div>
 
                     <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="novo_venda_material" class="form-label">Valor Materiais (R$)</label>
-                            <input type="text" class="form-control mascara-moeda" id="novo_venda_material" name="venda_material">
+                        <div class="col-12">
+                            <label class="form-label">Indicadores financeiros (material e serviço)</label>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:14%"></th>
+                                            <th class="text-end">Venda (R$)</th>
+                                            <th class="text-end">Custo (R$)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <th scope="row">Material</th>
+                                            <td><input type="text" class="form-control form-control-sm text-end input-moeda-fin" id="novo_fin_mat_venda" name="fin_mat_venda" autocomplete="off"></td>
+                                            <td><input type="text" class="form-control form-control-sm text-end input-moeda-fin" id="novo_fin_mat_custo" name="fin_mat_custo" autocomplete="off"></td>
+                                        </tr>
+                                        <tr>
+                                            <th scope="row">Serviço</th>
+                                            <td><input type="text" class="form-control form-control-sm text-end input-moeda-fin" id="novo_fin_ser_venda" name="fin_ser_venda" autocomplete="off"></td>
+                                            <td><input type="text" class="form-control form-control-sm text-end input-moeda-fin" id="novo_fin_ser_custo" name="fin_ser_custo" autocomplete="off"></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="border rounded p-3 bg-light mt-2">
+                                <div class="fw-semibold mb-2">Valores gerais (contrato)</div>
+                                <div class="row g-2">
+                                    <div class="col-md-4">
+                                        <label for="novo_fin_ger_impostos" class="form-label small mb-0">Impostos (R$)</label>
+                                        <input type="text" class="form-control form-control-sm text-end input-moeda-fin" id="novo_fin_ger_impostos" name="fin_ger_impostos" autocomplete="off">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="novo_fin_ger_royalties" class="form-label small mb-0">Royalties (R$)</label>
+                                        <input type="text" class="form-control form-control-sm text-end input-moeda-fin" id="novo_fin_ger_royalties" name="fin_ger_royalties" autocomplete="off">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="novo_fin_ger_investimentos" class="form-label small mb-0">Investimentos (R$)</label>
+                                        <input type="text" class="form-control form-control-sm text-end input-moeda-fin" id="novo_fin_ger_investimentos" name="fin_ger_investimentos" autocomplete="off">
+                                    </div>
+                                </div>
+                            </div>
+                            <small class="text-muted d-block mt-2">As vendas (material + serviço) alimentam o total do contrato; custos e valores gerais ficam em <code>conf</code> (JSON).</small>
                         </div>
-                        <div class="col-md-6">
-                            <label for="novo_venda_servico" class="form-label">Valor Serviços (R$)</label>
-                            <input type="text" class="form-control mascara-moeda" id="novo_venda_servico" name="venda_servico">
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label mb-0">Aditivos</label>
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="novo_btn_add_aditivo">
+                                    <i class="fas fa-plus"></i> Adicionar aditivo
+                                </button>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:14%">Data</th>
+                                            <th style="width:18%">Valor (R$)</th>
+                                            <th>Descrição</th>
+                                            <th style="width:5%" class="text-center"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="novo_aditivos_tbody"></tbody>
+                                </table>
+                            </div>
+                            <input type="hidden" name="aditivos_json" id="novo_aditivos_json" value="[]">
+                            <small class="text-muted d-block mt-1">Registre um ou mais aditivos; os dados são gravados em <code>conf</code> (JSON).</small>
                         </div>
                     </div>
 
@@ -166,26 +228,99 @@ document.addEventListener('DOMContentLoaded', function() {
             .trim());
     }
 
-    // Calcular valor total
+    const seletorInputsFinNovo = '#novo_fin_mat_venda, #novo_fin_mat_custo, #novo_fin_ser_venda, #novo_fin_ser_custo, #novo_fin_ger_impostos, #novo_fin_ger_royalties, #novo_fin_ger_investimentos';
+
+    // Calcular valor total (venda material + venda serviço)
     function calcularTotalNovo() {
-        const valorMaterial = converterParaNumero(document.getElementById('novo_venda_material').value);
-        const valorServico = converterParaNumero(document.getElementById('novo_venda_servico').value);
+        const valorMaterial = converterParaNumero(document.getElementById('novo_fin_mat_venda').value);
+        const valorServico = converterParaNumero(document.getElementById('novo_fin_ser_venda').value);
         const total = valorMaterial + valorServico;
         document.getElementById('novo_valor_total').textContent = formatarMoeda(total);
     }
 
-    // Inicializar máscaras para valores monetários
     if (typeof $.fn.maskMoney !== 'undefined') {
-        $('#novo_venda_material, #novo_venda_servico').maskMoney({
+        $(seletorInputsFinNovo).maskMoney({
             prefix: 'R$ ',
             allowNegative: false,
             thousands: '.',
             decimal: ',',
             affixesStay: true
         });
+        $(seletorInputsFinNovo).on('keyup blur', calcularTotalNovo);
+    }
 
-        // Recalcular total quando os valores são alterados
-        $('#novo_venda_material, #novo_venda_servico').on('keyup', calcularTotalNovo);
+    const maskMoedaOpts = {
+        prefix: 'R$ ',
+        allowNegative: false,
+        thousands: '.',
+        decimal: ',',
+        affixesStay: true
+    };
+
+    function serializarAditivosNovo() {
+        const tbody = document.getElementById('novo_aditivos_tbody');
+        const arr = [];
+        tbody.querySelectorAll('tr').forEach(function (tr) {
+            const inpData = tr.querySelector('.inp-adit-data');
+            const inpValor = tr.querySelector('.inp-adit-valor');
+            const inpDesc = tr.querySelector('.inp-adit-desc');
+            const data = inpData ? inpData.value.trim() : '';
+            const valorStr = inpValor ? inpValor.value : '';
+            const valor = converterParaNumero(valorStr);
+            const desc = inpDesc ? inpDesc.value.trim() : '';
+            if (!data && !desc && (!valor || valor === 0)) return;
+            arr.push({ data: data, valor: valor, descricao: desc });
+        });
+        document.getElementById('novo_aditivos_json').value = JSON.stringify(arr);
+        return arr;
+    }
+
+    function aplicarMaskAditivoValor($inp) {
+        if (typeof $.fn.maskMoney !== 'undefined') {
+            $inp.maskMoney(maskMoedaOpts);
+        }
+    }
+
+    function adicionarLinhaAditivoNovo(prefill) {
+        const tbody = document.getElementById('novo_aditivos_tbody');
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+            '<td><input type="date" class="form-control form-control-sm inp-adit-data"></td>' +
+            '<td><input type="text" class="form-control form-control-sm text-end inp-adit-valor input-moeda-aditivo-novo" autocomplete="off"></td>' +
+            '<td><input type="text" class="form-control form-control-sm inp-adit-desc" placeholder="Descrição do aditivo" maxlength="4000" autocomplete="off"></td>' +
+            '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remover-aditivo-novo" title="Remover"><i class="fas fa-times"></i></button></td>';
+        tbody.appendChild(tr);
+        const $v = $(tr).find('.inp-adit-valor');
+        aplicarMaskAditivoValor($v);
+        if (prefill) {
+            if (prefill.data) tr.querySelector('.inp-adit-data').value = prefill.data;
+            if (prefill.descricao) tr.querySelector('.inp-adit-desc').value = prefill.descricao;
+            if (typeof prefill.valor === 'number' && typeof $.fn.maskMoney !== 'undefined') {
+                $v.maskMoney('mask', prefill.valor);
+            }
+        }
+        tr.querySelectorAll('.inp-adit-data, .inp-adit-valor, .inp-adit-desc').forEach(function (el) {
+            el.addEventListener('change', serializarAditivosNovo);
+            el.addEventListener('keyup', serializarAditivosNovo);
+        });
+    }
+
+    document.getElementById('novo_btn_add_aditivo').addEventListener('click', function () {
+        adicionarLinhaAditivoNovo(null);
+        serializarAditivosNovo();
+    });
+
+    document.getElementById('novo_aditivos_tbody').addEventListener('click', function (e) {
+        const btn = e.target.closest('.btn-remover-aditivo-novo');
+        if (!btn) return;
+        const tr = btn.closest('tr');
+        if (tr) tr.remove();
+        serializarAditivosNovo();
+    });
+
+    function limparAditivosNovo() {
+        document.getElementById('novo_aditivos_tbody').innerHTML = '';
+        document.getElementById('novo_aditivos_json').value = '[]';
     }
 
     // Array para armazenar CNPJs
@@ -301,6 +436,8 @@ document.addEventListener('DOMContentLoaded', function() {
             return false;
         }
 
+        serializarAditivosNovo();
+
         // Enviar via AJAX
         const form = document.getElementById('form-novo-contrato');
         const formData = new FormData(form);
@@ -341,10 +478,13 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     });
 
-    // Limpar formulário ao fechar o modal
     document.getElementById('modalNovoContrato').addEventListener('hidden.bs.modal', function () {
         document.getElementById('form-novo-contrato').reset();
         document.getElementById('novo_valor_total').textContent = 'R$ 0,00';
+        limparAditivosNovo();
+        if (typeof $.fn.maskMoney !== 'undefined') {
+            $(seletorInputsFinNovo).val('').maskMoney('mask', 0);
+        }
     });
 });
 </script>

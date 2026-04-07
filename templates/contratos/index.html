@@ -42,6 +42,7 @@
 <!-- Incluir modais -->
 {% include 'contratos/modais/novo_contrato.html' %}
 {% include 'contratos/modais/editar_contrato.html' %}
+{% include 'contratos/modais/modal_resumo_orcado.html' %}
 {% endblock %}
 
 {% block extra_js %}
@@ -98,6 +99,13 @@
             const contratoId = $(this).data('id');
             if (typeof abrirModalEditar === 'function') {
                 abrirModalEditar(contratoId);
+            }
+        });
+
+        $(document).on('click', '.btn-resumo-orcado-exec', function() {
+            const contratoId = $(this).data('id');
+            if (typeof abrirModalResumoOrcadoExec === 'function') {
+                abrirModalResumoOrcadoExec(contratoId);
             }
         });
 

@@ -118,6 +118,8 @@ class Estoque(db.Model):
         return 0
     def get_estoque_atual(self):
         return self.get_saldo_ate_data()
+    def saldo_anterior(self):
+        self.get_saldo_ate_data(self.data_movimento)
     def get_estoque(self,data_fim=None,data_inicio=None):
         query = EstoqueMovimentacoes.query.filter_by(estoque_id = self.id)
         if data_inicio:
@@ -136,12 +138,15 @@ class Estoque(db.Model):
         
         # Adicionar um dia e definir hora como 23:59:59 para incluir todo o dia
         from datetime import timedelta
-        if isinstance(data_fim, datetime):
-            data_fim_completa = data_fim.replace(hour=23, minute=59, second=59)
+        if False:
+            if isinstance(data_fim, datetime):
+                data_fim_completa = data_fim.replace(hour=23, minute=59, second=59)
+            else:
+                print(f"data_fim_completa: {data_fim_completa}")
+                # Se for date, converter para datetime
+                data_fim_completa = datetime.combine(data_fim, datetime.max.time())
         else:
-            # Se for date, converter para datetime
-            data_fim_completa = datetime.combine(data_fim, datetime.max.time())
-        
+            data_fim_completa = data_fim
         movimentacoes = self.get_estoque(data_fim=data_fim_completa)
         saldo = Decimal('0.0')
         
@@ -265,6 +270,122 @@ class EstoqueMovimentacoes(db.Model):
             'observacao': self.observacao,
             'usuario_id': self.usuario_id,
         }
+
+    def obter_data_emissao_nota_fiscal_vinculada(self):
+        """
+        Retorna a data de emissão da nota fiscal associada via ``nota_fiscal_item``,
+        ou None se não houver vínculo ou NF sem data.
+        """
+        if not self.nota_fiscal_item_id:
+            return None
+        item = self.nota_fiscal_item
+        if not item:
+            return None
+        nf = item.nota_fiscal
+        if not nf:
+            return None
+        return nf.data_emissao
+
+    def atualizar_data_movimento_com_nota_fiscal(self, commit=True, forcar=False):
+        """
+        Atualiza ``data_movimento`` para a data de emissão da nota fiscal vinculada
+        (mesmo critério usado em ``importar_para_estoque``: ``NotaFiscal.data_emissao``).
+
+        Não chama ``save()`` da movimentação (evita recalcular quantidade de estoque);
+        apenas persiste a alteração da data.
+
+        Args:
+            commit: se True, executa ``db.session.commit()``.
+            forcar: se True, grava mesmo quando a data já parece igual (útil após correções
+                finas de timezone/normalização).
+
+        Returns:
+            dict com chaves: ``ok`` (bool), ``message`` (str), ``alterado`` (bool),
+            ``data_anterior``, ``data_nova`` (datetime ou None).
+        """
+        nova = self.obter_data_emissao_nota_fiscal_vinculada()
+        if nova is None:
+            return {
+                'ok': False,
+                'message': 'Movimentação sem item de nota fiscal ou sem data de emissão na NF.',
+                'alterado': False,
+                'data_anterior': self.data_movimento,
+                'data_nova': None,
+            }
+        anterior = self.data_movimento
+        if not forcar and anterior is not None and nova is not None:
+            if anterior == nova:
+                return {
+                    'ok': True,
+                    'message': 'Data da movimentação já coincide com a data de emissão da nota fiscal.',
+                    'alterado': False,
+                    'data_anterior': anterior,
+                    'data_nova': nova,
+                }
+        self.data_movimento = nova
+        db.session.add(self)
+        if commit:
+            db.session.commit()
+        return {
+            'ok': True,
+            'message': 'Data da movimentação atualizada conforme a nota fiscal.',
+            'alterado': True,
+            'data_anterior': anterior,
+            'data_nova': nova,
+        }
+
+    @classmethod
+    def atualizar_data_movimentacoes_por_nota_fiscal(cls, nota_fiscal_id, commit=True):
+        """
+        Atualiza ``data_movimento`` de todas as movimentações ligadas a itens da NF indicada.
+
+        Import de ``NotaFiscalItem`` é feito dentro do método para reduzir risco de import circular.
+
+        Args:
+            nota_fiscal_id: ID em ``NotaFiscal.id``.
+            commit: se True, um único commit ao final.
+
+        Returns:
+            dict com ``ok``, ``message``, ``total_movimentacoes``, ``alteradas``, ``detalhes``
+            (lista de retornos de ``atualizar_data_movimento_com_nota_fiscal`` por id).
+        """
+        from models.nota_fiscal import NotaFiscalItem
+
+        item_ids = [
+            row[0]
+            for row in db.session.query(NotaFiscalItem.id).filter(
+                NotaFiscalItem.nf_id == nota_fiscal_id
+            ).all()
+        ]
+        if not item_ids:
+            return {
+                'ok': True,
+                'message': 'Nenhum item de nota fiscal para este ID.',
+                'total_movimentacoes': 0,
+                'alteradas': 0,
+                'detalhes': [],
+            }
+
+        movimentacoes = (
+            cls.query.filter(cls.nota_fiscal_item_id.in_(item_ids)).order_by(cls.id).all()
+        )
+        detalhes = []
+        alteradas = 0
+        for mov in movimentacoes:
+            r = mov.atualizar_data_movimento_com_nota_fiscal(commit=False, forcar=False)
+            detalhes.append({'movimentacao_id': mov.id, **r})
+            if r.get('alterado'):
+                alteradas += 1
+        if commit:
+            db.session.commit()
+        return {
+            'ok': True,
+            'message': f'{alteradas} movimentação(ões) com data atualizada de {len(movimentacoes)} vinculada(s).',
+            'total_movimentacoes': len(movimentacoes),
+            'alteradas': alteradas,
+            'detalhes': detalhes,
+        }
+
     @classmethod
     def get_historico_saldo_para_grafico(cls, estoque_id, data_inicio=None, data_fim=None, agrupar_por_semana=False):
         """

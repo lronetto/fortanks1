@@ -41,6 +41,9 @@
                 <button type="button" class="btn btn-success btn-sm" id="btnGerarRelatorio" style="display: none;">
                     <i class="fas fa-file-alt"></i> Gerar Relatório de Materiais
                 </button>
+                <button type="button" class="btn btn-outline-info btn-sm me-2" data-bs-toggle="modal" data-bs-target="#modalCompararIndicesTanques" title="Comparar e editar índices entre vários tanques">
+                    <i class="fas fa-columns"></i> Comparar índices
+                </button>
                 <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoTanque">
                     <i class="fas fa-plus"></i> Novo Tanque
                 </button>
@@ -84,6 +87,7 @@
 {% include 'tanques/modais/duplicar_tanque.html' %}
 {% include 'tanques/modais/novo_grupo.html' %}
 {% include 'tanques/modais/adicionar_grupo.html' %}
+{% include 'tanques/modais/modal_comparar_indices_tanques.html' %}
 {% endblock %}
 
 {% block scripts %}

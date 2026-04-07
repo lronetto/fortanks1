@@ -1,5 +1,5 @@
 from flask import Blueprint, render_template, request, send_file, jsonify
-from models.tanque import TanquesPecas, Tanques
+from models.tanque import TanquesPecas, Tanques, TanquesGrupos, tanques_grupos
 from models.contrato import Contrato
 from models.concreto import ConcretoConcretagens, ConcretoConcretagensTanques
 from models.database import db
@@ -12,13 +12,20 @@ import os
 
 concretagem_pecas_bp = Blueprint('relatorios_concretagem_pecas', __name__, url_prefix='/relatorios/concretagem-pecas')
 
-def get_dados_concretagem(data_inicio=None, data_fim=None, tanque_id=None, contrato_id=None):
+def get_dados_concretagem(data_inicio=None, data_fim=None, tanque_id=None, contrato_id=None, grupo_id=None):
     """
     Busca dados de concretagem de peças com filtros opcionais
     """
     query = TanquesPecas.query.join(Tanques)
     
     # Aplicar filtros
+    if grupo_id:
+        query = query.join(
+            tanques_grupos,
+            tanques_grupos.c.tanque_id == TanquesPecas.tanque_id,
+        ).filter(tanques_grupos.c.grupo_id == grupo_id)
+        query = query.distinct()
+
     if tanque_id:
         query = query.filter(TanquesPecas.tanque_id == tanque_id)
     
@@ -179,6 +186,7 @@ def index():
     data_fim_str = request.args.get('data_fim', data_fim.strftime('%Y-%m-%d'))
     tanque_id = request.args.get('tanque_id', type=int)
     contrato_id = request.args.get('contrato_id', type=int)
+    grupo_id = request.args.get('grupo_id', type=int)
     
     try:
         data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date()
@@ -188,7 +196,13 @@ def index():
         data_fim = datetime.now().date()
     
     # Buscar dados
-    dados = get_dados_concretagem(data_inicio=data_inicio, data_fim=data_fim, tanque_id=tanque_id, contrato_id=contrato_id)
+    dados = get_dados_concretagem(
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        tanque_id=tanque_id,
+        contrato_id=contrato_id,
+        grupo_id=grupo_id,
+    )
     
     # Agrupar dados
     dados_mes = agrupar_por_mes(dados)
@@ -208,20 +222,25 @@ def index():
     # Calcular total de metros de placas
     total_metros_placas = sum(item.get('metros_placas', 0) for item in dados)
     
-    # Buscar tanques para filtro (filtrados por projeto se selecionado)
+    # Buscar tanques para filtro (filtrados por projeto e/ou grupo se selecionados)
+    q_tanques = Tanques.query
     if contrato_id:
-        tanques = Tanques.query.filter(
-            Tanques.contrato_id == contrato_id
-        ).order_by(Tanques.nome).all()
-        # Filtrar apenas tanques com contrato ativo
+        q_tanques = q_tanques.filter(Tanques.contrato_id == contrato_id)
+    if grupo_id:
+        q_tanques = q_tanques.join(
+            tanques_grupos,
+            tanques_grupos.c.tanque_id == Tanques.id,
+        ).filter(tanques_grupos.c.grupo_id == grupo_id)
+    tanques = q_tanques.order_by(Tanques.nome).all()
+    if contrato_id:
         tanques = [t for t in tanques if t.contrato and t.contrato.ativo]
     else:
-        # Retornar todos os tanques com contrato ativo
-        tanques = Tanques.query.all()
         tanques = [t for t in tanques if not t.contrato or t.contrato.ativo]
-        tanques.sort(key=lambda x: x.nome)
+        if not grupo_id:
+            tanques.sort(key=lambda x: x.nome)
     
     contratos = Contrato.query.filter(Contrato.ativo == True).order_by(Contrato.nome).all()
+    grupos = TanquesGrupos.get_all()
     
     # Calcular total de concretagens únicas
     concretagens_unicas = set()
@@ -248,8 +267,10 @@ def index():
         data_fim=data_fim,
         tanque_id=tanque_id,
         contrato_id=contrato_id,
+        grupo_id=grupo_id,
         tanques=tanques,
         contratos=contratos,
+        grupos=grupos,
         total_pecas=len(dados),
         total_concretagens=total_concretagens,
         total_metros_placas=round(total_metros_placas, 2)
@@ -261,15 +282,17 @@ def api_tanques_por_projeto():
     API para retornar tanques filtrados por projeto (contrato)
     """
     contrato_id = request.args.get('contrato_id', type=int)
-    
+    grupo_id = request.args.get('grupo_id', type=int)
+
+    q = Tanques.query
     if contrato_id:
-        # Filtrar tanques do projeto específico
-        tanques = Tanques.query.filter(
-            Tanques.contrato_id == contrato_id
-        ).order_by(Tanques.nome).all()
-    else:
-        # Retornar todos os tanques (com ou sem contrato)
-        tanques = Tanques.query.order_by(Tanques.nome).all()
+        q = q.filter(Tanques.contrato_id == contrato_id)
+    if grupo_id:
+        q = q.join(
+            tanques_grupos,
+            tanques_grupos.c.tanque_id == Tanques.id,
+        ).filter(tanques_grupos.c.grupo_id == grupo_id)
+    tanques = q.order_by(Tanques.nome).all()
     
     tanques_json = []
     for tanque in tanques:
@@ -293,6 +316,7 @@ def api_dados():
     data_fim_str = request.args.get('data_fim')
     tanque_id = request.args.get('tanque_id', type=int)
     contrato_id = request.args.get('contrato_id', type=int)
+    grupo_id = request.args.get('grupo_id', type=int)
     
     try:
         data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date() if data_inicio_str else None
@@ -301,7 +325,13 @@ def api_dados():
         data_inicio = None
         data_fim = None
     
-    dados = get_dados_concretagem(data_inicio=data_inicio, data_fim=data_fim, tanque_id=tanque_id, contrato_id=contrato_id)
+    dados = get_dados_concretagem(
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        tanque_id=tanque_id,
+        contrato_id=contrato_id,
+        grupo_id=grupo_id,
+    )
     dados_mes = agrupar_por_mes(dados)
     dados_semana = agrupar_por_semana(dados)
     
@@ -373,6 +403,7 @@ def exportar_excel():
     data_fim_str = request.args.get('data_fim')
     tanque_id = request.args.get('tanque_id', type=int)
     contrato_id = request.args.get('contrato_id', type=int)
+    grupo_id = request.args.get('grupo_id', type=int)
     
     try:
         data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date() if data_inicio_str else None
@@ -381,7 +412,13 @@ def exportar_excel():
         data_inicio = None
         data_fim = None
     
-    dados = get_dados_concretagem(data_inicio=data_inicio, data_fim=data_fim, tanque_id=tanque_id, contrato_id=contrato_id)
+    dados = get_dados_concretagem(
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        tanque_id=tanque_id,
+        contrato_id=contrato_id,
+        grupo_id=grupo_id,
+    )
     dados_mes = agrupar_por_mes(dados)
     dados_semana = agrupar_por_semana(dados)
     
@@ -451,6 +488,7 @@ def exportar_pdf():
     data_fim_str = request.args.get('data_fim')
     tanque_id = request.args.get('tanque_id', type=int)
     contrato_id = request.args.get('contrato_id', type=int)
+    grupo_id = request.args.get('grupo_id', type=int)
     
     try:
         data_inicio = datetime.strptime(data_inicio_str, '%Y-%m-%d').date() if data_inicio_str else None
@@ -459,7 +497,13 @@ def exportar_pdf():
         data_inicio = None
         data_fim = None
     
-    dados = get_dados_concretagem(data_inicio=data_inicio, data_fim=data_fim, tanque_id=tanque_id, contrato_id=contrato_id)
+    dados = get_dados_concretagem(
+        data_inicio=data_inicio,
+        data_fim=data_fim,
+        tanque_id=tanque_id,
+        contrato_id=contrato_id,
+        grupo_id=grupo_id,
+    )
     dados_mes = agrupar_por_mes(dados)
     dados_semana = agrupar_por_semana(dados)
     
@@ -473,6 +517,11 @@ def exportar_pdf():
     if contrato_id:
         contrato = Contrato.query.get(contrato_id)
         projeto_nome = contrato.nome if contrato else None
+
+    grupo_nome = None
+    if grupo_id:
+        g = TanquesGrupos.query.get(grupo_id)
+        grupo_nome = g.nome if g else None
     
     # Caminho absoluto da logo para o WeasyPrint
     logo_path = os.path.abspath(os.path.join('static', 'img', 'logo.png'))
@@ -490,6 +539,7 @@ def exportar_pdf():
         data_fim=data_fim,
         tanque_nome=tanque_nome,
         projeto_nome=projeto_nome,
+        grupo_nome=grupo_nome,
         total_pecas=len(dados),
         total_metros_placas=round(total_metros_placas, 2),
         logo_path=logo_path_uri,

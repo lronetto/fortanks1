@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import date, datetime
 from flask import render_template, redirect, url_for, flash, request, jsonify
 from flask_login import current_user
 from sqlalchemy import or_
@@ -8,13 +8,14 @@ from models.contrato import Contrato
 from models.tanque import Tanques
 from models.centro_custo import CentroCusto
 from models.cronograma import (
-    CronogramaFeriado,
     CronogramaTanque,
     CronogramaLinhaBase,
     CronogramaLinhaBaseTanque,
 )
 
 from . import cronograma_bp, parse_date
+
+from utils.cronograma_calculo_pecas import calcular_projeto_pecas, distribuir_dias_por_semana
 
 
 @cronograma_bp.route('/')
@@ -90,6 +91,49 @@ def projeto(contrato_id):
         flash('Contrato inativo.', 'warning')
         return redirect(url_for('cronograma.index'))
     return render_template('cronograma/projeto.html', contrato=contrato)
+
+
+@cronograma_bp.route('/projeto/<int:contrato_id>/calculo-pecas')
+def projeto_calculo_pecas(contrato_id):
+    """Cálculo de dias por tipo de peça (índices no tanque) e distribuição por semana."""
+    contrato = Contrato.query.get_or_404(contrato_id)
+    if not contrato.ativo:
+        flash('Contrato inativo.', 'warning')
+        return redirect(url_for('cronograma.index'))
+
+    data_inicio = parse_date(request.args.get('data_inicio'))
+    if not data_inicio:
+        data_inicio = date.today()
+
+    linhas, avisos, total_dias = calcular_projeto_pecas(contrato_id)
+    semanas = distribuir_dias_por_semana(total_dias, data_inicio)
+    acum = 0.0
+    semanas_com_acumulado = []
+    for s in semanas:
+        acum += float(s['dias'])
+        row = dict(s)
+        row['acumulado'] = round(acum, 4)
+        semanas_com_acumulado.append(row)
+
+    resumo_tanques = []
+    for tid in sorted({r['tanque_id'] for r in linhas}):
+        sub = [r for r in linhas if r['tanque_id'] == tid]
+        resumo_tanques.append({
+            'tanque_id': tid,
+            'tanque_nome': sub[0]['tanque_nome'],
+            'dias': sum(g['dias_total'] for g in sub),
+        })
+
+    return render_template(
+        'cronograma/calculo_pecas.html',
+        contrato=contrato,
+        linhas=linhas,
+        avisos=avisos,
+        total_dias=total_dias,
+        semanas=semanas_com_acumulado,
+        data_inicio=data_inicio,
+        resumo_tanques=resumo_tanques,
+    )
 
 
 @cronograma_bp.route('/api/projeto/<int:contrato_id>/tanques-datatables', methods=['GET'])
@@ -194,91 +238,6 @@ def projeto_linha_base_salvar(contrato_id):
     db.session.commit()
     flash('Linha de base criada com sucesso.', 'success')
     return redirect(url_for('cronograma.projeto', contrato_id=contrato_id))
-
-
-@cronograma_bp.route('/feriados')
-def feriados():
-    return render_template('cronograma/feriados.html')
-
-
-@cronograma_bp.route('/api/feriados-datatables', methods=['GET'])
-def api_feriados_datatables():
-    draw = request.args.get('draw', 1, type=int)
-    start = request.args.get('start', 0, type=int)
-    length = request.args.get('length', 25, type=int)
-    search_value = request.args.get('search[value]', '', type=str).strip()
-    q = CronogramaFeriado.query
-    if search_value:
-        like = f'%{search_value}%'
-        q = q.filter(or_(CronogramaFeriado.nome.ilike(like), CronogramaFeriado.uf.ilike(like)))
-    total = CronogramaFeriado.query.count()
-    filt = q.count()
-    rows = q.order_by(CronogramaFeriado.data.desc()).offset(start).limit(length).all()
-    data = []
-    for r in rows:
-        data.append({
-            'id': r.id,
-            'data': r.data.strftime('%d/%m/%Y') if r.data else '',
-            'data_iso': r.data.isoformat() if r.data else '',
-            'nome': r.nome,
-            'tipo': r.tipo,
-            'uf': r.uf or '',
-            'municipio': r.municipio or '',
-            'recorrente': 'Sim' if r.recorrente else 'Não',
-            'ativo': 'Sim' if r.ativo else 'Não',
-            'observacao': r.observacao or '',
-        })
-    return jsonify({
-        'draw': draw,
-        'recordsTotal': total,
-        'recordsFiltered': filt,
-        'data': data,
-    })
-
-
-@cronograma_bp.route('/feriados/novo', methods=['POST'])
-def feriados_novo():
-    f = CronogramaFeriado(
-        data=parse_date(request.form.get('data')) or datetime.now().date(),
-        nome=(request.form.get('nome') or '').strip() or 'Feriado',
-        tipo=(request.form.get('tipo') or 'nacional').strip(),
-        uf=(request.form.get('uf') or '').strip() or None,
-        municipio=(request.form.get('municipio') or '').strip() or None,
-        recorrente=bool(request.form.get('recorrente')),
-        ativo=bool(request.form.get('ativo')),
-        observacao=(request.form.get('observacao') or '').strip() or None,
-    )
-    db.session.add(f)
-    db.session.commit()
-    flash('Feriado cadastrado.', 'success')
-    return redirect(url_for('cronograma.feriados'))
-
-
-@cronograma_bp.route('/feriados/editar/<int:feriado_id>', methods=['POST'])
-def feriados_editar(feriado_id):
-    f = CronogramaFeriado.query.get_or_404(feriado_id)
-    d = parse_date(request.form.get('data'))
-    if d:
-        f.data = d
-    f.nome = (request.form.get('nome') or '').strip() or f.nome
-    f.tipo = (request.form.get('tipo') or 'nacional').strip()
-    f.uf = (request.form.get('uf') or '').strip() or None
-    f.municipio = (request.form.get('municipio') or '').strip() or None
-    f.recorrente = bool(request.form.get('recorrente'))
-    f.ativo = bool(request.form.get('ativo'))
-    f.observacao = (request.form.get('observacao') or '').strip() or None
-    db.session.commit()
-    flash('Feriado atualizado.', 'success')
-    return redirect(url_for('cronograma.feriados'))
-
-
-@cronograma_bp.route('/feriados/excluir/<int:feriado_id>', methods=['POST'])
-def feriados_excluir(feriado_id):
-    f = CronogramaFeriado.query.get_or_404(feriado_id)
-    db.session.delete(f)
-    db.session.commit()
-    flash('Feriado removido.', 'success')
-    return redirect(url_for('cronograma.feriados'))
 
 
 @cronograma_bp.route('/linhas-base')

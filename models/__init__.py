@@ -60,7 +60,15 @@ from .dados_analiticos import DadoAnalitico
 from .reembolso import Reembolsos, ReembolsosDocumentos
 from .epi import Epi, EpiEntregas
 from .certificado import Certificados, CertificadosTipos
-from .cronograma import CronogramaFeriado, CronogramaTanque, CronogramaLinhaBase, CronogramaLinhaBaseTanque
+from .cronograma import (
+    CronogramaItem,
+    CronogramaCalendario,
+    CronogramaCalendarioFeriado,
+    CronogramaVinculoCalendario,
+    CronogramaTanque,
+    CronogramaLinhaBase,
+    CronogramaLinhaBaseTanque,
+)
 from .permissoes import Modulo, Permissao
 from .fornecedor import Fornecedor
 from .pedido_compra import PedidoCompra, PedidoCompraItem, PedidoCompraEntrada
@@ -113,7 +121,9 @@ __all__ = [
     'Reembolsos', 'ReembolsosDocumentos',
     'Epi', 'EpiEntregas',
     'Certificados', 'CertificadosTipos',
-    'CronogramaFeriado', 'CronogramaTanque', 'CronogramaLinhaBase', 'CronogramaLinhaBaseTanque',
+    'CronogramaItem', 'CronogramaCalendario', 'CronogramaCalendarioFeriado', 'CronogramaVinculoCalendario',
+    'CronogramaTanque',
+    'CronogramaLinhaBase', 'CronogramaLinhaBaseTanque',
     'Modulo', 'Permissao',
     'Fornecedor', 'PedidoCompra', 'PedidoCompraItem', 'PedidoCompraEntrada',
 ] 

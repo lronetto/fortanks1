@@ -1,0 +1,422 @@
+<!-- Modal: comparação e edição de índices entre tanques -->
+<div class="modal fade" id="modalCompararIndicesTanques" tabindex="-1" aria-labelledby="modalCompararIndicesTanquesLabel" aria-hidden="true">
+    <div class="modal-dialog modal-fullscreen-lg-down modal-xl modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-info text-white">
+                <h5 class="modal-title" id="modalCompararIndicesTanquesLabel">
+                    <i class="fas fa-columns"></i> Comparar / editar índices entre tanques
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="small text-muted mb-2">
+                    Inclua pelo menos dois tanques, carregue os dados e edite lado a lado. Ao salvar, apenas a lista de índices é atualizada em cada tanque (demais dados adicionais são preservados).
+                </p>
+                <div class="row g-2 align-items-end mb-3">
+                    <div class="col-md-6">
+                        <label for="comparar-indices-select-tanque" class="form-label small mb-0">Adicionar tanque</label>
+                        <select class="form-select form-select-sm" id="comparar-indices-select-tanque">
+                            <option value="">Carregando...</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6 d-flex flex-wrap gap-2">
+                        <button type="button" class="btn btn-outline-primary btn-sm" id="btn-comparar-indices-adicionar">
+                            <i class="fas fa-plus"></i> Incluir na lista
+                        </button>
+                        <button type="button" class="btn btn-primary btn-sm" id="btn-comparar-indices-carregar">
+                            <i class="fas fa-sync"></i> Carregar comparação
+                        </button>
+                    </div>
+                </div>
+                <div id="comparar-indices-chips" class="d-flex flex-wrap gap-2 mb-2"></div>
+                <div id="comparar-indices-alerta" class="alert alert-warning py-2 small d-none" role="alert"></div>
+                <div class="d-flex justify-content-between align-items-center mb-2">
+                    <span class="small text-muted" id="comparar-indices-status"></span>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btn-comparar-indices-nova-linha">
+                        <i class="fas fa-plus"></i> Nova linha (nome de índice)
+                    </button>
+                </div>
+                <div class="table-responsive border rounded" style="max-height: 60vh; overflow: auto;">
+                    <table class="table table-sm table-bordered align-middle mb-0" id="comparar-indices-tabela">
+                        <thead class="table-light sticky-top" style="z-index: 2;">
+                            <tr id="comparar-indices-thead-row">
+                                <th style="min-width: 160px;">Nome do índice</th>
+                            </tr>
+                        </thead>
+                        <tbody id="comparar-indices-tbody"></tbody>
+                    </table>
+                </div>
+            </div>
+            <div class="modal-footer flex-wrap gap-2">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-success" id="btn-comparar-indices-salvar">
+                    <i class="fas fa-save"></i> Salvar alterações em todos os tanques
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    var tanquesNaComparacao = [];
+    var idsOrdem = [];
+    var linhasNomes = [];
+
+    function getCsrf() {
+        if (typeof window.getCSRFToken === 'function') return window.getCSRFToken();
+        var m = document.querySelector('meta[name="csrf-token"]');
+        if (m && m.content) return m.content;
+        var g = document.getElementById('csrf_token_global');
+        return g ? g.value : '';
+    }
+
+    function idsSelecionadosNaGrade() {
+        return Array.from(document.querySelectorAll('.tanque-checkbox:checked')).map(function (cb) { return cb.value; });
+    }
+
+    function unionNomes(tanques) {
+        var set = {};
+        tanques.forEach(function (t) {
+            (t.indices || []).forEach(function (it) {
+                var n = (it.nome !== undefined && it.nome !== null) ? String(it.nome).trim() : '';
+                if (n) set[n] = true;
+            });
+        });
+        return Object.keys(set).sort(function (a, b) { return a.localeCompare(b, 'pt-BR'); });
+    }
+
+    function valorNaLinha(tanque, nomeLinha) {
+        var alvo = String(nomeLinha || '').trim();
+        var it = (tanque.indices || []).find(function (x) {
+            return String(x.nome || '').trim() === alvo;
+        });
+        if (!it) return { valor: '', data_inicio: '', data_fim: '' };
+        return {
+            valor: it.valor != null ? String(it.valor) : '',
+            data_inicio: it.data_inicio != null ? String(it.data_inicio) : '',
+            data_fim: it.data_fim != null ? String(it.data_fim) : ''
+        };
+    }
+
+    function normalizarDataParaInput(val) {
+        if (val === null || val === undefined || val === '') return '';
+        var s = String(val).trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+        var m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (m) {
+            return m[3].padStart(4, '0') + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+        }
+        return '';
+    }
+
+    function escapeAttr(s) {
+        return String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+    }
+
+    function rotuloTanqueChip(id) {
+        var sid = String(id);
+        var t = tanquesNaComparacao.find(function (x) { return String(x.id) === sid; });
+        if (t) return '#' + sid + ' ' + (t.nome || '');
+        var list = window.__tanquesResumoCache || [];
+        var r = list.find(function (x) { return String(x.id) === sid; });
+        if (r) return '#' + sid + ' ' + (r.nome || '');
+        return '#' + sid;
+    }
+
+    function renderChips() {
+        var el = document.getElementById('comparar-indices-chips');
+        if (!el) return;
+        el.innerHTML = '';
+        idsOrdem.forEach(function (id) {
+            var label = rotuloTanqueChip(id);
+            var span = document.createElement('span');
+            span.className = 'badge bg-secondary d-flex align-items-center gap-1';
+            span.innerHTML = escapeAttr(label) +
+                ' <button type="button" class="btn-close btn-close-white btn-sm m-0 p-0" style="font-size:0.6rem;" data-remove-id="' + escapeAttr(id) + '" aria-label="Remover"></button>';
+            el.appendChild(span);
+        });
+        el.querySelectorAll('[data-remove-id]').forEach(function (btn) {
+            btn.addEventListener('click', function () {
+                var rid = btn.getAttribute('data-remove-id');
+                idsOrdem = idsOrdem.filter(function (x) { return String(x) !== String(rid); });
+                tanquesNaComparacao = tanquesNaComparacao.filter(function (x) { return String(x.id) !== String(rid); });
+                renderChips();
+                document.getElementById('comparar-indices-tbody').innerHTML = '';
+                document.getElementById('comparar-indices-status').textContent = '';
+                atualizarTheadVazio();
+            });
+        });
+    }
+
+    function atualizarTheadVazio() {
+        var tr = document.getElementById('comparar-indices-thead-row');
+        if (!tr) return;
+        while (tr.children.length > 1) tr.removeChild(tr.lastChild);
+    }
+
+    function syncLinhasNomesFromDom() {
+        var tbody = document.getElementById('comparar-indices-tbody');
+        if (!tbody) return;
+        var nomes = [];
+        tbody.querySelectorAll('tr').forEach(function (tr) {
+            var inp = tr.querySelector('.cmp-nome-row');
+            nomes.push(inp ? inp.value.trim() : '');
+        });
+        if (nomes.length) linhasNomes = nomes;
+    }
+
+    function renderTabela() {
+        var tbody = document.getElementById('comparar-indices-tbody');
+        var theadRow = document.getElementById('comparar-indices-thead-row');
+        var status = document.getElementById('comparar-indices-status');
+        if (!tbody || !theadRow) return;
+
+        atualizarTheadVazio();
+        tbody.innerHTML = '';
+
+        if (tanquesNaComparacao.length < 2) {
+            status.textContent = 'Inclua e carregue pelo menos 2 tanques.';
+            return;
+        }
+
+        tanquesNaComparacao.forEach(function (t) {
+            var th = document.createElement('th');
+            th.style.minWidth = '200px';
+            th.innerHTML = '<div class="small fw-bold">#' + t.id + ' ' + escapeAttr(t.nome || '') + '</div>' +
+                '<div class="text-muted" style="font-size:0.75rem;">' + escapeAttr(t.contrato || '') + '</div>';
+            theadRow.appendChild(th);
+        });
+
+        if (linhasNomes.length === 0) linhasNomes.push('');
+
+        linhasNomes.forEach(function (nomeLinha, rowIdx) {
+            var tr = document.createElement('tr');
+            tr.setAttribute('data-row-index', String(rowIdx));
+
+            var tdNome = document.createElement('td');
+            tdNome.innerHTML = '<input type="text" class="form-control form-control-sm cmp-nome-row" value="' +
+                escapeAttr(nomeLinha) + '" placeholder="Nome do índice">';
+            tr.appendChild(tdNome);
+
+            tanquesNaComparacao.forEach(function (t) {
+                var v = valorNaLinha(t, nomeLinha);
+                var td = document.createElement('td');
+                td.setAttribute('data-tanque-id', String(t.id));
+                td.innerHTML =
+                    '<input type="text" class="form-control form-control-sm mb-1 cmp-val" placeholder="Valor" value="' + escapeAttr(v.valor) + '">' +
+                    '<div class="d-flex flex-column flex-sm-row gap-1">' +
+                    '<input type="date" class="form-control form-control-sm cmp-di" title="Data início" value="' + escapeAttr(normalizarDataParaInput(v.data_inicio)) + '">' +
+                    '<input type="date" class="form-control form-control-sm cmp-df" title="Data fim" value="' + escapeAttr(normalizarDataParaInput(v.data_fim)) + '">' +
+                    '</div>';
+                tr.appendChild(td);
+            });
+
+            tbody.appendChild(tr);
+        });
+
+        status.textContent = tanquesNaComparacao.length + ' tanque(s), ' + linhasNomes.length + ' linha(s).';
+    }
+
+    function coletarIndicesPorTanque() {
+        var tbody = document.getElementById('comparar-indices-tbody');
+        if (!tbody) return {};
+        var out = {};
+        tanquesNaComparacao.forEach(function (t) { out[t.id] = []; });
+
+        tbody.querySelectorAll('tr').forEach(function (tr) {
+            var nome = (tr.querySelector('.cmp-nome-row') && tr.querySelector('.cmp-nome-row').value || '').trim();
+            tanquesNaComparacao.forEach(function (t) {
+                var td = tr.querySelector('td[data-tanque-id="' + t.id + '"]');
+                if (!td) return;
+                var valor = (td.querySelector('.cmp-val') && td.querySelector('.cmp-val').value || '').trim();
+                var di = (td.querySelector('.cmp-di') && td.querySelector('.cmp-di').value || '').trim();
+                var df = (td.querySelector('.cmp-df') && td.querySelector('.cmp-df').value || '').trim();
+                if (!nome && !valor && !di && !df) return;
+                out[t.id].push({ nome: nome, valor: valor, data_inicio: di, data_fim: df });
+            });
+        });
+        return out;
+    }
+
+    function popularSelectTanques() {
+        var sel = document.getElementById('comparar-indices-select-tanque');
+        if (!sel) return;
+        sel.innerHTML = '<option value="">Selecione...</option>';
+        var list = window.__tanquesResumoCache || [];
+        list.forEach(function (t) {
+            var opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = '#' + t.id + ' — ' + (t.nome || '') + (t.contrato ? ' (' + t.contrato + ')' : '');
+            sel.appendChild(opt);
+        });
+    }
+
+    function carregarResumoSePreciso(cb) {
+        if (window.__tanquesResumoCache && window.__tanquesResumoCache.length) {
+            if (cb) cb();
+            return;
+        }
+        fetch('/tanques/api/tanques-resumo', { headers: { Accept: 'application/json' } })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                window.__tanquesResumoCache = (data.success && data.tanques) ? data.tanques : [];
+                if (cb) cb();
+            })
+            .catch(function () {
+                window.__tanquesResumoCache = [];
+                if (cb) cb();
+            });
+    }
+
+    function carregarDadosComparacao() {
+        var alerta = document.getElementById('comparar-indices-alerta');
+        if (idsOrdem.length < 2) {
+            if (alerta) {
+                alerta.textContent = 'Inclua pelo menos dois tanques na lista.';
+                alerta.classList.remove('d-none');
+            }
+            return;
+        }
+        if (alerta) alerta.classList.add('d-none');
+
+        var qs = idsOrdem.map(function (x) { return encodeURIComponent(x); }).join(',');
+        fetch('/tanques/api/indices-comparar?ids=' + qs, { headers: { Accept: 'application/json' } })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.success || !data.tanques) {
+                    alert(data.error || 'Erro ao carregar.');
+                    return;
+                }
+                tanquesNaComparacao = data.tanques;
+                idsOrdem = tanquesNaComparacao.map(function (t) { return t.id; });
+                linhasNomes = unionNomes(tanquesNaComparacao);
+                if (linhasNomes.length === 0) linhasNomes = [''];
+                renderChips();
+                renderTabela();
+            })
+            .catch(function () {
+                alert('Erro ao carregar comparação.');
+            });
+    }
+
+    function adicionarIdNaLista(idStr) {
+        if (!idStr) return;
+        var sid = String(idStr);
+        if (idsOrdem.some(function (x) { return String(x) === sid; })) return;
+        if (idsOrdem.length >= 12) {
+            alert('Máximo de 12 tanques.');
+            return;
+        }
+        idsOrdem.push(sid);
+        renderChips();
+    }
+
+    document.getElementById('btn-comparar-indices-adicionar').addEventListener('click', function () {
+        var sel = document.getElementById('comparar-indices-select-tanque');
+        if (!sel || !sel.value) {
+            alert('Selecione um tanque.');
+            return;
+        }
+        adicionarIdNaLista(sel.value);
+        sel.value = '';
+    });
+
+    document.getElementById('btn-comparar-indices-carregar').addEventListener('click', function () {
+        carregarDadosComparacao();
+    });
+
+    document.getElementById('btn-comparar-indices-nova-linha').addEventListener('click', function () {
+        if (tanquesNaComparacao.length < 2) {
+            alert('Carregue a comparação com pelo menos 2 tanques primeiro.');
+            return;
+        }
+        syncLinhasNomesFromDom();
+        linhasNomes.push('');
+        renderTabela();
+    });
+
+    document.getElementById('btn-comparar-indices-salvar').addEventListener('click', function () {
+        if (tanquesNaComparacao.length < 2) {
+            alert('Nada para salvar.');
+            return;
+        }
+        var porTanque = coletarIndicesPorTanque();
+        var csrf = getCsrf();
+        var btn = document.getElementById('btn-comparar-indices-salvar');
+        if (btn) { btn.disabled = true; }
+
+        var promessas = tanquesNaComparacao.map(function (t) {
+            var indices = porTanque[t.id] || [];
+            return fetch('/tanques/api/tanques/' + t.id + '/indices', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    Accept: 'application/json',
+                    'X-CSRFToken': csrf
+                },
+                body: JSON.stringify({ indices: indices })
+            }).then(function (r) {
+                return r.text().then(function (text) {
+                    var j = {};
+                    try { j = text ? JSON.parse(text) : {}; } catch (e) { j = { error: text || 'resposta inválida' }; }
+                    return { ok: r.ok, body: j };
+                });
+            });
+        });
+
+        Promise.all(promessas)
+            .then(function (results) {
+                var falhas = [];
+                results.forEach(function (r, i) {
+                    var body = r.body || {};
+                    if (!r.ok || !body.success) {
+                        falhas.push('#' + tanquesNaComparacao[i].id + ': ' + (body.error || 'erro'));
+                    }
+                });
+                if (falhas.length) {
+                    alert('Alguns tanques não foram salvos:\n' + falhas.join('\n'));
+                } else {
+                    alert('Índices salvos em todos os tanques selecionados.');
+                }
+            })
+            .catch(function () {
+                alert('Erro ao salvar.');
+            })
+            .finally(function () {
+                if (btn) { btn.disabled = false; }
+            });
+    });
+
+    var modalEl = document.getElementById('modalCompararIndicesTanques');
+    if (modalEl) {
+        modalEl.addEventListener('show.bs.modal', function () {
+            tanquesNaComparacao = [];
+            linhasNomes = [];
+            idsOrdem = [];
+            carregarResumoSePreciso(function () {
+                popularSelectTanques();
+                var pre = idsSelecionadosNaGrade();
+                if (pre.length >= 2) {
+                    pre.forEach(function (id) { adicionarIdNaLista(id); });
+                    var av = document.getElementById('comparar-indices-alerta');
+                    if (av) av.classList.add('d-none');
+                    carregarDadosComparacao();
+                } else {
+                    renderChips();
+                    document.getElementById('comparar-indices-tbody').innerHTML = '';
+                    atualizarTheadVazio();
+                    document.getElementById('comparar-indices-status').textContent = pre.length === 1
+                        ? 'Selecione mais um tanque na grade ou adicione tanques abaixo.'
+                        : 'Adicione pelo menos dois tanques e clique em Carregar comparação.';
+                    var av2 = document.getElementById('comparar-indices-alerta');
+                    if (av2) {
+                        av2.textContent = 'Dica: marque dois ou mais tanques na lista antes de abrir este painel para carregar automaticamente.';
+                        av2.classList.remove('d-none');
+                    }
+                }
+            });
+        });
+    }
+})();
+</script>

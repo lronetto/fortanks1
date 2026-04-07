@@ -1,0 +1,39 @@
+<div class="modal fade" id="modalEditarCalendario" tabindex="-1" aria-labelledby="modalEditarCalendarioLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <form method="post" id="formEditarCalendario" action="">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalEditarCalendarioLabel">Editar calendário</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label">Nome</label>
+                        <input type="text" class="form-control" name="nome" id="ec_nome" required maxlength="160">
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Dias úteis da semana</label>
+                        <div class="d-flex flex-wrap gap-3">
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="seg_util" id="ec_seg" value="1"><label class="form-check-label" for="ec_seg">Segunda</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="ter_util" id="ec_ter" value="1"><label class="form-check-label" for="ec_ter">Terça</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="qua_util" id="ec_qua" value="1"><label class="form-check-label" for="ec_qua">Quarta</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="qui_util" id="ec_qui" value="1"><label class="form-check-label" for="ec_qui">Quinta</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="sex_util" id="ec_sex" value="1"><label class="form-check-label" for="ec_sex">Sexta</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="sab_util" id="ec_sab" value="1"><label class="form-check-label" for="ec_sab">Sábado</label></div>
+                            <div class="form-check"><input class="form-check-input" type="checkbox" name="dom_util" id="ec_dom" value="1"><label class="form-check-label" for="ec_dom">Domingo</label></div>
+                        </div>
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label">Observação</label>
+                        <textarea class="form-control" name="observacao" id="ec_observacao" rows="2"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>

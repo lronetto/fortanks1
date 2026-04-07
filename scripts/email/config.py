@@ -7,6 +7,8 @@ import shutil
 
 from dotenv import load_dotenv
 
+_log = logging.getLogger(__name__)
+
 try:
     import rarfile
 
@@ -17,17 +19,18 @@ try:
         if shutil.which(path) or (os.path.exists(path) and os.access(path, os.X_OK)):
             unrar_found = path
             rarfile.UNRAR_TOOL = path
-            logging.info(f"Ferramenta unrar encontrada em: {path}")
+            _log.info("Ferramenta unrar encontrada em: %s", path)
             break
 
     if not unrar_found:
         unrar_in_path = shutil.which("unrar")
         if unrar_in_path:
             rarfile.UNRAR_TOOL = unrar_in_path
-            logging.info(f"Ferramenta unrar encontrada no PATH: {unrar_in_path}")
+            _log.info("Ferramenta unrar encontrada no PATH: %s", unrar_in_path)
         else:
-            logging.warning(
-                "Ferramenta unrar não encontrada. Arquivos RAR podem não funcionar corretamente."
+            # Opcional no Windows; evita WARNING em todo import da app (use DEBUG para diagnosticar).
+            _log.debug(
+                "Ferramenta unrar não encontrada. Anexos .rar exigem unrar no PATH ou WinRAR/unar."
             )
 except ImportError:
 
@@ -42,8 +45,8 @@ except ImportError:
 
     rarfile = _RarStub()  # type: ignore
     RAR_SUPPORT = False
-    logging.warning(
-        "Biblioteca rarfile não encontrada. Arquivos .rar não serão processados. Instale com: pip install rarfile"
+    _log.warning(
+        "Biblioteca rarfile não instalada. Arquivos .rar não serão processados. Instale com: pip install rarfile"
     )
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")

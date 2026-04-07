@@ -122,9 +122,11 @@ def processar_producao_por_pecas(pecas_list, usuario_id=1, log=True, _usinagem=T
             grupos[chave] = []
         grupos[chave].append(peca)
     if _usinagem:
+        # JSON no SQL: não usar .get() na coluna (é InstrumentedAttribute). Chave ausente ou null => NULL no extract.
         usinagens = ConcretoUsinagens.query.filter(
             ConcretoUsinagens.data_usinagem.like(f'%{dia_date}%'),
-            ConcretoUsinagens.dados_adicionais.get('data_producao') is None).all()
+            func.json_extract(ConcretoUsinagens.dados_adicionais, '$.data_producao').is_(None),
+        ).all()
         for usinagem in usinagens:
             try:
                 usinagem.produzir(usuario_id=usuario_id, total=True)

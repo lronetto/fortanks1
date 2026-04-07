@@ -120,13 +120,14 @@ def equipamentos_datatables():
 
     order_col_index = request.form.get('order[0][column]', '0')
     order_dir = request.form.get('order[0][dir]', 'asc')
-    # Coluna 2 = patrimônio (JSON) — sem ordenação SQL confiável; usa nome como desempate visual
+    # Coluna 0 = miniatura (sem ordenação útil); 3 = patrimônio (JSON) — usa nome como desempate
     col_map = {
         '0': Equipamento.nome,
-        '1': Equipamento.modelo,
-        '2': Equipamento.nome,
-        '3': Equipamento.nota_fiscal,
-        '4': Equipamento.status,
+        '1': Equipamento.nome,
+        '2': Equipamento.modelo,
+        '3': Equipamento.nome,
+        '4': Equipamento.nota_fiscal,
+        '5': Equipamento.status,
     }
     order_col = col_map.get(str(order_col_index), Equipamento.nome)
     if order_dir == 'desc':
@@ -136,11 +137,38 @@ def equipamentos_datatables():
 
     page_items = query.offset(start).limit(length).all()
 
-    data = []
+    mid_set = set()
+    extras_por_eq = {}
     for eq in page_items:
         ex = parse_extras(eq.dados_adicionais)
+        extras_por_eq[eq.id] = ex
+        mid = ex.get('material_id')
+        if mid:
+            mid_set.add(mid)
+    mats_por_id = {}
+    if mid_set:
+        for mm in Materiais.query.filter(Materiais.id.in_(mid_set)).all():
+            mats_por_id[mm.id] = mm
+
+    data = []
+    for eq in page_items:
+        ex = extras_por_eq[eq.id]
+        material_imagem_url = None
+        material_nome = ''
+        mid = ex.get('material_id')
+        if mid and mid in mats_por_id:
+            mat = mats_por_id[mid]
+            material_nome = mat.nome or ''
+            img_uid = mat.imagem_upload_id
+            if img_uid:
+                material_imagem_url = url_for(
+                    'material.material_imagem_inline',
+                    upload_id=img_uid,
+                )
         data.append({
             'id': eq.id,
+            'material_imagem_url': material_imagem_url,
+            'material_nome': material_nome,
             'nome': eq.nome or '',
             'modelo': eq.modelo or '',
             'patrimonio': ex.get('patrimonio') or '',
@@ -157,6 +185,19 @@ def equipamentos_datatables():
 
 
 _CATEGORIAS_MATERIAL_EQUIPAMENTO = ('Equipamento', 'Ferramenta')
+
+
+def _material_id_para_equipamento(raw) -> int | None:
+    """ID de material válido (categoria Equipamento/Ferramenta) ou None."""
+    s = (raw or '').strip() if raw is not None else ''
+    if not s or not s.isdigit():
+        return None
+    m = Materiais.query.get(int(s))
+    if not m:
+        return None
+    if (m.categoria or '') not in _CATEGORIAS_MATERIAL_EQUIPAMENTO:
+        return None
+    return m.id
 
 
 @equipamento_bp.route('/busca-materiais-equipamento', methods=['GET'])
@@ -242,6 +283,9 @@ def novo():
             nf_numero = _sync_equipamento_nota_fiscal_form(
                 request.form, extras_novo, tinha_vinculo_nota=False
             )
+            extras_novo['material_id'] = _material_id_para_equipamento(
+                request.form.get('material_id')
+            )
             equipamento = Equipamento(
                 nome=request.form['nome'],
                 tipo=request.form['tipo'],
@@ -298,6 +342,7 @@ def duplicar_equipamento(id):
         extras_novo['checklist_modelo_id'] = ex.get('checklist_modelo_id')
         if ex.get('nota_fiscal_id'):
             extras_novo['nota_fiscal_id'] = ex['nota_fiscal_id']
+        extras_novo['material_id'] = ex.get('material_id')
 
         nome_base = (orig.nome or 'Equipamento').strip()
         if len(nome_base) > 88:
@@ -375,6 +420,9 @@ def editar(id):
             nf_numero = _sync_equipamento_nota_fiscal_form(
                 request.form, extras, tinha_vinculo_nota=tinha_nf_vinculada
             )
+            extras['material_id'] = _material_id_para_equipamento(
+                request.form.get('material_id')
+            )
             equipamento.dados_adicionais = dump_extras(extras)
 
             equipamento.nome = request.form['nome']
@@ -429,6 +477,12 @@ def editar(id):
                         'equipamento.equipamento_foto', upload_id=u.id
                     ),
                 })
+        mid = ex.get('material_id')
+        material_nome = ''
+        if mid:
+            mm = Materiais.query.get(mid)
+            if mm:
+                material_nome = mm.nome or ''
         return jsonify({
             'id': equipamento.id,
             'nome': equipamento.nome,
@@ -444,6 +498,8 @@ def editar(id):
             'observacoes': equipamento.observacoes or '',
             'patrimonio': ex.get('patrimonio', ''),
             'checklist_modelo_id': ex.get('checklist_modelo_id'),
+            'material_id': mid,
+            'material_nome': material_nome,
             'fotos': fotos_json,
         })
 

@@ -303,7 +303,10 @@ def api_pecas():
                 'projeto_nome': peca.tanque.contrato.nome if peca.tanque and peca.tanque.contrato else 'Sem projeto',
                 'tipo': peca.tipo or '',
                 'nome': peca.nome or '',
+                'data_concretagem': peca.data_concretagem.strftime('%d/%m/%Y') if peca.data_concretagem else '',
+                'data_concretagem_sort': peca.data_concretagem.strftime('%Y-%m-%d') if peca.data_concretagem else '',
                 'data_cadastro': peca.data_cadastro.strftime('%d/%m/%Y %H:%M') if peca.data_cadastro else '',
+                'data_cadastro_sort': peca.data_cadastro.strftime('%Y-%m-%d %H:%M:%S') if peca.data_cadastro else '',
                 'status': status_html,
                 'acoes': acoes_html,
                 'concretado': concretado,
@@ -544,6 +547,7 @@ def exportar_excel():
                 'Acabado': 'Sim' if acabada else 'Não',
                 'Transportado': 'Sim' if transportado else 'Não',
                 'Perca': 'Sim' if perca else 'Não',
+                'Data Concretagem': peca.data_concretagem.strftime('%d/%m/%Y %H:%M') if peca.data_concretagem else '',
                 'Data Cadastro': peca.data_cadastro.strftime('%d/%m/%Y %H:%M') if peca.data_cadastro else '',
             })
         df = pd.DataFrame(rows)

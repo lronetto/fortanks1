@@ -1,0 +1,220 @@
+<div class="modal fade" id="modalImportarFeriadosApi" tabindex="-1" aria-labelledby="modalImportarFeriadosApiLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalImportarFeriadosApiLabel">
+                    <i class="fas fa-cloud-download-alt"></i> Importar feriados (API)
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-3">
+                    <strong>Nacionais:</strong> Brasil API (<code>brasilapi.com.br</code>).
+                    <strong>Estaduais e municipais:</strong> dataset
+                    <a href="https://github.com/joaopbini/feriados-brasil" target="_blank" rel="noopener">feriados-brasil</a>
+                    (JSON por ano). Para municipais, informe o <strong>código IBGE do município</strong>
+                    (<a href="https://www.ibge.gov.br/explica/codigos-dos-municipios.php" target="_blank" rel="noopener">consulta IBGE</a>).
+                    Feriados já cadastrados na mesma data são ignorados.
+                </p>
+                <div class="row g-2">
+                    <div class="col-md-4">
+                        <label class="form-label" for="ifa_ano">Ano</label>
+                        <input type="number" class="form-control" id="ifa_ano" min="1900" max="2199" step="1" required>
+                    </div>
+                    <div class="col-md-8">
+                        <label class="form-label">Incluir</label>
+                        <div class="d-flex flex-wrap gap-3 pt-1">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="ifa_nac" checked>
+                                <label class="form-check-label" for="ifa_nac">Feriados nacionais</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="ifa_est">
+                                <label class="form-check-label" for="ifa_est">Feriados estaduais</label>
+                            </div>
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="ifa_mun">
+                                <label class="form-check-label" for="ifa_mun">Feriados municipais</label>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="ifa_uf">UF (estaduais)</label>
+                        <select class="form-select" id="ifa_uf" disabled>
+                            <option value="">— selecione —</option>
+                            <option value="AC">AC</option>
+                            <option value="AL">AL</option>
+                            <option value="AM">AM</option>
+                            <option value="AP">AP</option>
+                            <option value="BA">BA</option>
+                            <option value="CE">CE</option>
+                            <option value="DF">DF</option>
+                            <option value="ES">ES</option>
+                            <option value="GO">GO</option>
+                            <option value="MA">MA</option>
+                            <option value="MG">MG</option>
+                            <option value="MS">MS</option>
+                            <option value="MT">MT</option>
+                            <option value="PA">PA</option>
+                            <option value="PB">PB</option>
+                            <option value="PE">PE</option>
+                            <option value="PI">PI</option>
+                            <option value="PR">PR</option>
+                            <option value="RJ">RJ</option>
+                            <option value="RN">RN</option>
+                            <option value="RO">RO</option>
+                            <option value="RR">RR</option>
+                            <option value="RS">RS</option>
+                            <option value="SC">SC</option>
+                            <option value="SE">SE</option>
+                            <option value="SP">SP</option>
+                            <option value="TO">TO</option>
+                        </select>
+                    </div>
+                    <div class="col-md-6">
+                        <label class="form-label" for="ifa_ibge">Código IBGE do município</label>
+                        <input type="text" class="form-control" id="ifa_ibge" inputmode="numeric" maxlength="7" pattern="[0-9]{7}" placeholder="Ex.: 3550308" disabled autocomplete="off">
+                        <span class="form-text small text-muted">Obrigatório se marcar municipais (7 dígitos).</span>
+                    </div>
+                </div>
+                <div id="ifa_msg" class="alert d-none mt-3 mb-0" role="alert"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+                <button type="button" class="btn btn-primary" id="ifa_btn_importar">
+                    <i class="fas fa-download"></i> Importar para este calendário
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    var anoEl = document.getElementById('ifa_ano');
+    var nacEl = document.getElementById('ifa_nac');
+    var estEl = document.getElementById('ifa_est');
+    var munEl = document.getElementById('ifa_mun');
+    var ufEl = document.getElementById('ifa_uf');
+    var ibgeEl = document.getElementById('ifa_ibge');
+    var msgEl = document.getElementById('ifa_msg');
+    var btnEl = document.getElementById('ifa_btn_importar');
+    var modalEl = document.getElementById('modalImportarFeriadosApi');
+
+    function setMsg(kind, text) {
+        msgEl.className = 'alert mt-3 mb-0';
+        if (!text) {
+            msgEl.classList.add('d-none');
+            msgEl.textContent = '';
+            return;
+        }
+        msgEl.classList.remove('d-none');
+        if (kind === 'danger') msgEl.classList.add('alert-danger');
+        else if (kind === 'warning') msgEl.classList.add('alert-warning');
+        else msgEl.classList.add('alert-success');
+        msgEl.textContent = text;
+    }
+
+    function syncUf() {
+        var on = estEl.checked;
+        ufEl.disabled = !on;
+        if (!on) ufEl.value = '';
+    }
+    function syncIbge() {
+        var on = munEl.checked;
+        ibgeEl.disabled = !on;
+        if (!on) ibgeEl.value = '';
+    }
+    estEl.addEventListener('change', syncUf);
+    munEl.addEventListener('change', syncIbge);
+    syncUf();
+    syncIbge();
+
+    if (modalEl) {
+        modalEl.addEventListener('show.bs.modal', function() {
+            setMsg('', '');
+            var y = new Date().getFullYear();
+            if (anoEl && !anoEl.value) anoEl.value = String(y);
+        });
+    }
+
+    btnEl.addEventListener('click', function() {
+        var calId = window.calSelecionadoId;
+        if (!calId) {
+            setMsg('danger', 'Selecione um calendário e abra os feriados antes de importar.');
+            return;
+        }
+        var ano = parseInt(anoEl.value, 10);
+        if (!ano || ano < 1900 || ano > 2199) {
+            setMsg('danger', 'Informe um ano entre 1900 e 2199.');
+            return;
+        }
+        var incNac = nacEl.checked;
+        var incEst = estEl.checked;
+        var incMun = munEl.checked;
+        if (!incNac && !incEst && !incMun) {
+            setMsg('danger', 'Marque ao menos uma opção: nacionais, estaduais ou municipais.');
+            return;
+        }
+        var uf = (ufEl.value || '').trim().toUpperCase();
+        if (incEst && uf.length !== 2) {
+            setMsg('danger', 'Para feriados estaduais, selecione a UF.');
+            return;
+        }
+        var ibgeRaw = (ibgeEl.value || '').trim().replace(/\D/g, '');
+        if (incMun && ibgeRaw.length !== 7) {
+            setMsg('danger', 'Para feriados municipais, informe o código IBGE com 7 dígitos.');
+            return;
+        }
+        var csrf = document.querySelector('meta[name="csrf-token"]');
+        csrf = csrf ? csrf.getAttribute('content') : '';
+        if (!csrf) {
+            setMsg('danger', 'Token CSRF não encontrado. Recarregue a página.');
+            return;
+        }
+        var url = (window.urlImportarFeriadosApiTpl || '').replace('999999999', String(calId));
+        if (!url) {
+            setMsg('danger', 'URL de importação não configurada.');
+            return;
+        }
+        btnEl.disabled = true;
+        setMsg('success', 'Importando…');
+        fetch(url, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Accept': 'application/json',
+                'X-CSRFToken': csrf
+            },
+            body: JSON.stringify({
+                csrf_token: csrf,
+                ano: ano,
+                uf: incEst ? uf : '',
+                incluir_nacionais: incNac,
+                incluir_estaduais: incEst,
+                incluir_municipais: incMun,
+                codigo_ibge: incMun ? parseInt(ibgeRaw, 10) : null
+            })
+        })
+        .then(function(r) { return r.json().then(function(j) { return { ok: r.ok, status: r.status, body: j }; }); })
+        .then(function(res) {
+            btnEl.disabled = false;
+            var b = res.body || {};
+            if (!res.ok || !b.ok) {
+                setMsg('danger', b.error || b.message || ('Erro HTTP ' + res.status));
+                return;
+            }
+            var parts = [];
+            if (typeof b.inseridos === 'number') parts.push('Inseridos: ' + b.inseridos);
+            if (typeof b.ignorados === 'number') parts.push('Já existentes (ignorados): ' + b.ignorados);
+            if (b.aviso) parts.push(b.aviso);
+            setMsg('success', parts.join(' — ') || 'Concluído.');
+            if (typeof window.reloadCalFeriadosDt === 'function') window.reloadCalFeriadosDt();
+            if (typeof window.reloadCalendariosDt === 'function') window.reloadCalendariosDt();
+        })
+        .catch(function() {
+            btnEl.disabled = false;
+            setMsg('danger', 'Falha de rede ou resposta inválida.');
+        });
+    });
+})();
+</script>

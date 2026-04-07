@@ -1,6 +1,6 @@
 <!-- Modal de Edição de Tanque -->
 <div class="modal fade" id="modalEditarTanque" tabindex="-1" aria-labelledby="modalEditarTanqueLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title" id="modalEditarTanqueLabel"><i class="fas fa-edit"></i> Editar Tanque</h5>
@@ -125,6 +125,43 @@
                             <small class="form-text text-muted">Valor unitário do tanque</small>
                         </div>
                     </div>
+
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <h6 class="font-weight-bold mb-2">Índices</h6>
+                            <p class="small text-muted mb-2">Nome, valor e período de cada índice (gravados em dados adicionais do tanque).</p>
+                            <div class="table-responsive">
+                                <table class="table table-sm table-bordered mb-1" id="tabela-edit-indices">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th>Nome do índice</th>
+                                            <th>Valor</th>
+                                            <th style="min-width: 140px;">Data início</th>
+                                            <th style="min-width: 140px;">Data fim</th>
+                                            <th style="width: 48px;"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="tbody-edit-indices"></tbody>
+                                </table>
+                            </div>
+                            <button type="button" class="btn btn-outline-secondary btn-sm mb-2" id="btn-edit-indice-linha">
+                                <i class="fas fa-plus"></i> Novo índice
+                            </button>
+                            <div class="row g-2 align-items-end">
+                                <div class="col-md-8">
+                                    <label for="select-copiar-edit-indices-de" class="form-label small mb-0">Copiar índices de outro tanque</label>
+                                    <select class="form-select form-select-sm" id="select-copiar-edit-indices-de">
+                                        <option value="">Carregando...</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-4">
+                                    <button type="button" class="btn btn-outline-primary btn-sm w-100" id="btn-copiar-edit-indices-de">
+                                        <i class="fas fa-copy"></i> Copiar
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </form>
             </div>
             <div class="modal-footer">
@@ -140,6 +177,139 @@
 
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    const tbodyEditIndices = document.getElementById('tbody-edit-indices');
+    const selectCopiarEdit = document.getElementById('select-copiar-edit-indices-de');
+
+    function escapeHtml(s) {
+        if (s === null || s === undefined) return '';
+        const d = document.createElement('div');
+        d.textContent = String(s);
+        return d.innerHTML;
+    }
+
+    function normalizarDataParaInput(val) {
+        if (val === null || val === undefined || val === '') return '';
+        const s = String(val).trim();
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
+        const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+        if (m) {
+            return m[3].padStart(4, '0') + '-' + m[2].padStart(2, '0') + '-' + m[1].padStart(2, '0');
+        }
+        return '';
+    }
+
+    function adicionarLinhaIndiceEdit(nome, valor, dataInicio, dataFim) {
+        const tr = document.createElement('tr');
+        const di = normalizarDataParaInput(dataInicio);
+        const df = normalizarDataParaInput(dataFim);
+        tr.innerHTML =
+            '<td><input type="text" class="form-control form-control-sm indice-nome" placeholder="Nome" value="' + escapeHtml(nome || '') + '"></td>' +
+            '<td><input type="text" class="form-control form-control-sm indice-valor" placeholder="Valor" value="' + escapeHtml(valor || '') + '"></td>' +
+            '<td><input type="date" class="form-control form-control-sm indice-data-inicio" value="' + escapeHtml(di) + '"></td>' +
+            '<td><input type="date" class="form-control form-control-sm indice-data-fim" value="' + escapeHtml(df) + '"></td>' +
+            '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remover-indice" title="Remover"><i class="fas fa-times"></i></button></td>';
+        tbodyEditIndices.appendChild(tr);
+        tr.querySelector('.btn-remover-indice').addEventListener('click', function () {
+            tr.remove();
+        });
+    }
+
+    function limparIndicesEdit() {
+        tbodyEditIndices.innerHTML = '';
+    }
+
+    function coletarIndicesEdit() {
+        const out = [];
+        tbodyEditIndices.querySelectorAll('tr').forEach(function (tr) {
+            const nome = (tr.querySelector('.indice-nome') && tr.querySelector('.indice-nome').value || '').trim();
+            const valor = (tr.querySelector('.indice-valor') && tr.querySelector('.indice-valor').value || '').trim();
+            const dataInicio = (tr.querySelector('.indice-data-inicio') && tr.querySelector('.indice-data-inicio').value || '').trim();
+            const dataFim = (tr.querySelector('.indice-data-fim') && tr.querySelector('.indice-data-fim').value || '').trim();
+            if (nome || valor || dataInicio || dataFim) {
+                out.push({
+                    nome: nome,
+                    valor: valor,
+                    data_inicio: dataInicio,
+                    data_fim: dataFim
+                });
+            }
+        });
+        return out;
+    }
+
+    function popularSelectTanquesResumoEdit(selectEl, excludeId) {
+        selectEl.innerHTML = '<option value="">Selecione um tanque...</option>';
+        const list = window.__tanquesResumoCache || [];
+        list.forEach(function (t) {
+            if (excludeId && String(t.id) === String(excludeId)) return;
+            const opt = document.createElement('option');
+            opt.value = t.id;
+            opt.textContent = '#' + t.id + ' — ' + (t.nome || '') + (t.contrato ? ' (' + t.contrato + ')' : '');
+            selectEl.appendChild(opt);
+        });
+    }
+
+    function carregarTanquesResumoEdit(callback) {
+        if (window.__tanquesResumoCache) {
+            if (callback) callback();
+            return;
+        }
+        fetch('/tanques/api/tanques-resumo', { headers: { 'Accept': 'application/json' } })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (data.success && data.tanques) {
+                    window.__tanquesResumoCache = data.tanques;
+                } else {
+                    window.__tanquesResumoCache = [];
+                }
+                if (callback) callback();
+            })
+            .catch(function () {
+                window.__tanquesResumoCache = [];
+                if (callback) callback();
+            });
+    }
+
+    document.getElementById('btn-edit-indice-linha').addEventListener('click', function () {
+        adicionarLinhaIndiceEdit('', '', '', '');
+    });
+
+    document.getElementById('btn-copiar-edit-indices-de').addEventListener('click', function () {
+        const id = selectCopiarEdit.value;
+        if (!id) {
+            alert('Selecione um tanque de origem.');
+            return;
+        }
+        fetch('/api/tanques/' + encodeURIComponent(id), {
+            headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function (r) { return r.json(); })
+            .then(function (data) {
+                if (!data.success || !data.tanque) {
+                    alert('Não foi possível carregar o tanque de origem.');
+                    return;
+                }
+                let indices = [];
+                if (data.tanque.dados_adicionais) {
+                    try {
+                        const da = JSON.parse(data.tanque.dados_adicionais);
+                        if (da && Array.isArray(da.indices)) indices = da.indices;
+                    } catch (e) { /* ignore */ }
+                }
+                limparIndicesEdit();
+                if (indices.length === 0) {
+                    alert('O tanque selecionado não possui índices cadastrados.');
+                    return;
+                }
+                indices.forEach(function (it) {
+                    adicionarLinhaIndiceEdit(it.nome, it.valor, it.data_inicio, it.data_fim);
+                });
+            })
+            .catch(function () {
+                alert('Erro ao copiar índices.');
+            });
+    });
+
     // Função para preencher o modal com os dados do tanque
     function preencherModal(tanque) {
         if (!tanque) {
@@ -169,23 +339,42 @@ document.addEventListener('DOMContentLoaded', function() {
             if (contratoSelect && tanque.contrato_id) {
                 contratoSelect.value = tanque.contrato_id;
             }
-            
-            // Carregar dados adicionais (segunda concretagem)
+
+            document.getElementById('edit_segunda_concretagem').checked = false;
+            document.getElementById('edit_descricao_segunda_concretagem').value = '';
+            toggleDescricaoSegundaConcretagem();
+
+            let base = {};
             if (tanque.dados_adicionais) {
                 try {
-                    const dadosAdicionais = JSON.parse(tanque.dados_adicionais);
-                    if (dadosAdicionais.segunda_concretagem) {
-                        document.getElementById('edit_segunda_concretagem').checked = true;
-                        if (dadosAdicionais.descricao_segunda_concretagem) {
-                            document.getElementById('edit_descricao_segunda_concretagem').value = dadosAdicionais.descricao_segunda_concretagem;
-                        }
-                        toggleDescricaoSegundaConcretagem();
-                    }
+                    base = JSON.parse(tanque.dados_adicionais);
+                    if (typeof base !== 'object' || base === null) base = {};
                 } catch (e) {
                     console.error('Erro ao parsear dados_adicionais:', e);
+                    base = {};
                 }
             }
-            
+            window.__tanqueDadosAdicionaisBase = base;
+
+            if (base.segunda_concretagem) {
+                document.getElementById('edit_segunda_concretagem').checked = true;
+                if (base.descricao_segunda_concretagem) {
+                    document.getElementById('edit_descricao_segunda_concretagem').value = base.descricao_segunda_concretagem;
+                }
+                toggleDescricaoSegundaConcretagem();
+            }
+
+            limparIndicesEdit();
+            if (base.indices && Array.isArray(base.indices)) {
+                base.indices.forEach(function (it) {
+                    adicionarLinhaIndiceEdit(it.nome, it.valor, it.data_inicio, it.data_fim);
+                });
+            }
+
+            carregarTanquesResumoEdit(function () {
+                popularSelectTanquesResumoEdit(selectCopiarEdit, tanque.id);
+            });
+
             atualizarDimensoesHelp();
         } catch (error) {
             console.error('Erro ao preencher o modal:', error);
@@ -289,27 +478,28 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
 
-                // Preparar dados adicionais em JSON
                 const segundaConcretagem = document.getElementById('edit_segunda_concretagem').checked;
                 const descricaoSegundaConcretagem = document.getElementById('edit_descricao_segunda_concretagem').value.trim();
-                
-                const dadosAdicionais = {};
+
+                const base = window.__tanqueDadosAdicionaisBase && typeof window.__tanqueDadosAdicionaisBase === 'object'
+                    ? Object.assign({}, window.__tanqueDadosAdicionaisBase)
+                    : {};
                 if (segundaConcretagem) {
-                    dadosAdicionais.segunda_concretagem = true;
+                    base.segunda_concretagem = true;
                     if (descricaoSegundaConcretagem) {
-                        dadosAdicionais.descricao_segunda_concretagem = descricaoSegundaConcretagem;
+                        base.descricao_segunda_concretagem = descricaoSegundaConcretagem;
+                    } else {
+                        delete base.descricao_segunda_concretagem;
                     }
+                } else {
+                    delete base.segunda_concretagem;
+                    delete base.descricao_segunda_concretagem;
                 }
+                base.indices = coletarIndicesEdit();
 
                 const form = document.getElementById('form-editar-tanque');
                 const formData = new FormData(form);
-                
-                // Adicionar dados_adicionais como JSON
-                if (Object.keys(dadosAdicionais).length > 0) {
-                    formData.set('dados_adicionais', JSON.stringify(dadosAdicionais));
-                } else {
-                    formData.set('dados_adicionais', '');
-                }
+                formData.set('dados_adicionais', JSON.stringify(base));
                 
                 const url = `/tanques/editar/${tanqueId}`;
                 

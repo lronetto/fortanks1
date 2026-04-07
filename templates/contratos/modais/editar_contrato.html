@@ -1,6 +1,6 @@
 <!-- Modal de Editar Contrato -->
 <div class="modal fade" id="modalEditarContrato" tabindex="-1" aria-labelledby="modalEditarContratoLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg">
+    <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title" id="modalEditarContratoLabel">
@@ -102,13 +102,75 @@
                     </div>
 
                     <div class="row mb-3">
-                        <div class="col-md-6">
-                            <label for="editar_venda_material" class="form-label">Valor Materiais (R$)</label>
-                            <input type="text" class="form-control mascara-moeda" id="editar_venda_material" name="venda_material">
+                        <div class="col-12">
+                            <label class="form-label">Indicadores financeiros (material e serviço)</label>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:14%"></th>
+                                            <th class="text-end">Venda (R$)</th>
+                                            <th class="text-end">Custo (R$)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody>
+                                        <tr>
+                                            <th scope="row">Material</th>
+                                            <td><input type="text" class="form-control form-control-sm text-end input-moeda-fin" id="editar_fin_mat_venda" name="fin_mat_venda" autocomplete="off"></td>
+                                            <td><input type="text" class="form-control form-control-sm text-end input-moeda-fin" id="editar_fin_mat_custo" name="fin_mat_custo" autocomplete="off"></td>
+                                        </tr>
+                                        <tr>
+                                            <th scope="row">Serviço</th>
+                                            <td><input type="text" class="form-control form-control-sm text-end input-moeda-fin" id="editar_fin_ser_venda" name="fin_ser_venda" autocomplete="off"></td>
+                                            <td><input type="text" class="form-control form-control-sm text-end input-moeda-fin" id="editar_fin_ser_custo" name="fin_ser_custo" autocomplete="off"></td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                            <div class="border rounded p-3 bg-light mt-2">
+                                <div class="fw-semibold mb-2">Valores gerais (contrato)</div>
+                                <div class="row g-2">
+                                    <div class="col-md-4">
+                                        <label for="editar_fin_ger_impostos" class="form-label small mb-0">Impostos (R$)</label>
+                                        <input type="text" class="form-control form-control-sm text-end input-moeda-fin" id="editar_fin_ger_impostos" name="fin_ger_impostos" autocomplete="off">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="editar_fin_ger_royalties" class="form-label small mb-0">Royalties (R$)</label>
+                                        <input type="text" class="form-control form-control-sm text-end input-moeda-fin" id="editar_fin_ger_royalties" name="fin_ger_royalties" autocomplete="off">
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label for="editar_fin_ger_investimentos" class="form-label small mb-0">Investimentos (R$)</label>
+                                        <input type="text" class="form-control form-control-sm text-end input-moeda-fin" id="editar_fin_ger_investimentos" name="fin_ger_investimentos" autocomplete="off">
+                                    </div>
+                                </div>
+                            </div>
+                            <small class="text-muted d-block mt-2">As vendas (material + serviço) alimentam o total do contrato; custos e valores gerais ficam em <code>conf</code> (JSON).</small>
                         </div>
-                        <div class="col-md-6">
-                            <label for="editar_venda_servico" class="form-label">Valor Serviços (R$)</label>
-                            <input type="text" class="form-control mascara-moeda" id="editar_venda_servico" name="venda_servico">
+                    </div>
+
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label class="form-label mb-0">Aditivos</label>
+                                <button type="button" class="btn btn-sm btn-outline-primary" id="editar_btn_add_aditivo">
+                                    <i class="fas fa-plus"></i> Adicionar aditivo
+                                </button>
+                            </div>
+                            <div class="table-responsive">
+                                <table class="table table-bordered table-sm align-middle mb-0">
+                                    <thead class="table-light">
+                                        <tr>
+                                            <th style="width:14%">Data</th>
+                                            <th style="width:18%">Valor (R$)</th>
+                                            <th>Descrição</th>
+                                            <th style="width:5%" class="text-center"></th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="editar_aditivos_tbody"></tbody>
+                                </table>
+                            </div>
+                            <input type="hidden" name="aditivos_json" id="editar_aditivos_json" value="[]">
+                            <small class="text-muted d-block mt-1">Registre um ou mais aditivos; os dados são gravados em <code>conf</code> (JSON).</small>
                         </div>
                     </div>
 
@@ -167,26 +229,136 @@ document.addEventListener('DOMContentLoaded', function() {
             .trim());
     }
 
-    // Calcular valor total
+    const seletorInputsFinEditar = '#editar_fin_mat_venda, #editar_fin_mat_custo, #editar_fin_ser_venda, #editar_fin_ser_custo, #editar_fin_ger_impostos, #editar_fin_ger_royalties, #editar_fin_ger_investimentos';
+
     function calcularTotalEditar() {
-        const valorMaterial = converterParaNumero(document.getElementById('editar_venda_material').value);
-        const valorServico = converterParaNumero(document.getElementById('editar_venda_servico').value);
+        const valorMaterial = converterParaNumero(document.getElementById('editar_fin_mat_venda').value);
+        const valorServico = converterParaNumero(document.getElementById('editar_fin_ser_venda').value);
         const total = valorMaterial + valorServico;
         document.getElementById('editar_valor_total').textContent = formatarMoeda(total);
     }
 
-    // Inicializar máscaras para valores monetários
     if (typeof $.fn.maskMoney !== 'undefined') {
-        $('#editar_venda_material, #editar_venda_servico').maskMoney({
+        $(seletorInputsFinEditar).maskMoney({
             prefix: 'R$ ',
             allowNegative: false,
             thousands: '.',
             decimal: ',',
             affixesStay: true
         });
+        $(seletorInputsFinEditar).on('keyup blur', calcularTotalEditar);
+    }
 
-        // Recalcular total quando os valores são alterados
-        $('#editar_venda_material, #editar_venda_servico').on('keyup', calcularTotalEditar);
+    const maskMoedaAditivoOpts = {
+        prefix: 'R$ ',
+        allowNegative: false,
+        thousands: '.',
+        decimal: ',',
+        affixesStay: true
+    };
+
+    function serializarAditivosEditar() {
+        const tbody = document.getElementById('editar_aditivos_tbody');
+        const arr = [];
+        tbody.querySelectorAll('tr').forEach(function (tr) {
+            const inpData = tr.querySelector('.inp-adit-data');
+            const inpValor = tr.querySelector('.inp-adit-valor');
+            const inpDesc = tr.querySelector('.inp-adit-desc');
+            const data = inpData ? inpData.value.trim() : '';
+            const valorStr = inpValor ? inpValor.value : '';
+            const valor = converterParaNumero(valorStr);
+            const desc = inpDesc ? inpDesc.value.trim() : '';
+            if (!data && !desc && (!valor || valor === 0)) return;
+            arr.push({ data: data, valor: valor, descricao: desc });
+        });
+        document.getElementById('editar_aditivos_json').value = JSON.stringify(arr);
+        return arr;
+    }
+
+    function aplicarMaskAditivoValorEditar($inp) {
+        if (typeof $.fn.maskMoney !== 'undefined') {
+            $inp.maskMoney(maskMoedaAditivoOpts);
+        }
+    }
+
+    function adicionarLinhaAditivoEditar(prefill) {
+        const tbody = document.getElementById('editar_aditivos_tbody');
+        const tr = document.createElement('tr');
+        tr.innerHTML =
+            '<td><input type="date" class="form-control form-control-sm inp-adit-data"></td>' +
+            '<td><input type="text" class="form-control form-control-sm text-end inp-adit-valor" autocomplete="off"></td>' +
+            '<td><input type="text" class="form-control form-control-sm inp-adit-desc" placeholder="Descrição do aditivo" maxlength="4000" autocomplete="off"></td>' +
+            '<td class="text-center"><button type="button" class="btn btn-sm btn-outline-danger btn-remover-aditivo-editar" title="Remover"><i class="fas fa-times"></i></button></td>';
+        tbody.appendChild(tr);
+        const $v = $(tr).find('.inp-adit-valor');
+        aplicarMaskAditivoValorEditar($v);
+        if (prefill) {
+            if (prefill.data) tr.querySelector('.inp-adit-data').value = prefill.data;
+            if (prefill.descricao) tr.querySelector('.inp-adit-desc').value = prefill.descricao;
+            if (typeof prefill.valor === 'number' && typeof $.fn.maskMoney !== 'undefined') {
+                $v.maskMoney('mask', prefill.valor);
+            }
+        }
+        tr.querySelectorAll('.inp-adit-data, .inp-adit-valor, .inp-adit-desc').forEach(function (el) {
+            el.addEventListener('change', serializarAditivosEditar);
+            el.addEventListener('keyup', serializarAditivosEditar);
+        });
+    }
+
+    function renderAditivosEditar(lista) {
+        document.getElementById('editar_aditivos_tbody').innerHTML = '';
+        const arr = Array.isArray(lista) ? lista : [];
+        if (arr.length === 0) {
+            document.getElementById('editar_aditivos_json').value = '[]';
+            return;
+        }
+        arr.forEach(function (item) {
+            adicionarLinhaAditivoEditar({
+                data: item.data || '',
+                valor: typeof item.valor === 'number' ? item.valor : parseFloat(item.valor) || 0,
+                descricao: item.descricao || ''
+            });
+        });
+        serializarAditivosEditar();
+    }
+
+    document.getElementById('editar_btn_add_aditivo').addEventListener('click', function () {
+        adicionarLinhaAditivoEditar(null);
+        serializarAditivosEditar();
+    });
+
+    document.getElementById('editar_aditivos_tbody').addEventListener('click', function (e) {
+        const btn = e.target.closest('.btn-remover-aditivo-editar');
+        if (!btn) return;
+        const tr = btn.closest('tr');
+        if (tr) tr.remove();
+        serializarAditivosEditar();
+    });
+
+    function aplicarIndicadoresNoFormularioEditar(ind) {
+        const mat = (ind && ind.material) ? ind.material : {};
+        const ser = (ind && ind.servico) ? ind.servico : {};
+        const ger = (ind && ind.geral) ? ind.geral : {};
+        const pares = [
+            ['#editar_fin_mat_venda', mat.venda],
+            ['#editar_fin_mat_custo', mat.custo],
+            ['#editar_fin_ser_venda', ser.venda],
+            ['#editar_fin_ser_custo', ser.custo],
+            ['#editar_fin_ger_impostos', ger.impostos],
+            ['#editar_fin_ger_royalties', ger.royalties],
+            ['#editar_fin_ger_investimentos', ger.investimentos]
+        ];
+        if (typeof $.fn.maskMoney !== 'undefined') {
+            pares.forEach(function (p) {
+                $(p[0]).maskMoney('mask', Number(p[1]) || 0);
+            });
+        } else {
+            pares.forEach(function (p) {
+                const el = document.querySelector(p[0]);
+                if (el) el.value = formatarMoeda(Number(p[1]) || 0);
+            });
+        }
+        calcularTotalEditar();
     }
 
     // Array para armazenar CNPJs
@@ -305,10 +477,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 document.getElementById('editar_cidade').value = contrato.cidade || '';
                 document.getElementById('editar_data_base').value = contrato.data_base || '';
                 
-                // Formatar e definir valores monetários
-                document.getElementById('editar_venda_material').value = formatarMoeda(contrato.valor_mat || 0);
-                document.getElementById('editar_venda_servico').value = formatarMoeda(contrato.valor_ser || 0);
-                calcularTotalEditar();
+                aplicarIndicadoresNoFormularioEditar(contrato.indicadores);
+                renderAditivosEditar(contrato.aditivos);
                 
                 // Carregar CNPJs associados
                 if (contrato.cnpjs_associados) {
@@ -360,6 +530,8 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('editar_centro_custo_id').focus();
             return false;
         }
+
+        serializarAditivosEditar();
 
         // Enviar via AJAX
         const form = document.getElementById('form-editar-contrato');

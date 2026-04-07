@@ -1,0 +1,253 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Cronograma — Calendário{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <nav aria-label="breadcrumb">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('cronograma.index') }}">Cronograma</a></li>
+            <li class="breadcrumb-item active" aria-current="page">Calendário</li>
+        </ol>
+    </nav>
+
+    <h1 class="h3 mb-2 text-gray-800"><i class="fas fa-calendar-day"></i> Calendário</h1>
+    <p class="text-muted mb-4">
+        Cadastre um ou mais <strong>calendários</strong>. Em cada um, defina quais dias da semana são <strong>úteis</strong>
+        e inclua os <strong>feriados</strong> (datas em que não há expediente, mesmo que caiam em dia útil da semana).
+    </p>
+
+    {% with messages = get_flashed_messages(with_categories=true) %}
+        {% if messages %}
+            {% for category, message in messages %}
+                <div class="alert alert-{{ category if category in ['success', 'warning', 'danger', 'info'] else 'secondary' }} alert-dismissible fade show" role="alert">
+                    {{ message }}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Fechar"></button>
+                </div>
+            {% endfor %}
+        {% endif %}
+    {% endwith %}
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h6 class="m-0 font-weight-bold text-primary">Calendários</h6>
+            <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovoCalendario">
+                <i class="fas fa-plus"></i> Novo calendário
+            </button>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm" id="tabelaCalendarios" width="100%">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Dias úteis (semana)</th>
+                            <th class="text-center">Feriados</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4" id="cardFeriados" style="display: none;">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h6 class="m-0 font-weight-bold text-primary" id="tituloFeriados">Feriados</h6>
+            <div class="d-flex flex-wrap gap-2">
+                <button type="button" class="btn btn-sm btn-outline-secondary" id="btnImportarFeriadosApi" disabled data-bs-toggle="modal" data-bs-target="#modalImportarFeriadosApi" title="Brasil API + dataset estadual">
+                    <i class="fas fa-cloud-download-alt"></i> Importar da API
+                </button>
+                <button type="button" class="btn btn-sm btn-primary" id="btnNovoFeriadoCal" data-bs-toggle="modal" data-bs-target="#modalNovoCalFeriado">
+                    <i class="fas fa-plus"></i> Novo feriado
+                </button>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm" id="tabelaCalFeriados" width="100%">
+                    <thead>
+                        <tr>
+                            <th>Data</th>
+                            <th>Nome</th>
+                            <th>Observação</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include 'cronograma/modais/modal_novo_calendario.html' %}
+{% include 'cronograma/modais/modal_editar_calendario.html' %}
+{% include 'cronograma/modais/modal_novo_cal_feriado.html' %}
+{% include 'cronograma/modais/modal_editar_cal_feriado.html' %}
+{% include 'cronograma/modais/modal_importar_feriados_api.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    var csrf = document.querySelector('meta[name="csrf-token"]').getAttribute('content');
+    var urlDtCal = "{{ url_for('cronograma.api_calendario_datatables') }}";
+    var urlFeriadosTpl = "{{ url_for('cronograma.api_calendario_feriados_datatables', calendario_id=999999999) }}";
+
+    var urlEditarCalTpl = "{{ url_for('cronograma.calendario_editar', calendario_id=999999999) }}";
+    var urlExcluirCalTpl = "{{ url_for('cronograma.calendario_excluir', calendario_id=999999999) }}";
+    var urlFeriadoNovoTpl = "{{ url_for('cronograma.calendario_feriado_novo', calendario_id=999999999) }}";
+    var urlFeriadoEditTpl = "{{ url_for('cronograma.calendario_feriado_editar', calendario_id=999999999, feriado_id=888888888) }}";
+    var urlFeriadoExcTpl = "{{ url_for('cronograma.calendario_feriado_excluir', calendario_id=999999999, feriado_id=888888888) }}";
+    var urlImportarFeriadosApiTpl = "{{ url_for('cronograma.api_calendario_importar_feriados_api', calendario_id=999999999) }}";
+
+    var calSelecionadoId = null;
+    var tableFeriados = null;
+
+    window.urlImportarFeriadosApiTpl = urlImportarFeriadosApiTpl;
+    window.reloadCalFeriadosDt = function() { /* preenchido quando a tabela de feriados existe */ };
+    window.reloadCalendariosDt = function() { /* idem */ };
+
+    var tableCal = $('#tabelaCalendarios').DataTable({
+        processing: true,
+        serverSide: true,
+        searching: true,
+        ajax: { url: urlDtCal, type: 'GET' },
+        language: { url: '{{ url_for("static", filename="js/datatables-pt-BR-1.13.json") }}' },
+        order: [[0, 'asc']],
+        pageLength: 25,
+        responsive: true,
+        columns: [
+            { data: 'nome' },
+            { data: 'dias_uteis' },
+            { data: 'n_feriados', className: 'text-center' },
+            {
+                data: null,
+                orderable: false,
+                searchable: false,
+                className: 'text-center',
+                render: function(_d, _t, row) {
+                    var nomeEsc = String(row.nome || '').replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+                    return '<button type="button" class="btn btn-sm btn-outline-primary btn-feriados-cal me-1" data-id="' + row.id + '" data-nome="' + nomeEsc + '"><i class="fas fa-list"></i> Feriados</button>' +
+                        '<button type="button" class="btn btn-sm btn-primary btn-editar-cal me-1" data-row=\'' + JSON.stringify(row).replace(/'/g, '&#39;') + '\'><i class="fas fa-edit"></i></button>' +
+                        '<button type="button" class="btn btn-sm btn-danger btn-excluir-cal" data-id="' + row.id + '"><i class="fas fa-trash"></i></button>';
+                }
+            }
+        ]
+    });
+    window.reloadCalendariosDt = function() { tableCal.ajax.reload(null, false); };
+
+    function setCheck(id, on) {
+        var el = document.getElementById(id);
+        if (el) el.checked = !!on;
+    }
+
+    $('#tabelaCalendarios tbody').on('click', '.btn-editar-cal', function() {
+        var raw = $(this).attr('data-row');
+        var row = JSON.parse(raw.replace(/&#39;/g, "'"));
+        $('#formEditarCalendario').attr('action', urlEditarCalTpl.replace('999999999', String(row.id)));
+        $('#ec_nome').val(row.nome || '');
+        $('#ec_observacao').val(row.observacao || '');
+        setCheck('ec_seg', row.seg_util);
+        setCheck('ec_ter', row.ter_util);
+        setCheck('ec_qua', row.qua_util);
+        setCheck('ec_qui', row.qui_util);
+        setCheck('ec_sex', row.sex_util);
+        setCheck('ec_sab', row.sab_util);
+        setCheck('ec_dom', row.dom_util);
+        new bootstrap.Modal(document.getElementById('modalEditarCalendario')).show();
+    });
+
+    $('#tabelaCalendarios tbody').on('click', '.btn-excluir-cal', function() {
+        if (!confirm('Excluir este calendário e todos os feriados vinculados?')) return;
+        var id = $(this).data('id');
+        var f = document.createElement('form');
+        f.method = 'POST';
+        f.action = urlExcluirCalTpl.replace('999999999', String(id));
+        var inp = document.createElement('input');
+        inp.type = 'hidden';
+        inp.name = 'csrf_token';
+        inp.value = csrf;
+        f.appendChild(inp);
+        document.body.appendChild(f);
+        f.submit();
+    });
+
+    function abrirFeriados(calId, nome) {
+        calSelecionadoId = calId;
+        window.calSelecionadoId = calId;
+        $('#tituloFeriados').text('Feriados — ' + (nome || ''));
+        $('#formNovoCalFeriado').attr('action', urlFeriadoNovoTpl.replace('999999999', String(calId)));
+        $('#btnImportarFeriadosApi').prop('disabled', false);
+        $('#cardFeriados').show();
+        var ajaxUrl = urlFeriadosTpl.replace('999999999', String(calId));
+        if (tableFeriados) {
+            tableFeriados.ajax.url(ajaxUrl).load();
+        } else {
+            tableFeriados = $('#tabelaCalFeriados').DataTable({
+                processing: true,
+                serverSide: true,
+                searching: true,
+                ajax: { url: ajaxUrl, type: 'GET' },
+                language: { url: '{{ url_for("static", filename="js/datatables-pt-BR-1.13.json") }}' },
+                order: [[0, 'desc']],
+                pageLength: 25,
+                responsive: true,
+                columns: [
+                    { data: 'data' },
+                    { data: 'nome' },
+                    { data: 'observacao' },
+                    {
+                        data: null,
+                        orderable: false,
+                        searchable: false,
+                        className: 'text-center',
+                        render: function(_d, _t, row) {
+                            return '<button type="button" class="btn btn-sm btn-primary btn-editar-cal-fer me-1" data-row=\'' + JSON.stringify(row).replace(/'/g, '&#39;') + '\'><i class="fas fa-edit"></i></button>' +
+                                '<button type="button" class="btn btn-sm btn-danger btn-excluir-cal-fer" data-id="' + row.id + '"><i class="fas fa-trash"></i></button>';
+                        }
+                    }
+                ]
+            });
+        }
+        window.reloadCalFeriadosDt = function() {
+            if (tableFeriados) tableFeriados.ajax.reload(null, false);
+        };
+    }
+
+    $('#tabelaCalendarios tbody').on('click', '.btn-feriados-cal', function() {
+        abrirFeriados($(this).data('id'), $(this).data('nome'));
+    });
+
+    $('#cardFeriados').on('click', '.btn-editar-cal-fer', function() {
+        if (!calSelecionadoId) return;
+        var raw = $(this).attr('data-row');
+        var row = JSON.parse(raw.replace(/&#39;/g, "'"));
+        var act = urlFeriadoEditTpl.replace('999999999', String(calSelecionadoId)).replace('888888888', String(row.id));
+        $('#formEditarCalFeriado').attr('action', act);
+        $('#efc_data').val(row.data_iso || '');
+        $('#efc_nome').val(row.nome || '');
+        $('#efc_observacao').val(row.observacao || '');
+        new bootstrap.Modal(document.getElementById('modalEditarCalFeriado')).show();
+    });
+
+    $('#cardFeriados').on('click', '.btn-excluir-cal-fer', function() {
+        if (!calSelecionadoId) return;
+        if (!confirm('Excluir este feriado?')) return;
+        var id = $(this).data('id');
+        var f = document.createElement('form');
+        f.method = 'POST';
+        f.action = urlFeriadoExcTpl.replace('999999999', String(calSelecionadoId)).replace('888888888', String(id));
+        var inp = document.createElement('input');
+        inp.type = 'hidden';
+        inp.name = 'csrf_token';
+        inp.value = csrf;
+        f.appendChild(inp);
+        document.body.appendChild(f);
+        f.submit();
+    });
+})();
+</script>
+{% endblock %}

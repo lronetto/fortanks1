@@ -2,9 +2,11 @@ from flask import Blueprint, render_template, redirect, url_for, flash, request,
 from flask_login import login_required, current_user
 from flask_wtf.csrf import generate_csrf
 from datetime import datetime
+import json
 import pandas as pd
 import io
 from sqlalchemy import or_
+from sqlalchemy.orm import joinedload
 
 from models.database import db
 from models.tanque import Tanques, TanquesPecas, TanquesGrupos
@@ -29,6 +31,129 @@ def index():
     sistemas = ['SC-10', 'SC-14', 'SR-06']
     grupos = TanquesGrupos.get_all()
     return render_template('tanques/index.html', contratos=contratos, sistemas=sistemas, grupos=grupos)
+
+
+def _tanque_dados_adicionais_para_salvar(raw_str):
+    """
+    Converte string JSON do formulário em texto para a coluna dados_adicionais.
+    Retorna None se vazio ou inválido.
+    """
+    if not raw_str or not str(raw_str).strip():
+        return None
+    try:
+        d = json.loads(raw_str)
+        if isinstance(d, dict):
+            return json.dumps(d, ensure_ascii=False)
+    except (json.JSONDecodeError, TypeError):
+        pass
+    return None
+
+
+@tanque_bp.route('/api/tanques-resumo', methods=['GET'])
+def api_tanques_resumo():
+    """Lista id/nome/contrato para seletores (ex.: copiar índices entre tanques)."""
+    try:
+        rows = (
+            db.session.query(Tanques.id, Tanques.nome, Contrato.nome)
+            .outerjoin(Contrato, Tanques.contrato_id == Contrato.id)
+            .order_by(Tanques.id.desc())
+            .limit(4000)
+            .all()
+        )
+        return jsonify({
+            'success': True,
+            'tanques': [
+                {'id': r[0], 'nome': r[1] or '', 'contrato': r[2] or ''}
+                for r in rows
+            ],
+        })
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@tanque_bp.route('/api/indices-comparar', methods=['GET'])
+def api_indices_comparar():
+    """Retorna índices (dados_adicionais.indices) de vários tanques para comparação."""
+    ids_param = (request.args.get('ids') or '').strip()
+    if not ids_param:
+        return jsonify({'success': False, 'error': 'Informe o parâmetro ids (ex.: ids=1,2,3)'}), 400
+    ids = []
+    for x in ids_param.split(','):
+        x = x.strip()
+        if x.isdigit():
+            ids.append(int(x))
+    if len(ids) < 2:
+        return jsonify({'success': False, 'error': 'Selecione pelo menos 2 tanques'}), 400
+    if len(ids) > 12:
+        return jsonify({'success': False, 'error': 'Máximo de 12 tanques por comparação'}), 400
+    out = []
+    for tid in ids:
+        t = Tanques.query.options(joinedload(Tanques.contrato)).get(tid)
+        if not t:
+            continue
+        indices = []
+        if t.dados_adicionais:
+            try:
+                d = json.loads(t.dados_adicionais)
+                if isinstance(d, dict) and isinstance(d.get('indices'), list):
+                    indices = d['indices']
+            except (json.JSONDecodeError, TypeError):
+                pass
+        cname = ''
+        if t.contrato:
+            cname = t.contrato.nome or ''
+        out.append({
+            'id': t.id,
+            'nome': t.nome or '',
+            'contrato': cname,
+            'indices': indices,
+        })
+    if len(out) < 2:
+        return jsonify({'success': False, 'error': 'Não foi possível carregar pelo menos 2 tanques válidos'}), 400
+    return jsonify({'success': True, 'tanques': out})
+
+
+@tanque_bp.route('/api/tanques/<int:tanque_id>/indices', methods=['POST'])
+def api_salvar_indices_tanque(tanque_id):
+    """Atualiza apenas a lista indices em dados_adicionais, preservando demais chaves."""
+    tanque = Tanques.query.get_or_404(tanque_id)
+    data = request.get_json(silent=True) or {}
+    indices = data.get('indices')
+    if not isinstance(indices, list):
+        return jsonify({'success': False, 'error': 'Campo indices deve ser uma lista'}), 400
+    cleaned = []
+    for it in indices:
+        if not isinstance(it, dict):
+            continue
+        nome = (it.get('nome') or '').strip()
+        valor = (it.get('valor') or '').strip()
+        di = (it.get('data_inicio') or '').strip()
+        df = (it.get('data_fim') or '').strip()
+        if not nome and not valor and not di and not df:
+            continue
+        cleaned.append({
+            'nome': nome,
+            'valor': valor,
+            'data_inicio': di,
+            'data_fim': df,
+        })
+    base = {}
+    if tanque.dados_adicionais:
+        try:
+            base = json.loads(tanque.dados_adicionais)
+            if not isinstance(base, dict):
+                base = {}
+        except (json.JSONDecodeError, TypeError):
+            base = {}
+    base['indices'] = cleaned
+    tanque.dados_adicionais = json.dumps(base, ensure_ascii=False)
+    try:
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
+
 
 @tanque_bp.route('/api/datatables', methods=['GET'])
 def api_datatables():
@@ -234,6 +359,7 @@ def novo():
         placas_normais = request.form.get('placas_normais')
         placas_fecho = request.form.get('placas_fecho')
         valor_unitario = request.form.get('valor_unitario')
+        dados_adicionais_str = request.form.get('dados_adicionais', '').strip()
         
         # Extrair valores numéricos das dimensões
         diametro = None
@@ -317,7 +443,8 @@ def novo():
                 placas_normais=placas_normais,
                 placas_fecho=placas_fecho,
                 valorUnitario=valor_unitario,
-                contrato_id=contrato_id
+                contrato_id=contrato_id,
+                dados_adicionais=_tanque_dados_adicionais_para_salvar(dados_adicionais_str),
             )
             
             # Salvar o tanque
@@ -467,7 +594,7 @@ def editar(id):
             tanque.contrato_id = contrato_id
             tanque.item_nf = item_nf
             tanque.valorUnitario = valor_unitario
-            tanque.dados_adicionais = dados_adicionais if dados_adicionais else None
+            tanque.dados_adicionais = _tanque_dados_adicionais_para_salvar(dados_adicionais)
             
             # Salvar as alterações
             db.session.commit()
@@ -595,7 +722,8 @@ def duplicar(id):
                 placas_fecho=tanque_original.placas_fecho,
                 valorUnitario=tanque_original.valorUnitario,
                 contrato_id=tanque_original.contrato_id,
-                item_nf=tanque_original.item_nf
+                item_nf=tanque_original.item_nf,
+                dados_adicionais=tanque_original.dados_adicionais,
             )
             
             # Salvar o novo tanque

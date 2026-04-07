@@ -64,7 +64,7 @@
                         <input type="date" class="form-control" id="data_fim" name="data_fim" 
                                value="{{ data_fim.strftime('%Y-%m-%d') }}">
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
                         <label for="contrato_id" class="form-label">Projeto</label>
                         <select class="form-select" id="contrato_id" name="contrato_id">
                             <option value="">Todos os projetos</option>
@@ -75,7 +75,18 @@
                             {% endfor %}
                         </select>
                     </div>
-                    <div class="col-md-3">
+                    <div class="col-md-2">
+                        <label for="grupo_id" class="form-label">Grupo de tanques</label>
+                        <select class="form-select" id="grupo_id" name="grupo_id">
+                            <option value="">Todos os grupos</option>
+                            {% for grupo in grupos %}
+                            <option value="{{ grupo.id }}" {% if grupo_id == grupo.id %}selected{% endif %}>
+                                {{ grupo.nome }}
+                            </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-md-2">
                         <label for="tanque_id" class="form-label">Tanque</label>
                         <select class="form-select" id="tanque_id" name="tanque_id">
                             <option value="">Todos os tanques</option>
@@ -345,6 +356,7 @@
             data_inicio: $('#data_inicio').val(),
             data_fim: $('#data_fim').val(),
             contrato_id: $('#contrato_id').val(),
+            grupo_id: $('#grupo_id').val(),
             tanque_id: $('#tanque_id').val()
         };
         atualizarLinksExportacao(filtrosIniciais);
@@ -354,10 +366,22 @@
             filtrarDados();
         });
         
-        // Filtrar tanques quando projeto mudar
+        // Filtrar tanques quando projeto ou grupo mudar
         $('#contrato_id').on('change', function() {
             atualizarTanquesPorProjeto();
             // Limpar seleção de tanque se não estiver mais na lista
+            const tanqueIdAtual = $('#tanque_id').val();
+            setTimeout(function() {
+                const tanqueAindaExiste = $('#tanque_id option[value="' + tanqueIdAtual + '"]').length > 0;
+                if (tanqueIdAtual && !tanqueAindaExiste) {
+                    $('#tanque_id').val('');
+                }
+                filtrarDados();
+            }, 100);
+        });
+
+        $('#grupo_id').on('change', function() {
+            atualizarTanquesPorProjeto();
             const tanqueIdAtual = $('#tanque_id').val();
             setTimeout(function() {
                 const tanqueAindaExiste = $('#tanque_id option[value="' + tanqueIdAtual + '"]').length > 0;
@@ -390,10 +414,14 @@
         }
         
         // Buscar tanques do projeto
+        const grupoId = $('#grupo_id').val();
         $.ajax({
             url: '{{ url_for("relatorios_concretagem_pecas.api_tanques_por_projeto") }}',
             method: 'GET',
-            data: { contrato_id: contratoId },
+            data: {
+                contrato_id: contratoId || undefined,
+                grupo_id: grupoId || undefined
+            },
             success: function(response) {
                 response.tanques.forEach(function(tanque) {
                     const option = $('<option></option>')
@@ -417,10 +445,11 @@
     }
 
     function carregarTodosTanques(select, tanqueIdAtual) {
+        const grupoId = $('#grupo_id').val();
         $.ajax({
             url: '{{ url_for("relatorios_concretagem_pecas.api_tanques_por_projeto") }}',
             method: 'GET',
-            data: {},
+            data: { grupo_id: grupoId || undefined },
             success: function(response) {
                 response.tanques.forEach(function(tanque) {
                     const option = $('<option></option>')
@@ -640,6 +669,7 @@
             data_inicio: $('#data_inicio').val(),
             data_fim: $('#data_fim').val(),
             contrato_id: $('#contrato_id').val(),
+            grupo_id: $('#grupo_id').val(),
             tanque_id: $('#tanque_id').val()
         };
         
@@ -786,6 +816,7 @@
         if (filtros.data_inicio) params.append('data_inicio', filtros.data_inicio);
         if (filtros.data_fim) params.append('data_fim', filtros.data_fim);
         if (filtros.contrato_id) params.append('contrato_id', filtros.contrato_id);
+        if (filtros.grupo_id) params.append('grupo_id', filtros.grupo_id);
         if (filtros.tanque_id) params.append('tanque_id', filtros.tanque_id);
         
         const queryString = params.toString();

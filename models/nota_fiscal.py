@@ -1,5 +1,6 @@
 from models.database import db
 from datetime import datetime
+from dateutil.parser import isoparse
 from sqlalchemy.orm import defer
 from sqlalchemy import func
 
@@ -41,6 +42,24 @@ MAP_TIPO = {
     2 : 'cte',
     3 : 'nfse',
 }
+
+
+def _parse_nfe_data_emissao_xml(data_emissao_text):
+    """
+    Converte dhEmi (ISO-8601, ex.: 2026-04-01T09:53:00-03:00) ou dEmi (YYYY-MM-DD)
+    do XML da NF-e em datetime naive, preservando hora/minuto/segundo quando existirem.
+    """
+    t = (data_emissao_text or '').strip()
+    if not t:
+        raise ValueError('data de emissão vazia')
+    if 'T' in t:
+        dt = isoparse(t)
+        if dt.tzinfo is not None:
+            dt = dt.replace(tzinfo=None)
+        return dt
+    return datetime.strptime(t[:10], '%Y-%m-%d')
+
+
 def determinar_movimentacoes_estoque(nota_fiscal):
     """
     Determina as movimentações de estoque necessárias baseado nos CNPJs da nota fiscal.
@@ -775,11 +794,11 @@ class NotaFiscal(db.Model):
 
         # Data de emissão
         data_emissao = ide.findtext('cte:dhEmi', default='', namespaces=ns)
-        if data_emissao:
-            data_emissao = data_emissao.split('T')[0]
-            data_emissao = datetime.strptime(data_emissao, '%Y-%m-%d')
-        else:
-            data_emissao = datetime.now()
+        try:
+            data_emissao = _parse_nfe_data_emissao_xml(data_emissao)
+        except (ValueError, TypeError) as e:
+            logger.error("Data de emissão inválida no XML: %r (%s)", data_emissao, e)
+            return chave_acesso, None
 
         # Origem e destino
         municipio_inicio = ide.findtext('cte:xMunIni', default='', namespaces=ns)
@@ -911,13 +930,12 @@ class NotaFiscal(db.Model):
             if not data_emissao_text:
                 logger.error("Data de emissão não encontrada no XML")
                 return chave_acesso, None
-                
-            # Ajustar formato da data
-            if 'T' in data_emissao_text:
-                data_emissao = data_emissao_text.split('T')[0]
-            else:
-                data_emissao = data_emissao_text
-            
+            try:
+                data_emissao = _parse_nfe_data_emissao_xml(data_emissao_text)
+            except (ValueError, TypeError) as e:
+                logger.error("Data de emissão inválida no XML: %r (%s)", data_emissao_text, e)
+                return chave_acesso, None
+
             # Extrair CNPJ emitente
             cnpj_emitente = get_xml_text(emit, './/nfe:CNPJ', ns) or get_xml_text(emit, './/CNPJ', ns)
             nome_emitente = get_xml_text(emit, './/nfe:xNome', ns) or get_xml_text(emit, './/xNome', ns)

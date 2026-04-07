@@ -1,0 +1,105 @@
+<div class="modal fade" id="modalVinculoCalendario" tabindex="-1" aria-labelledby="modalVinculoCalendarioLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form id="formVinculoCalendario">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="vinculo_id" id="mvc_vinculo_id" value="">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalVinculoCalendarioLabel">Calendário por índice</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted small">
+                        Informe o <strong>índice raiz</strong> (ex.: <code>1</code> ou <code>2.3</code>). Todos os itens com esse índice
+                        ou abaixo dele na hierarquia (<code>1.1</code>, <code>1.2.1</code>…) passam a usar o calendário escolhido
+                        na <strong>matriz semanal</strong> (dias úteis e feriados). Se houver vários vínculos, vale o prefixo <strong>mais específico</strong>.
+                    </p>
+                    <div class="mb-3">
+                        <label class="form-label" for="mvc_indice">Índice (prefixo)</label>
+                        <input type="text" class="form-control font-monospace" name="indice_prefixo" id="mvc_indice" maxlength="50" required placeholder="Ex.: 1 ou 2.1" autocomplete="off">
+                    </div>
+                    <div class="mb-0">
+                        <label class="form-label" for="mvc_calendario_id">Calendário</label>
+                        <select class="form-select" name="calendario_id" id="mvc_calendario_id" required>
+                            <option value="">— Carregando… —</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+(function() {
+    var form = document.getElementById('formVinculoCalendario');
+    var selCal = document.getElementById('mvc_calendario_id');
+    var urlOpts = "{{ url_for('cronograma.api_calendarios_opcoes') }}";
+    var urlSalvarVinc = "{{ url_for('cronograma.projeto_vinculo_calendario_salvar', contrato_id=contrato.id) }}";
+    var csrf = document.querySelector('meta[name="csrf-token"]');
+    csrf = csrf ? csrf.getAttribute('content') : '';
+
+    function carregarCalendarios() {
+        if (!selCal) return Promise.resolve();
+        return fetch(urlOpts, { credentials: 'same-origin' }).then(function(r) { return r.json(); }).then(function(list) {
+            selCal.innerHTML = '<option value="">— Selecione —</option>';
+            (list || []).forEach(function(c) {
+                var o = document.createElement('option');
+                o.value = c.id;
+                o.textContent = c.nome || ('#' + c.id);
+                selCal.appendChild(o);
+            });
+        });
+    }
+
+    window.abrirModalNovoVinculoCal = function() {
+        document.getElementById('mvc_vinculo_id').value = '';
+        document.getElementById('mvc_indice').value = '';
+        document.getElementById('modalVinculoCalendarioLabel').textContent = 'Novo vínculo calendário';
+        carregarCalendarios().then(function() {
+            document.getElementById('mvc_calendario_id').value = '';
+            var el = document.getElementById('modalVinculoCalendario');
+            if (el && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                bootstrap.Modal.getOrCreateInstance(el).show();
+            }
+        });
+    };
+
+    window.abrirModalEditarVinculoCal = function(row) {
+        document.getElementById('mvc_vinculo_id').value = row.id;
+        document.getElementById('mvc_indice').value = row.indice_prefixo || '';
+        document.getElementById('modalVinculoCalendarioLabel').textContent = 'Editar vínculo calendário';
+        carregarCalendarios().then(function() {
+            document.getElementById('mvc_calendario_id').value = String(row.calendario_id || '');
+            var el = document.getElementById('modalVinculoCalendario');
+            if (el && typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                bootstrap.Modal.getOrCreateInstance(el).show();
+            }
+        });
+    };
+
+    if (form) {
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            var fd = new FormData(form);
+            fetch(urlSalvarVinc, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': csrf },
+                body: fd,
+                credentials: 'same-origin'
+            }).then(function(r) { return r.json(); }).then(function(j) {
+                if (j.ok) {
+                    var m = document.getElementById('modalVinculoCalendario');
+                    if (m && bootstrap.Modal) bootstrap.Modal.getInstance(m).hide();
+                    if (typeof window.reloadVinculosCalDt === 'function') window.reloadVinculosCalDt();
+                } else {
+                    alert(j.error || 'Não foi possível salvar.');
+                }
+            }).catch(function() { alert('Erro de rede.'); });
+        });
+    }
+})();
+</script>

@@ -1,0 +1,111 @@
+<!-- Modal resumo orçado x executado -->
+<div class="modal fade" id="modalResumoOrcadoExec" tabindex="-1" aria-labelledby="modalResumoOrcadoExecLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header bg-success text-white">
+                <h5 class="modal-title" id="modalResumoOrcadoExecLabel">
+                    <i class="fas fa-balance-scale"></i> <span id="resumo_oe_titulo">Orçado x executado</span>
+                </h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p class="text-muted small mb-2" id="resumo_oe_centro"></p>
+                <div id="resumo_oe_alerta" class="alert alert-warning d-none" role="alert"></div>
+                <div id="resumo_oe_loading" class="text-center py-4">
+                    <div class="spinner-border text-success" role="status"><span class="visually-hidden">Carregando...</span></div>
+                </div>
+                <div id="resumo_oe_conteudo" class="d-none">
+                    <div class="table-responsive">
+                        <table class="table table-sm table-bordered align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Item</th>
+                                    <th class="text-end">Orçado (R$)</th>
+                                    <th class="text-end">Executado (R$)</th>
+                                    <th class="text-end">Diferença (R$)</th>
+                                    <th class="small">Ref. execução</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resumo_oe_tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+(function () {
+    function fmtBRL(n) {
+        const x = Number(n);
+        if (Number.isNaN(x)) return '—';
+        return x.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    window.abrirModalResumoOrcadoExec = function (contratoId) {
+        const modalEl = document.getElementById('modalResumoOrcadoExec');
+        const loading = document.getElementById('resumo_oe_loading');
+        const conteudo = document.getElementById('resumo_oe_conteudo');
+        const tbody = document.getElementById('resumo_oe_tbody');
+        const alerta = document.getElementById('resumo_oe_alerta');
+        const centroEl = document.getElementById('resumo_oe_centro');
+        const titulo = document.getElementById('resumo_oe_titulo');
+
+        loading.classList.remove('d-none');
+        conteudo.classList.add('d-none');
+        alerta.classList.add('d-none');
+        alerta.textContent = '';
+        tbody.innerHTML = '';
+        titulo.textContent = 'Orçado x executado';
+        centroEl.textContent = '';
+
+        const modalInst = bootstrap.Modal.getOrCreateInstance(modalEl);
+        modalInst.show();
+
+        const url = "{{ url_for('contrato.api_resumo_orcado_executado', contrato_id=999999999) }}".replace('999999999', String(contratoId));
+
+        fetch(url, {
+            method: 'GET',
+            headers: { 'X-Requested-With': 'XMLHttpRequest' }
+        })
+            .then(function (r) {
+                if (!r.ok) throw new Error('Falha ao carregar resumo');
+                return r.json();
+            })
+            .then(function (data) {
+                titulo.textContent = 'Orçado x executado — ' + (data.contrato_nome || '');
+                if (data.centro_custo) {
+                    centroEl.textContent = 'Centro de custo: ' + data.centro_custo;
+                } else {
+                    centroEl.textContent = 'Centro de custo: —';
+                }
+                if (data.sem_centro_custo) {
+                    alerta.textContent = 'Sem centro de custo: impostos, royalties e investimentos (dados analíticos) ficam zerados. As vendas executadas usam as notas fiscais vinculadas ao contrato.';
+                    alerta.classList.remove('d-none');
+                }
+                (data.linhas || []).forEach(function (row) {
+                    const tr = document.createElement('tr');
+                    tr.innerHTML =
+                        '<td>' + (row.item || '') + '</td>' +
+                        '<td class="text-end">' + fmtBRL(row.orcado) + '</td>' +
+                        '<td class="text-end">' + fmtBRL(row.executado) + '</td>' +
+                        '<td class="text-end">' + fmtBRL(row.diferenca) + '</td>' +
+                        '<td class="small text-muted">' + (row.ref_execucao || '') + '</td>';
+                    tbody.appendChild(tr);
+                });
+                loading.classList.add('d-none');
+                conteudo.classList.remove('d-none');
+            })
+            .catch(function () {
+                loading.classList.add('d-none');
+                conteudo.classList.add('d-none');
+                alert('Não foi possível carregar o resumo orçado x executado.');
+                bootstrap.Modal.getInstance(modalEl).hide();
+            });
+    };
+})();
+</script>
