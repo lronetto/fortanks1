@@ -647,7 +647,7 @@
             
             // Enviar via AJAX
             $.ajax({
-                url: `/notas-fiscais/api/importar-item-estoque/${itemId}`,
+                url: "{{ url_for('nota_fiscal.api_importar_item_estoque', item_id=999999999) }}".replace('999999999', String(itemId)),
                 type: 'POST',
                 data: { 
                     centro_custo_id: centoCustoId,
@@ -751,7 +751,7 @@
                         success: function() {
                             // Depois, importar para estoque
                             $.ajax({
-                                url: `/notas-fiscais/api/importar-item-estoque/${item.id}`,
+                                url: "{{ url_for('nota_fiscal.api_importar_item_estoque', item_id=999999999) }}".replace('999999999', String(item.id)),
                                 type: 'POST',
                                 data: { 
                                     centro_custo_id: centoCustoId,

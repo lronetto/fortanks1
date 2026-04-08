@@ -43,6 +43,10 @@ def api_get_dados_notas_fiscais(request):
     emitente = json_filtros.get("emitente", "") # Matriz, Filiais, Terceiros, Matriz_Filiais
     destinatario = json_filtros.get("destinatario", "") # Matriz, Filiais, Terceiros, Matriz_Filiais
     status_pagamento = json_filtros.get("status_pagamento", "")
+
+    pagamento = json_filtros.get("pagamento", "")
+    reembolso_upload = json_filtros.get("reembolso_upload", "")
+
     print(f'status_pagamento: {status_pagamento}')
     pagamento_5percent = json_filtros.get("pagamento_5percent", False)
     data_emissao_inicio = json_filtros.get("data_emissao_inicio", "")
@@ -275,23 +279,33 @@ def api_get_dados_notas_fiscais(request):
     elif cancelada == "nao_canceladas":
         query = query.filter(NotaFiscal.status_processamento != "cancelada")
     # cancelada == "" (todos): sem filtro por cancelamento
-    if reembolso:
-        if reembolso == "1":
-            query = query.filter(
-                func.json_extract(NotaFiscal.dados_adicionais, "$.reembolso.enviado") == 1
+    if reembolso_upload == True:
+        query = query.filter(upload_reembolso_column == 1)
+    elif reembolso_upload == False:
+        query = query.filter(upload_reembolso_column == 0)
+    if reembolso == True:
+        query = query.filter(
+            func.json_extract(NotaFiscal.dados_adicionais, "$.reembolso.enviado") == 1
+        )
+    elif reembolso == False:
+        query = query.filter(
+            or_(
+                func.json_extract(NotaFiscal.dados_adicionais, "$.reembolso").is_(None),
+                func.json_extract(NotaFiscal.dados_adicionais, "$.reembolso.enviado") == 0
             )
-        elif reembolso == "0":
-            query = query.filter(
-                or_(
-                    func.json_extract(NotaFiscal.dados_adicionais, "$.reembolso").is_(None),
-                    func.json_extract(NotaFiscal.dados_adicionais, "$.reembolso.enviado") == 0
-                )
-            )
+        )
     if liberada:
         if liberada == "liberada":
             query = query.filter(liberada_column == 1)
         elif liberada == "nao_liberada":
             query = query.filter(or_(liberada_column == 0, liberada_column.is_(None)))
+
+    if pagamento == True:
+        query = query.filter(or_(pagamento_column.isnot(None)))
+    elif pagamento == False:
+        query = query.filter(
+            and_(pagamento_column.is_(None))
+        )   
     if busca:
         busca_like = f"%{busca}%"
         query = query.filter(

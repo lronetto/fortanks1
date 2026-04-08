@@ -1,6 +1,10 @@
 import base64
+import json
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
+
+from sqlalchemy.orm import joinedload
 from flask import (
     Blueprint,
     render_template,
@@ -13,7 +17,7 @@ from flask import (
     abort,
 )
 from flask_login import login_required, current_user
-from sqlalchemy import or_
+from sqlalchemy import or_, desc, func
 from models.database import db
 from models.equipamento import (
     EQ_STATUS,
@@ -25,6 +29,7 @@ from models.equipamento import (
     ChecklistEquipamento,
     ChecklistResposta,
 )
+from models.estoque import Estoque, EstoqueMovimentacoes
 from models.colaborador import Colaborador
 from models.material import Materiais
 from models.upload import Upload
@@ -38,6 +43,199 @@ from utils.equipamento_dados_adicionais import (
 )
 
 equipamento_bp = Blueprint('equipamento', __name__, url_prefix='/equipamentos')
+
+ORIGEN_MANUT_EQ = 'manutencao_equipamento'
+
+
+def _reverter_movimentacao_estoque_sem_commit(mov: EstoqueMovimentacoes) -> None:
+    if mov.estoque is None and mov.estoque_id:
+        mov.estoque = Estoque.query.get(mov.estoque_id)
+    if mov.estoque:
+        if mov.tipo_movimento == 'entrada':
+            mov.estoque.quantidade -= mov.quantidade
+        elif mov.tipo_movimento == 'saida':
+            mov.estoque.quantidade += mov.quantidade
+        db.session.add(mov.estoque)
+    db.session.delete(mov)
+
+
+def _reverter_materiais_manutencao(manutencao_id: int) -> None:
+    movs = EstoqueMovimentacoes.query.filter_by(
+        origem_tipo=ORIGEN_MANUT_EQ,
+        origem_id=manutencao_id,
+    ).all()
+    for mov in movs:
+        _reverter_movimentacao_estoque_sem_commit(mov)
+
+
+def _persistir_saida_manutencao_sem_commit(
+    estoque_id: int,
+    quantidade: Decimal,
+    manutencao_id: int,
+    usuario_id: int,
+) -> EstoqueMovimentacoes:
+    mov = EstoqueMovimentacoes()
+    mov.remover(
+        quantidade,
+        estoque_id,
+        manutencao_id,
+        ORIGEN_MANUT_EQ,
+        usuario_id,
+        motivo=None,
+    )
+    if mov.estoque_id:
+        mov.estoque = Estoque.query.get(mov.estoque_id)
+    if not mov.estoque:
+        raise ValueError('Material de estoque não encontrado.')
+    if mov.tipo_movimento == 'saida':
+        mov.estoque.quantidade -= mov.quantidade
+    db.session.add(mov.estoque)
+    db.session.add(mov)
+    db.session.flush()
+    return mov
+
+
+def _parse_materiais_finalizacao_json(raw: str) -> list:
+    if not raw or not str(raw).strip():
+        return []
+    try:
+        data = json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ValueError('Lista de materiais inválida.') from exc
+    if not isinstance(data, list):
+        raise ValueError('Lista de materiais inválida.')
+    out = []
+    for row in data:
+        if not isinstance(row, dict):
+            continue
+        try:
+            eid = int(row.get('estoque_id'))
+        except (TypeError, ValueError):
+            raise ValueError('ID de estoque inválido.')
+        q_raw = row.get('quantidade')
+        if q_raw is None or str(q_raw).strip() == '':
+            raise ValueError('Informe a quantidade de cada material.')
+        q = Decimal(str(q_raw).replace(',', '.'))
+        if q <= 0:
+            raise ValueError('Quantidade deve ser maior que zero.')
+        vu_raw = row.get('valor_unitario')
+        vu = None
+        if vu_raw is not None and str(vu_raw).strip() != '':
+            vu = Decimal(str(vu_raw).replace(',', '.'))
+            if vu < 0:
+                raise ValueError('Valor unitário inválido.')
+        out.append({'estoque_id': eid, 'quantidade': q, 'valor_unitario': vu})
+    return out
+
+
+def _manutencao_atualizar_dados_adicionais_materiais(
+    dados_existentes: Optional[str],
+    itens: list,
+) -> str:
+    """
+    Mescla JSON existente em dados_adicionais com o snapshot dos materiais
+    enviados na finalização (estoque_id, quantidade, valor_unitario).
+    """
+    base: dict = {}
+    if dados_existentes:
+        try:
+            parsed = json.loads(dados_existentes)
+            if isinstance(parsed, dict):
+                base = parsed
+        except json.JSONDecodeError:
+            base = {}
+    linhas = []
+    for it in itens:
+        row = {
+            'estoque_id': it['estoque_id'],
+            'quantidade': str(it['quantidade']),
+        }
+        if it.get('valor_unitario') is not None:
+            row['valor_unitario'] = str(it['valor_unitario'])
+        linhas.append(row)
+    base['materiais'] = linhas
+    base['materiais_atualizado_em'] = datetime.now().isoformat()
+    return json.dumps(base, ensure_ascii=False)
+
+
+def _linhas_materiais_finalizar_de_dados_adicionais(manutencao: Manutencao) -> list:
+    """Monta linhas para o modal de finalizar a partir de dados_adicionais.materiais."""
+    linhas_mats: list = []
+    raw = manutencao.dados_adicionais
+    if not raw:
+        return linhas_mats
+    try:
+        parsed = json.loads(raw)
+        if not isinstance(parsed, dict):
+            return linhas_mats
+        materiais = parsed.get('materiais')
+        if not isinstance(materiais, list):
+            return linhas_mats
+    except json.JSONDecodeError:
+        return linhas_mats
+    for m in materiais:
+        if not isinstance(m, dict):
+            continue
+        try:
+            eid = int(m.get('estoque_id'))
+        except (TypeError, ValueError):
+            continue
+        q_raw = m.get('quantidade')
+        vu_raw = m.get('valor_unitario')
+        q_float = 0.0
+        if q_raw is not None and str(q_raw).strip() != '':
+            try:
+                q_float = float(str(q_raw).replace(',', '.'))
+            except ValueError:
+                q_float = 0.0
+        vu_f = None
+        if vu_raw is not None and str(vu_raw).strip() != '':
+            try:
+                vu_f = float(str(vu_raw).replace(',', '.'))
+            except ValueError:
+                vu_f = None
+        est = Estoque.query.options(
+            joinedload(Estoque.material).joinedload(Materiais.unidade_obj),
+        ).get(eid)
+        mat = est.material if est else None
+        un = ''
+        if mat and mat.unidade_obj:
+            un = mat.unidade_obj.sigla or mat.unidade_obj.nome or ''
+        nome_txt = ''
+        if mat:
+            cod = mat.codigo or ''
+            nome_txt = (cod + ' — ' if cod else '') + (mat.nome or '') + (f' ({un})' if un else '')
+        linhas_mats.append({
+            'estoque_id': eid,
+            'quantidade': q_float,
+            'valor_unitario': vu_f,
+            'label': nome_txt or ('Estoque #' + str(eid)),
+        })
+    return linhas_mats
+
+
+def _aplicar_materiais_manutencao(
+    manutencao_id: int,
+    itens: list,
+    usuario_id: int,
+) -> None:
+    _reverter_materiais_manutencao(manutencao_id)
+    for it in itens:
+        est = Estoque.query.get(it['estoque_id'])
+        if (
+            not est
+            or est.tipo_item != 'material'
+            or not est.material_id
+        ):
+            raise ValueError(
+                'Cada linha deve ser um material cadastrado no estoque.'
+            )
+        _persistir_saida_manutencao_sem_commit(
+            est.id,
+            it['quantidade'],
+            manutencao_id,
+            usuario_id,
+        )
 
 
 def _sync_equipamento_nota_fiscal_form(
@@ -693,6 +891,8 @@ def nova_manutencao(id):
                     manutencao.nota_fiscal_id = int(nf_raw)
 
             db.session.add(manutencao)
+            if request.form.get('manutencao_modal_rapida') == '1':
+                equipamento.status = _status_equipamento_validado('Pendente')
             db.session.commit()
             if is_ajax:
                 return jsonify({
@@ -761,12 +961,118 @@ def modal_finalizar_manutencao(id, manutencao_id):
         .limit(300)
         .all()
     )
+    linhas_mats = _linhas_materiais_finalizar_de_dados_adicionais(manutencao)
     return render_template(
         'equipamentos/modais/partials/form_finalizar_manutencao_equipamento.html',
         equipamento=equipamento,
         manutencao=manutencao,
         notas=notas,
+        materiais_consumo_linhas=linhas_mats,
+        agora_finalizar=datetime.now(),
     )
+
+
+def _ultimo_valor_unitario_nfe_para_material(
+    material_id: int,
+    codigo_material: Optional[str],
+    nf_id_preferida: Optional[int],
+) -> Optional[float]:
+    """
+    Preço unitário sugerido:
+    1) Se houver nf_id_preferida: último item dessa NF com material_id OU com código igual ao material;
+    2) Senão (ou se não achou): último item em qualquer NF (data_emissao desc) com material_id;
+    3) Se ainda não achou: último item por código do produto na NF (itens sem material_id vinculado).
+    """
+    from models.nota_fiscal import NotaFiscalItem, NotaFiscal
+
+    cod = (codigo_material or '').strip()
+
+    def _itens_na_nf(nfid: int):
+        base = NotaFiscalItem.query.filter(NotaFiscalItem.nf_id == nfid)
+        it = (
+            base.filter(NotaFiscalItem.material_id == material_id)
+            .order_by(NotaFiscalItem.id.desc())
+            .first()
+        )
+        if it:
+            return it
+        if cod:
+            cod_l = cod.lower()
+            it = (
+                base.filter(NotaFiscalItem.codigo.isnot(None))
+                .filter(
+                    or_(
+                        NotaFiscalItem.codigo == cod,
+                        func.lower(func.trim(NotaFiscalItem.codigo)) == cod_l,
+                    )
+                )
+                .order_by(NotaFiscalItem.id.desc())
+                .first()
+            )
+        return it
+
+    item = None
+    if nf_id_preferida:
+        item = _itens_na_nf(nf_id_preferida)
+
+    if not item:
+        item = (
+            db.session.query(NotaFiscalItem)
+            .join(NotaFiscal, NotaFiscal.id == NotaFiscalItem.nf_id)
+            .filter(NotaFiscalItem.material_id == material_id)
+            .order_by(desc(NotaFiscal.data_emissao), desc(NotaFiscalItem.id))
+            .first()
+        )
+
+    if not item and cod:
+        cod_l = cod.lower()
+        item = (
+            db.session.query(NotaFiscalItem)
+            .join(NotaFiscal, NotaFiscal.id == NotaFiscalItem.nf_id)
+            .filter(NotaFiscalItem.codigo.isnot(None))
+            .filter(
+                or_(
+                    NotaFiscalItem.codigo == cod,
+                    func.lower(func.trim(NotaFiscalItem.codigo)) == cod_l,
+                )
+            )
+            .order_by(desc(NotaFiscal.data_emissao), desc(NotaFiscalItem.id))
+            .first()
+        )
+
+    if not item:
+        return None
+    return float(item.valor_unitario)
+
+
+@equipamento_bp.route(
+    '/<int:id>/manutencoes/<int:manutencao_id>/api/preco-material-sugerido',
+    methods=['GET'],
+)
+@login_required
+def api_preco_material_sugerido_manutencao(id, manutencao_id):
+    """Último valor unitário do material nas NFs (prioriza a NF selecionada na manutenção, se houver)."""
+    _manutencao_do_equipamento(id, manutencao_id)
+    estoque_id = request.args.get('estoque_id', type=int)
+    nf_id = request.args.get('nota_fiscal_id', type=int)
+    if not estoque_id:
+        return jsonify(
+            success=False,
+            message='Parâmetro estoque_id é obrigatório.',
+        ), 400
+    est = Estoque.query.get_or_404(estoque_id)
+    if not est.material_id:
+        return jsonify(success=True, valor_unitario=None)
+    mat = Materiais.query.get(est.material_id)
+    codigo = mat.codigo if mat else None
+    vu = _ultimo_valor_unitario_nfe_para_material(
+        est.material_id,
+        codigo,
+        nf_id,
+    )
+    if vu is None:
+        return jsonify(success=True, valor_unitario=None)
+    return jsonify(success=True, valor_unitario=vu)
 
 
 @equipamento_bp.route('/<int:id>/manutencoes/<int:manutencao_id>/finalizar', methods=['POST'])
@@ -797,6 +1103,19 @@ def finalizar_manutencao(id, manutencao_id):
         except ValueError:
             raise ValueError('Nota fiscal inválida.')
         manutencao.observacoes = request.form.get('observacoes') or ''
+        uid = getattr(current_user, 'id', None)
+        if uid is None:
+            raise ValueError('Sessão inválida.')
+        itens = _parse_materiais_finalizacao_json(
+            request.form.get('materiais_json') or ''
+        )
+        manutencao.dados_adicionais = _manutencao_atualizar_dados_adicionais_materiais(
+            manutencao.dados_adicionais,
+            itens,
+        )
+        equipamento = Equipamento.query.get_or_404(id)
+        equipamento.status = _status_equipamento_validado('Ativo')
+        _aplicar_materiais_manutencao(manutencao.id, itens, int(uid))
         db.session.commit()
         if is_ajax:
             return jsonify({
@@ -878,6 +1197,7 @@ def excluir_manutencao(id, manutencao_id):
     manutencao = _manutencao_do_equipamento(id, manutencao_id)
     is_ajax = request.headers.get('X-Requested-With') == 'XMLHttpRequest'
     try:
+        _reverter_materiais_manutencao(manutencao.id)
         db.session.delete(manutencao)
         db.session.commit()
         if is_ajax:

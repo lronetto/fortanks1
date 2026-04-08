@@ -62,15 +62,15 @@
                                 <div class="form-group">
                                     <label>Status</label>
                                     <select class="form-control" id="filtroPagamento">
-                                        <option value="" >Todos</option>
-                                        <option value="0" >Não Pago</option>
-                                        <option value="1" >Pago</option>
-                                        <option value="2" >Sem Envio</option>
-                                        <option value="3" >Apenas reembolso</option>
-                                        <option value="4" >Selecionados</option>
-                                        <option value="5" >Pendente e nao pago</option>
-                                        <option value="6" >Pendente e nao pago e nao selecionados</option>
-                                        <option value="7" >Pendente e sem reembolso</option>
+                                        <option value="0" >Todos</option>
+                                        <option value="1" >Não Pago</option>
+                                        <option value="2" >Pago</option>
+                                        <option value="3" >Sem Envio</option>
+                                        <option value="4" >Apenas reembolso</option>
+                                        <option value="5" >Selecionados</option>
+                                        <option value="6" >Pendente e nao pago</option>
+                                        <option value="7" >Pendente e nao pago e nao selecionados</option>
+                                        <option value="8" >Pendente e sem reembolso</option>
                                     </select>
                                 </div>
                             </div>
@@ -278,7 +278,7 @@ document.addEventListener('DOMContentLoaded', function() {
                         pagamento: filtroPagamento,
                         csrf_token: document.querySelector('[name=csrf_token]')?.value
                     };
-                    console.log('Enviando dados para DataTables - Filtro:', filtroPagamento, 'Notas selecionadas:', notasSelecionadas);
+                    console.log('Enviando dados para DataTables - Filtro:', dataToSend);
                     return JSON.stringify(dataToSend);
                 },
                 headers: {

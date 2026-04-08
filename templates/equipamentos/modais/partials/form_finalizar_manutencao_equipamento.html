@@ -1,6 +1,10 @@
-{# Finalizacao rapida: custo, NF, conclusao, status, observacoes #}
-<form id="form_finalizar_manutencao_eq" novalidate>
+{# Finalizacao rapida: custo, NF, conclusao, status, observacoes, materiais estoque #}
+<form id="form_finalizar_manutencao_eq" novalidate
+      data-api-estoque="{{ url_for('estoque.api_listar') }}"
+      data-api-preco="{{ url_for('equipamento.api_preco_material_sugerido_manutencao', id=equipamento.id, manutencao_id=manutencao.id) }}">
     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+    <input type="hidden" name="materiais_json" id="man_fin_materiais_json" value="">
+    <script type="application/json" id="man_fin_seed_linhas">{{ materiais_consumo_linhas | tojson }}</script>
     <div class="mb-3 pb-2 border-bottom small text-muted">
         <p class="mb-1"><strong class="text-dark">{{ equipamento.nome }}</strong></p>
         <p class="mb-0">{{ manutencao.tipo }} &middot; inicio {{ manutencao.data_inicio.strftime('%d/%m/%Y %H:%M') }} &middot; {{ manutencao.responsavel }}</p>
@@ -8,16 +12,16 @@
     <div class="mb-3">
         <label for="man_fin_status" class="form-label">Status *</label>
         <select class="form-select" id="man_fin_status" name="status" required>
-            <option value="Pendente" {% if manutencao.status == 'Pendente' %}selected{% endif %}>Pendente</option>
-            <option value="Em Andamento" {% if manutencao.status == 'Em Andamento' %}selected{% endif %}>Em Andamento</option>
-            <option value="Concluída" {% if manutencao.status == 'Concluída' %}selected{% endif %}>Concluída</option>
+            <option value="Pendente">Pendente</option>
+            <option value="Em Andamento">Em Andamento</option>
+            <option value="Concluída" selected>Concluída</option>
         </select>
     </div>
     <div class="mb-3">
         <label for="man_fin_data_fim" class="form-label">Data e hora de conclusão</label>
         <input type="datetime-local" class="form-control" id="man_fin_data_fim" name="data_fim"
-               value="{{ manutencao.data_fim.strftime('%Y-%m-%dT%H:%M') if manutencao.data_fim else '' }}">
-        <div class="form-text">Opcional; recomendado ao marcar como concluída.</div>
+               value="{{ manutencao.data_fim.strftime('%Y-%m-%dT%H:%M') if manutencao.data_fim else agora_finalizar.strftime('%Y-%m-%dT%H:%M') }}">
+        <div class="form-text">Se ainda não havia data de conclusão, usa a data e hora atuais; altere se precisar.</div>
     </div>
     <div class="mb-3">
         <label for="man_fin_custo" class="form-label">Custo (R$)</label>
@@ -34,7 +38,32 @@
             </option>
             {% endfor %}
         </select>
+        <div class="form-text">Valor unitário sugerido: última compra nas notas (por material ou código). Se escolher uma NF abaixo, prioriza o item dessa nota.</div>
     </div>
+
+    <div class="mb-3">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <label class="form-label mb-0">Materiais do estoque (saída)</label>
+            <button type="button" class="btn btn-sm btn-outline-primary" id="man_fin_btn_add_mat">
+                <i class="fas fa-plus me-1"></i>Adicionar linha
+            </button>
+        </div>
+        <div class="table-responsive border rounded">
+            <table class="table table-sm table-striped mb-0 align-middle" id="man_fin_tbl_mats">
+                <thead class="table-light">
+                    <tr>
+                        <th style="min-width:220px">Material (busca)</th>
+                        <th style="width:110px">Qtd</th>
+                        <th style="width:130px">Valor unit. (R$)</th>
+                        <th style="width:48px"></th>
+                    </tr>
+                </thead>
+                <tbody id="man_fin_tb_mats"></tbody>
+            </table>
+        </div>
+        <div class="form-text mt-1">Ao salvar, registra saída no estoque. Alterar esta lista novamente desfaz as saídas anteriores e aplica as novas quantidades.</div>
+    </div>
+
     <div class="mb-3">
         <label for="man_fin_observacoes" class="form-label">Observações</label>
         <textarea class="form-control" id="man_fin_observacoes" name="observacoes" rows="3">{{ manutencao.observacoes or '' }}</textarea>
@@ -46,3 +75,20 @@
         </button>
     </div>
 </form>
+
+<template id="man_fin_tpl_row">
+    <tr>
+        <td>
+            <select class="form-select man-fin-sel-estoque" style="width:100%" data-placeholder="Buscar material..."></select>
+        </td>
+        <td>
+            <input type="number" class="form-control form-control-sm man-fin-qtd" min="0" step="0.0001" placeholder="0">
+        </td>
+        <td>
+            <input type="number" class="form-control form-control-sm man-fin-val" min="0" step="0.0001" placeholder="0,00">
+        </td>
+        <td class="text-nowrap">
+            <button type="button" class="btn btn-sm btn-outline-danger man-fin-del" title="Remover linha"><i class="fas fa-times"></i></button>
+        </td>
+    </tr>
+</template>

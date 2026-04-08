@@ -1,5 +1,5 @@
 <div class="modal fade" id="finalizarManutencaoEquipModal" tabindex="-1" aria-labelledby="finalizarManutencaoEquipModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-dialog-scrollable">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-success text-white">
                 <h5 class="modal-title" id="finalizarManutencaoEquipModalLabel">Finalizar manutenção</h5>
@@ -41,6 +41,149 @@
             if (df) df.setAttribute('max', hoje);
         }
 
+        /**
+         * Tabela de materiais: Select2 + JSON oculto para o POST.
+         */
+        window.initFinalizarManutencaoMateriaisForm = function (root) {
+            if (!root || typeof jQuery === 'undefined' || !jQuery.fn.select2) return;
+            var $root = jQuery(root);
+            var $form = $root.find('#form_finalizar_manutencao_eq');
+            if (!$form.length) return;
+            var apiE = $form.attr('data-api-estoque');
+            var apiP = $form.attr('data-api-preco');
+            var $tbody = $root.find('#man_fin_tb_mats');
+            var $tpl = $root.find('#man_fin_tpl_row');
+            var $hid = $root.find('#man_fin_materiais_json');
+            var $nf = $root.find('#man_fin_nota_fiscal_id');
+            var seedEl = root.querySelector('#man_fin_seed_linhas');
+            var seed = [];
+            if (seedEl && seedEl.textContent) {
+                try {
+                    seed = JSON.parse(seedEl.textContent.trim());
+                } catch (e1) { seed = []; }
+            }
+            if (!Array.isArray(seed)) seed = [];
+
+            function syncMatsJson() {
+                var arr = [];
+                $tbody.find('tr').each(function () {
+                    var $tr = jQuery(this);
+                    var sid = $tr.find('.man-fin-sel-estoque').val();
+                    var q = ($tr.find('.man-fin-qtd').val() || '').trim();
+                    var v = ($tr.find('.man-fin-val').val() || '').trim();
+                    if (!sid || q === '') return;
+                    var o = { estoque_id: parseInt(sid, 10), quantidade: q };
+                    if (v !== '') o.valor_unitario = v;
+                    arr.push(o);
+                });
+                if ($hid.length) $hid.val(JSON.stringify(arr));
+            }
+
+            function fetchPreco($tr) {
+                if (!apiP) return;
+                var sid = $tr.find('.man-fin-sel-estoque').val();
+                if (!sid) return;
+                var nfId = $nf.val() || '';
+                var url = apiP + '?estoque_id=' + encodeURIComponent(sid);
+                if (nfId) {
+                    url += '&nota_fiscal_id=' + encodeURIComponent(nfId);
+                }
+                fetch(url, { headers: { 'X-Requested-With': 'XMLHttpRequest' } })
+                    .then(function (r) { return r.json(); })
+                    .then(function (data) {
+                        if (data && data.success && data.valor_unitario != null) {
+                            var $v = $tr.find('.man-fin-val');
+                            if ($v.length) {
+                                $v.val(data.valor_unitario);
+                            }
+                        }
+                    })
+                    .catch(function () {});
+            }
+
+            function bindEstRow($tr) {
+                var $sel = $tr.find('.man-fin-sel-estoque');
+                $sel.select2({
+                    placeholder: 'Buscar material...',
+                    allowClear: true,
+                    width: '100%',
+                    dropdownParent: jQuery('#finalizarManutencaoEquipModal'),
+                    language: {
+                        noResults: function () { return 'Nenhum resultado'; },
+                        searching: function () { return 'Buscando...'; }
+                    },
+                    ajax: {
+                        url: apiE,
+                        dataType: 'json',
+                        delay: 250,
+                        data: function (p) {
+                            return { q: p.term || '', somente_material: '1' };
+                        },
+                        processResults: function (data) {
+                            return data || { results: [] };
+                        },
+                        cache: true
+                    },
+                    minimumInputLength: 1
+                });
+                $sel.on('select2:select', function () {
+                    fetchPreco($tr);
+                    syncMatsJson();
+                });
+                $sel.on('select2:clear', function () {
+                    syncMatsJson();
+                });
+            }
+
+            function addRow(preset) {
+                if (!$tpl.length) return;
+                var node = $tpl[0].content.cloneNode(true);
+                $tbody[0].appendChild(node);
+                var $tr = $tbody.children('tr').last();
+                bindEstRow($tr);
+                if (preset && preset.estoque_id) {
+                    var lbl = preset.label || ('Estoque #' + preset.estoque_id);
+                    var opt = new Option(lbl, String(preset.estoque_id), true, true);
+                    $tr.find('.man-fin-sel-estoque').append(opt).trigger('change');
+                }
+                if (preset && preset.quantidade != null) {
+                    $tr.find('.man-fin-qtd').val(preset.quantidade);
+                }
+                if (preset && preset.valor_unitario != null) {
+                    $tr.find('.man-fin-val').val(preset.valor_unitario);
+                }
+                $tr.find('.man-fin-qtd, .man-fin-val').on('input change', function () {
+                    syncMatsJson();
+                });
+                $tr.find('.man-fin-del').on('click', function () {
+                    var $s = $tr.find('.man-fin-sel-estoque');
+                    if ($s.data('select2')) $s.select2('destroy');
+                    $tr.remove();
+                    syncMatsJson();
+                });
+                syncMatsJson();
+            }
+
+            $root.find('#man_fin_btn_add_mat').off('click.manfin').on('click.manfin', function () {
+                addRow(null);
+            });
+
+            $nf.off('change.manfin').on('change.manfin', function () {
+                $tbody.find('tr').each(function () {
+                    fetchPreco(jQuery(this));
+                });
+            });
+
+            $tbody.empty();
+            if (seed.length) {
+                seed.forEach(function (row) { addRow(row); });
+            }
+            syncMatsJson();
+            $tbody.find('tr').each(function () {
+                fetchPreco(jQuery(this));
+            });
+        };
+
         function carregar(eid, mid) {
             equipIdAtual = eid;
             manIdAtual = mid;
@@ -59,6 +202,9 @@
                     body.style.display = 'block';
                     if (titleEl) titleEl.textContent = 'Finalizar manutenção';
                     bindFinHelpers();
+                    if (typeof window.initFinalizarManutencaoMateriaisForm === 'function') {
+                        window.initFinalizarManutencaoMateriaisForm(body);
+                    }
                 })
                 .catch(function () {
                     loading.style.display = 'none';
@@ -80,6 +226,26 @@
         $(document).on('submit', '#form_finalizar_manutencao_eq', function (e) {
             e.preventDefault();
             var form = this;
+            if (typeof window.initFinalizarManutencaoMateriaisForm === 'function') {
+                var hid = form.querySelector('#man_fin_materiais_json');
+                if (hid && typeof jQuery !== 'undefined') {
+                    var $tbody = jQuery(form).find('#man_fin_tb_mats');
+                    if ($tbody.length) {
+                        var arr = [];
+                        $tbody.find('tr').each(function () {
+                            var $tr = jQuery(this);
+                            var sid = $tr.find('.man-fin-sel-estoque').val();
+                            var q = ($tr.find('.man-fin-qtd').val() || '').trim();
+                            var v = ($tr.find('.man-fin-val').val() || '').trim();
+                            if (!sid || q === '') return;
+                            var o = { estoque_id: parseInt(sid, 10), quantidade: q };
+                            if (v !== '') o.valor_unitario = v;
+                            arr.push(o);
+                        });
+                        hid.value = JSON.stringify(arr);
+                    }
+                }
+            }
             if (!form.checkValidity()) {
                 form.classList.add('was-validated');
                 return;

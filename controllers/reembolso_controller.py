@@ -253,10 +253,16 @@ def nota_fiscal_busca_reembolso():
                     json_filtros['status_pagamento'] = 'apenas_reembolso'
                 elif pagamento == '4':
                     json_filtros['status_pagamento'] = 'selecionados'
+
                 elif pagamento == '5':
-                    json_filtros['status_pagamento'] = 'reembolso_e_nao_pago'
+                    #Pendente e nao pago
+                    json_filtros['pagamento'] = False
+                    json_filtros['reembolso'] = True
                 elif pagamento == '6':
-                    json_filtros['status_pagamento'] = 'reembolso_e_nao_pago_e_nao_selecionados'
+                    #Pendente e nao pago e nao selecionados
+                    json_filtros['pagamento'] = False
+                    json_filtros['reembolso'] = True
+                    json_filtros['notas_selecionadas'] = []
             print(f'json_filtros: {json_filtros}')
             query = api_get_dados_notas_fiscais(json_filtros)
             pagination = query.paginate(page=page, per_page=per_page,error_out=False)
@@ -382,35 +388,31 @@ def datatables_notas():
         }
         
         
-        pagamento = data.get('pagamento', '')
-        if pagamento:
-            if pagamento == '0':
-                json_filtros['status_pagamento'] = 'nao_pago'
-                json_filtros['liberada'] = 'nao_liberada'
-            elif pagamento == '1':
-                json_filtros['status_pagamento'] = 'pago'
-            elif pagamento == '2':
-                json_filtros['status_pagamento'] = 'sem_envio'
-            elif pagamento == '3':
-                json_filtros['status_pagamento'] = 'apenas_reembolso'
-            elif pagamento == '4':
+        pagamento =int(data.get('pagamento', 0))
+        if pagamento > 0:
+            if pagamento == 1:
+                #Não pago
+                json_filtros['pagamento'] = False
+            elif pagamento == 2:
+                #Pago
+                json_filtros['pagamento'] = True
+            elif pagamento == 3:
+                #Sem envio
+                json_filtros['upload_protocolo'] = None
+            elif pagamento == 4:
+                #Apenas reembolso
+                json_filtros['reembolso_upload'] = True
+            elif pagamento == 5:
+                #Selecionados
                 json_filtros['status_pagamento'] = 'selecionados'
-            elif pagamento == '5':
+            elif pagamento == 6:
                 #Pendente e nao pago
-                json_filtros['status_upload'] = '3'
-                json_filtros['reembolso'] = '0'
-            elif pagamento == '6':
+                json_filtros['pagamento'] = False
+                json_filtros['reembolso'] = True
+            elif pagamento == 7:
                 #Pendente e nao pago e nao selecionados
-                json_filtros['status_pagamento'] = 'nao_pago'
-                json_filtros['liberada'] = 'nao_liberada'
-            elif pagamento == '7':
-                #Pendente e sem reembolso
-                json_filtros['status_upload'] = '3'
-                json_filtros['reembolso'] = '0'
-                json_filtros['status_pagamento'] = 'nao_pago'
-                json_filtros['liberada'] = 'nao_liberada'
-                json_filtros['notas_selecionadas'] = []
-        
+                json_filtros['pagamento'] = False
+                json_filtros['reembolso'] = True
 
         print(json.dumps(json_filtros, indent=4))
         #print(f'Filtro pagamento: {pagamento}, status_pagamento: {json_filtros.get("status_pagamento")}')

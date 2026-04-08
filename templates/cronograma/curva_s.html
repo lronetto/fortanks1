@@ -8,16 +8,26 @@
         <ol class="breadcrumb">
             <li class="breadcrumb-item"><a href="{{ url_for('cronograma.index') }}">Cronograma</a></li>
             <li class="breadcrumb-item">
-                <a href="{{ url_for('cronograma.matriz_semanal', contrato_id=contrato.id, data_inicio=data_inicio.strftime('%Y-%m-%d'), data_fim=data_fim.strftime('%Y-%m-%d')) }}">Matriz semanal</a>
+                <a href="{{ url_for('cronograma.matriz_semanal', contrato_id=contrato.id, data_inicio=data_inicio.strftime('%Y-%m-%d'), data_fim=data_fim.strftime('%Y-%m-%d')) }}{% if orden_por_indice %}&amp;orden_indice=1{% endif %}">Matriz semanal</a>
             </li>
             <li class="breadcrumb-item active" aria-current="page">Curva S</li>
         </ol>
     </nav>
 
     <h1 class="h3 mb-2 text-gray-800"><i class="fas fa-chart-line"></i> Curva S — {{ contrato.nome }}</h1>
+    {% if simulacao_ativa %}
+    <div class="alert alert-info d-flex flex-wrap align-items-center gap-2 mb-3" role="status">
+        <span><i class="fas fa-flask"></i> <strong>Modo simulação ativo.</strong> O <strong>previsto</strong> desta curva usa os índices <code>TEMPO_*</code> / <code>TEMPOS_*</code> da sessão (mesmos da matriz semanal), não o cadastro dos tanques.</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="cron-sim-banner-limpar-curva"
+                data-limpar-url="{{ url_for('cronograma.matriz_semanal_simulacao_limpar') }}"
+                data-contrato-id="{{ contrato.id }}">
+            Usar dados do cadastro
+        </button>
+    </div>
+    {% endif %}
     <p class="text-muted mb-3">
         Acumulado de <strong>placas</strong> no projeto (soma dos itens da matriz). O eixo vertical em <strong>%</strong> usa como referência 100% o
-        <strong>previsto acumulado no fim do intervalo</strong> (última semana do período filtrado). O real é comparado à mesma base.
+        <strong>previsto acumulado no fim do intervalo</strong> (última semana do período filtrado). O real é comparado à mesma base{% if simulacao_ativa %} e não é alterado pela simulação de índices{% endif %}.
     </p>
 
     <div class="row mb-3">
@@ -38,7 +48,7 @@
             </div>
         </div>
         <div class="col-md-4 d-flex align-items-end">
-            <a href="{{ url_for('cronograma.matriz_semanal', contrato_id=contrato.id, data_inicio=data_inicio.strftime('%Y-%m-%d'), data_fim=data_fim.strftime('%Y-%m-%d')) }}" class="btn btn-outline-secondary">
+            <a href="{{ url_for('cronograma.matriz_semanal', contrato_id=contrato.id, data_inicio=data_inicio.strftime('%Y-%m-%d'), data_fim=data_fim.strftime('%Y-%m-%d')) }}{% if orden_por_indice %}&amp;orden_indice=1{% endif %}" class="btn btn-outline-secondary">
                 <i class="fas fa-table"></i> Voltar à matriz
             </a>
         </div>
@@ -57,10 +67,14 @@
 
     <div class="card shadow mb-4">
         <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Placas acumuladas (quantidade)</h6>
+            <h6 class="m-0 font-weight-bold text-primary">Placas — acumulado (linhas) e previsto × real por semana (barras)</h6>
         </div>
         <div class="card-body">
-            <div style="max-width: 100%; height: 360px;">
+            <p class="text-muted small mb-2">
+                <strong>Linhas:</strong> placas acumuladas (previsto e real). <strong>Barras:</strong> volume na semana (mesma base da matriz).
+                Eixo esquerdo: acumulado; eixo direito: placas na semana.
+            </p>
+            <div style="max-width: 100%; height: 440px;">
                 <canvas id="chartCurvaSPlacas"></canvas>
             </div>
         </div>
@@ -70,6 +84,37 @@
 
 {# Scripts no final do body (base.extra_js): no head o canvas ainda não existe e o gráfico ficava em branco. #}
 {% block extra_js %}
+<script>
+(function () {
+  var b = document.getElementById('cron-sim-banner-limpar-curva');
+  if (!b) return;
+  var limparUrl = b.getAttribute('data-limpar-url');
+  var cid = b.getAttribute('data-contrato-id');
+  b.addEventListener('click', function () {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    var tok = m ? m.getAttribute('content') : '';
+    if (!tok || !limparUrl || !cid) return;
+    b.disabled = true;
+    fetch(limparUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': tok,
+        'X-CSRF-Token': tok
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({ csrf_token: tok, contrato_id: parseInt(cid, 10) })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.ok) window.location.reload();
+        else b.disabled = false;
+      })
+      .catch(function () { b.disabled = false; });
+  });
+})();
+</script>
 <script>
 (function() {
     var labels = {{ labels|tojson }};
@@ -141,28 +186,57 @@
         });
     }
 
+    var semPrev = {{ curva_sem_previsto|tojson }};
+    var semReal = {{ curva_sem_real|tojson }};
+
     var ctx2 = document.getElementById('chartCurvaSPlacas');
     if (ctx2) {
         new Chart(ctx2.getContext('2d'), {
-            type: 'line',
+            type: 'bar',
             data: {
                 labels: labels,
                 datasets: [
                     {
-                        label: 'Previsto acumulado (placas)',
-                        data: cumP,
-                        borderColor: 'rgb(54, 162, 235)',
-                        fill: false,
-                        lineTension: 0.25,
-                        pointRadius: 3
+                        type: 'bar',
+                        label: 'Previsto (na semana)',
+                        data: semPrev,
+                        yAxisID: 'y-axis-2',
+                        backgroundColor: 'rgba(54, 162, 235, 0.55)',
+                        borderColor: 'rgba(13, 110, 253, 1)',
+                        borderWidth: 1
                     },
                     {
-                        label: 'Real acumulado (placas)',
-                        data: cumR,
-                        borderColor: 'rgb(40, 167, 69)',
+                        type: 'bar',
+                        label: 'Real (na semana)',
+                        data: semReal,
+                        yAxisID: 'y-axis-2',
+                        backgroundColor: 'rgba(40, 167, 69, 0.45)',
+                        borderColor: 'rgba(25, 135, 84, 1)',
+                        borderWidth: 1
+                    },
+                    {
+                        type: 'line',
+                        label: 'Previsto acumulado (placas)',
+                        data: cumP,
+                        yAxisID: 'y-axis-1',
+                        borderColor: 'rgb(13, 110, 253)',
+                        backgroundColor: 'transparent',
                         fill: false,
                         lineTension: 0.25,
-                        pointRadius: 3
+                        pointRadius: 3,
+                        borderWidth: 2
+                    },
+                    {
+                        type: 'line',
+                        label: 'Real acumulado (placas)',
+                        data: cumR,
+                        yAxisID: 'y-axis-1',
+                        borderColor: 'rgb(25, 135, 84)',
+                        backgroundColor: 'transparent',
+                        fill: false,
+                        lineTension: 0.25,
+                        pointRadius: 3,
+                        borderWidth: 2
                     }
                 ]
             },
@@ -171,23 +245,43 @@
                 maintainAspectRatio: false,
                 title: {
                     display: true,
-                    text: 'Curva S — placas acumuladas'
+                    text: 'Curva S — placas (acumulado e por semana)'
                 },
                 legend: { position: 'bottom' },
+                tooltips: {
+                    mode: 'index',
+                    intersect: false
+                },
                 scales: {
-                    yAxes: [{
-                        ticks: { beginAtZero: true },
-                        scaleLabel: {
-                            display: true,
-                            labelString: 'Placas'
-                        }
-                    }],
                     xAxes: [{
+                        barPercentage: 0.85,
+                        categoryPercentage: 0.65,
                         ticks: {
                             maxRotation: 45,
                             minRotation: 0
                         }
-                    }]
+                    }],
+                    yAxes: [
+                        {
+                            id: 'y-axis-1',
+                            position: 'left',
+                            ticks: { beginAtZero: true },
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'Acumulado (placas)'
+                            }
+                        },
+                        {
+                            id: 'y-axis-2',
+                            position: 'right',
+                            ticks: { beginAtZero: true },
+                            gridLines: { drawOnChartArea: false },
+                            scaleLabel: {
+                                display: true,
+                                labelString: 'Na semana (placas)'
+                            }
+                        }
+                    ]
                 }
             }
         });

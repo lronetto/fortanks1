@@ -351,7 +351,7 @@ document.addEventListener('DOMContentLoaded', function() {
             params.append('observacao', observacao.trim());
         }
         
-        fetch(`/notas-fiscais/api/importar-item-estoque/${itemId}`, {
+        fetch(`{{ url_for('nota_fiscal.api_importar_item_estoque', item_id=999999999) }}`.replace('999999999', String(itemId)), {
             method: 'POST',
             headers: {
                 'X-CSRFToken': csrfToken,
@@ -543,7 +543,7 @@ document.addEventListener('DOMContentLoaded', function() {
             if (item.descricao) params.append('descricao', item.descricao);
             if (item.ncm) params.append('ncm', item.ncm);
             
-            fetch(`/materiais/api/buscar-semelhantes?${params.toString()}`)
+            fetch(`{{ url_for('material.api_buscar_semelhantes') }}?${params.toString()}`)
                 .then(response => response.json())
                 .then(data => {
                     if (data.success) {
@@ -759,7 +759,7 @@ document.addEventListener('DOMContentLoaded', function() {
             btnConfirmar.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Criando...';
             
             // Fazer requisição para criar material
-            fetch('/materiais/api/criar', {
+            fetch('{{ url_for("material.api_criar") }}', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',

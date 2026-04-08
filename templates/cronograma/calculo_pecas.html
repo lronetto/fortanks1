@@ -14,9 +14,10 @@
 
     <h1 class="h3 mb-2 text-gray-800"><i class="fas fa-calculator"></i> Cálculo do cronograma (peças × índices)</h1>
     <p class="text-muted mb-3">
-        Os índices <strong>dias por peça</strong> vêm dos <strong>dados adicionais</strong> de cada tanque (lista Nome/Valor), por exemplo
-        <code>TEMPO_PN</code> e <code>TEMPO_PF</code>. Peças do tipo PN / Placa Normal usam <code>TEMPO_PN</code>; PF / Placa Fecho usam <code>TEMPO_PF</code>.
-        Ex.: 30 peças PN com índice 0,22 → 6,6 dias.
+        Os índices vêm dos <strong>dados adicionais</strong> de cada tanque (lista Nome/Valor): <code>TEMPO_*</code> = dias por peça;
+        <code>TEMPOS_*</code> = placas por semana. Se existir <code>TEMPOS_T</code>, vale para <strong>todos</strong> os tipos de placa e os demais índices de ritmo desse tanque são ignorados.
+        Caso contrário, PN usa <code>TEMPO_PN</code> / <code>TEMPOS_PN</code>, PF usa <code>TEMPO_PF</code> / <code>TEMPOS_PF</code> (<code>TEMPOS_*</code> tem prioridade sobre <code>TEMPO_*</code> no mesmo grupo).
+        Ex.: 30 peças PN com <code>TEMPO_PN</code> 0,22 → 6,6 dias; ou com <code>TEMPOS_PN</code> 10 → 3 semanas de carga equivalente na matriz.
     </p>
 
     <div class="card shadow mb-4">
@@ -114,8 +115,8 @@
                             <th>Tipo (cadastro)</th>
                             <th>Índice</th>
                             <th class="text-end">Qtd peças</th>
-                            <th class="text-end">Dias/peça</th>
-                            <th class="text-end">Dias total</th>
+                            <th class="text-end" title="TEMPO_* = dias/peça; TEMPOS_* = placas/semana">Ritmo</th>
+                            <th class="text-end" title="Carga equivalente na matriz (dias ou semanas×7)">Total (equiv.)</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -125,7 +126,13 @@
                             <td>{{ row.tipo_peca }}</td>
                             <td><code>{{ row.chave_indice }}</code></td>
                             <td class="text-end">{{ row.quantidade }}</td>
-                            <td class="text-end">{{ '%.4f'|format(row.dias_por_peca) }}</td>
+                            <td class="text-end">
+                                {% if row.chave_indice is string and 'TEMPOS_' in row.chave_indice %}
+                                    {{ '%.4f'|format(row.valor_ritmo|default(0)) }} <span class="text-muted small">pl./sem</span>
+                                {% else %}
+                                    {{ '%.4f'|format(row.dias_por_peca) }} <span class="text-muted small">d./p.</span>
+                                {% endif %}
+                            </td>
                             <td class="text-end">{{ '%.4f'|format(row.dias_total) }}</td>
                         </tr>
                         {% endfor %}

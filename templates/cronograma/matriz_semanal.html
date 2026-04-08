@@ -11,6 +11,7 @@
     --cron-matriz-w1: 9rem;
     --cron-matriz-w2: 12rem;
     --cron-matriz-w3: 5.75rem;
+    --cron-matriz-w4: 4.5rem;
     overflow: auto;
     -webkit-overflow-scrolling: touch;
   }
@@ -43,15 +44,26 @@
     background-color: var(--bs-body-bg, #fff);
     box-shadow: 3px 0 0 rgba(0, 0, 0, 0.06);
   }
+  .cron-matriz-sticky-4 {
+    position: sticky;
+    left: calc(var(--cron-matriz-w1) + var(--cron-matriz-w2) + var(--cron-matriz-w3));
+    z-index: 2;
+    width: var(--cron-matriz-w4);
+    min-width: var(--cron-matriz-w4);
+    background-color: var(--bs-body-bg, #fff);
+    box-shadow: 3px 0 0 rgba(0, 0, 0, 0.06);
+  }
   thead.table-light .cron-matriz-sticky-1,
   thead.table-light .cron-matriz-sticky-2,
-  thead.table-light .cron-matriz-sticky-3 {
+  thead.table-light .cron-matriz-sticky-3,
+  thead.table-light .cron-matriz-sticky-4 {
     z-index: 7;
     background-color: var(--bs-light, #f8f9fa) !important;
   }
   tbody .cron-matriz-sticky-1,
   tbody .cron-matriz-sticky-2,
-  tbody .cron-matriz-sticky-3 {
+  tbody .cron-matriz-sticky-3,
+  tbody .cron-matriz-sticky-4 {
     background-color: var(--bs-body-bg, #fff);
   }
   thead.table-light {
@@ -132,14 +144,15 @@
 
     <h1 class="h3 mb-2 text-gray-800"><i class="fas fa-table"></i> Matriz semanal — previsto e real</h1>
     <p class="text-muted mb-3">
-        <strong>Previsto:</strong> quantidade de <strong>placas</strong> (peças cadastradas no tanque), repartida pelas semanas a partir da <strong>data início prevista</strong> do tanque
-        (ou do início do intervalo abaixo se não houver data). Itens do mesmo tanque dividem o total pelo <strong>peso</strong> relativo.
-        Com <strong>predecessor</strong>, o início do previsto fica no dia seguinte ao término da semana de carga do predecessor (finish-to-start), respeitando a data base do tanque.
+        <strong>Previsto:</strong> o sistema calcula primeiro o total de <strong>dias de obra</strong> (quantidade de peças × índices <code>TEMPO_*</code> por tipo), rateado pelo <strong>peso</strong> entre itens do mesmo tanque;
+        esses dias são <strong>distribuídos nas semanas</strong> a partir da <strong>data início prevista</strong> do tanque (ou do intervalo abaixo), usando o <strong>calendário vinculado</strong> ao índice (dias úteis, feriados e dias não trabalhados) ou <strong>dias corridos</strong> se não houver calendário.
+        A coluna <strong>P</strong> mostra a parcela de <strong>placas</strong> correspondente a cada semana (proporcional aos dias distribuídos).
+        Com <strong>predecessor</strong>, o início fica no dia após o término da <strong>carga em dias de obra</strong> do predecessor (finish-to-start), respeitando a data base do tanque.
         <strong>Realizado:</strong> quantidade de placas com <strong>data de concretagem</strong> na semana.
         <strong>PA</strong> e <strong>RA</strong> são os totais <strong>acumulados</strong> de P e R ao longo das semanas (da esquerda para a direita).
         Itens <strong>sem tanque</strong> somam as placas dos filhos na hierarquia de índices (ex.: 1.3 agrega 1.3.1, 1.3.2…).
         A coluna <strong>Prazo (dias)</strong> é a soma de <strong>dias por peça × quantidade</strong> conforme os índices <code>TEMPO_*</code> do tanque (mesma base do cálculo por peças), rateada pelo <strong>peso</strong> entre itens do mesmo tanque e agregada nos níveis sem tanque.
-        As linhas aparecem em <strong>ordem cronológica</strong> pelo início efetivo do previsto (datas, predecessor e calendário). A tabela mantém a <strong>hierarquia do índice</strong> nas colunas; use as setas para <strong>recolher</strong> ou <strong>expandir</strong> ramos.
+        Use o filtro abaixo para alternar entre <strong>ordem cronológica</strong> (início efetivo do previsto) e <strong>ordem pelo índice</strong> (árvore do cronograma). A tabela mantém a <strong>hierarquia do índice</strong> nas colunas; use as setas para <strong>recolher</strong> ou <strong>expandir</strong> ramos.
         Se você não preencher <strong>Intervalo — início</strong>, o sistema usa a <strong>segunda-feira da semana da menor data</strong> entre as datas de início dos itens e as datas previstas dos tanques no cronograma, para a primeira coluna coincidir com o início planejado (ex.: 17/03 → semana que começa nessa segunda).
         Após <strong>Aplicar</strong>, o <strong>intervalo — fim</strong> é ajustado para o <strong>último dia da última semana</strong> em que existir previsto ou realizado (considera o horizonte mais longo entre eles).
     </p>
@@ -159,21 +172,46 @@
                 <div class="col-md-2">
                     <label for="data_inicio" class="form-label">Intervalo — início</label>
                     <input type="date" class="form-control" id="data_inicio" name="data_inicio"
-                           value="{{ data_inicio.strftime('%Y-%m-%d') }}">
+                           value="{{ data_inicio_filtro|default('', true) }}">
                 </div>
                 <div class="col-md-2">
                     <label for="data_fim" class="form-label">Intervalo — fim</label>
                     <input type="date" class="form-control" id="data_fim" name="data_fim"
-                           value="{{ data_fim.strftime('%Y-%m-%d') }}">
+                           value="{{ data_fim_filtro|default('', true) }}">
                 </div>
                 <div class="col-md-4">
                     <button type="submit" class="btn btn-primary w-100">
                         <i class="fas fa-filter"></i> Aplicar
                     </button>
                 </div>
+                <div class="col-12">
+                    <div class="form-check border rounded px-3 py-2 bg-light">
+                        <input class="form-check-input" type="checkbox" name="orden_indice" value="1"
+                               id="matriz_ordem_indice" {% if orden_por_indice %}checked{% endif %}>
+                        <label class="form-check-label" for="matriz_ordem_indice">
+                            Ordenar linhas pelo <strong>índice</strong> (hierarquia do cronograma). Desmarcado:
+                            ordem <strong>cronológica</strong> pelo início efetivo do previsto.
+                        </label>
+                    </div>
+                </div>
             </form>
         </div>
     </div>
+
+    {% if contrato and simulacao_ativa %}
+    <div class="alert alert-info d-flex flex-wrap align-items-center gap-2 mb-3" role="status">
+        <span><i class="fas fa-info-circle"></i> <strong>Modo simulação ativo.</strong> Prazo (dias) e dias previstos na matriz usam os índices guardados na sessão (não o cadastro dos tanques).</span>
+        <button type="button" class="btn btn-sm btn-outline-secondary ms-auto" id="cron-sim-banner-limpar"
+                data-limpar-url="{{ url_for('cronograma.matriz_semanal_simulacao_limpar') }}"
+                data-contrato-id="{{ contrato.id }}">
+            Usar dados do cadastro
+        </button>
+    </div>
+    {% endif %}
+
+    {% if contrato %}
+    {% include 'cronograma/partials/card_simulacao_indices.html' %}
+    {% endif %}
 
     {% if not contrato_id %}
     <div class="alert alert-info">
@@ -209,10 +247,10 @@
                         <i class="fas fa-undo-alt"></i>
                     </button>
                 </div>
-                <a href="{{ url_for('cronograma.matriz_semanal_exportar_excel', contrato_id=contrato.id, data_inicio=data_inicio.strftime('%Y-%m-%d'), data_fim=data_fim.strftime('%Y-%m-%d')) }}" class="btn btn-sm btn-success" title="Exportar matriz e dias para Excel (cores por tempo e intensidade)">
+                <a href="{{ url_for('cronograma.matriz_semanal_exportar_excel', contrato_id=contrato.id, data_inicio=data_inicio.strftime('%Y-%m-%d'), data_fim=data_fim.strftime('%Y-%m-%d')) }}{% if orden_por_indice %}&amp;orden_indice=1{% endif %}" class="btn btn-sm btn-success" title="Exportar matriz e dias para Excel (cores por tempo e intensidade)">
                     <i class="fas fa-file-excel"></i> Excel
                 </a>
-                <a href="{{ url_for('cronograma.projeto_curva_s', contrato_id=contrato.id, data_inicio=data_inicio.strftime('%Y-%m-%d'), data_fim=data_fim.strftime('%Y-%m-%d')) }}" class="btn btn-sm btn-outline-primary">
+                <a href="{{ url_for('cronograma.projeto_curva_s', contrato_id=contrato.id, data_inicio=data_inicio.strftime('%Y-%m-%d'), data_fim=data_fim.strftime('%Y-%m-%d')) }}{% if orden_por_indice %}&amp;orden_indice=1{% endif %}" class="btn btn-sm btn-outline-primary">
                     <i class="fas fa-chart-line"></i> Curva S
                 </a>
                 <a href="{{ url_for('cronograma.projeto', contrato_id=contrato.id) }}" class="btn btn-sm btn-outline-secondary">
@@ -239,6 +277,7 @@
                             </td>
                             <td class="cron-matriz-sticky-2">{{ row.nome }}</td>
                             <td class="text-center cron-matriz-sticky-3 font-monospace small" title="Total de dias de trabalho (índices do tanque), rateado pelo peso">{{ '%.2f'|format(row.prazo_dias_total|default(0)|float) }}</td>
+                            <td class="text-center cron-matriz-sticky-4 font-monospace small" title="Dias corridos de calendário do início ao fim da carga prevista (inclusive); agregados somam os filhos">{{ row.dias_corridos|default(0) }}</td>
                             {% for s in semanas %}
                             {% set pv = row.previsto[s.key] %}
                             {% set rv = row.real[s.key] %}
@@ -260,6 +299,7 @@
                             <th class="text-nowrap cron-matriz-sticky-1">Índice</th>
                             <th class="cron-matriz-sticky-2">Item</th>
                             <th class="text-center cron-matriz-sticky-3" title="Dias totais (peça × TEMPO_*), rateado pelo peso">Prazo<br><span class="fw-normal text-muted" style="font-size: 0.7rem;">(dias)</span></th>
+                            <th class="text-center cron-matriz-sticky-4" title="Dias corridos (calendário) da carga prevista">Dias<br><span class="fw-normal text-muted" style="font-size: 0.65rem;">(corridos)</span></th>
                             {% for s in semanas %}
                             <th class="text-center p-1" style="min-width: 6.25rem;">
                                 <div class="fw-bold">{{ s.label }}</div>
@@ -306,6 +346,7 @@
                             <th class="text-nowrap cron-matriz-sticky-1">Índice</th>
                             <th class="cron-matriz-sticky-2">Item</th>
                             <th class="text-center cron-matriz-sticky-3" title="Dias totais (peça × TEMPO_*)">Prazo<br><span class="fw-normal text-muted" style="font-size: 0.7rem;">(dias)</span></th>
+                            <th class="text-center cron-matriz-sticky-4" title="Dias corridos da carga prevista">Dias<br><span class="fw-normal text-muted" style="font-size: 0.65rem;">(corridos)</span></th>
                             <th class="p-0 align-bottom" colspan="{{ semanas|length }}">
                                 <div class="text-center text-muted py-1 small" style="font-size: 0.7rem;">Linha do tempo (semanas →)</div>
                                 <div class="cron-dias-timeline cron-dias-timeline-header px-1 pb-2" style="--n: {{ semanas|length }};">
@@ -333,6 +374,7 @@
                             </td>
                             <td class="cron-matriz-sticky-2">{{ row.nome }}</td>
                             <td class="text-center cron-matriz-sticky-3 font-monospace small">{{ '%.2f'|format(row.prazo_dias_total|default(0)|float) }}</td>
+                            <td class="text-center cron-matriz-sticky-4 font-monospace small">{{ row.dias_corridos|default(0) }}</td>
                             <td class="p-1 align-top" colspan="{{ semanas|length }}">
                                 {% set nsem = semanas|length %}
                                 <div class="cron-dias-runs-wrap" style="--n: {{ nsem }};" role="img" aria-label="Dias previstos ao longo das semanas">
@@ -361,7 +403,7 @@
                         {% set nsem = semanas|length %}
                         {% set mxt = max_dias_barras_totais|default(1)|float %}
                         <tr class="table-light fw-bold small cron-barras-total-row">
-                            <td class="cron-matriz-sticky-1 text-nowrap align-middle" colspan="3">Total (dias / semana)</td>
+                            <td class="cron-matriz-sticky-1 text-nowrap align-middle" colspan="4">Total (dias / semana)</td>
                             <td class="p-1 align-middle" colspan="{{ semanas|length }}">
                                 <div class="cron-dias-runs-wrap" style="--n: {{ nsem }};">
                                     <div class="cron-dias-runs-track">
@@ -393,6 +435,37 @@
 {% endblock %}
 
 {% block extra_js %}
+<script>
+(function () {
+  var b = document.getElementById('cron-sim-banner-limpar');
+  if (!b) return;
+  var limparUrl = b.getAttribute('data-limpar-url');
+  var cid = b.getAttribute('data-contrato-id');
+  b.addEventListener('click', function () {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    var tok = m ? m.getAttribute('content') : '';
+    if (!tok || !limparUrl || !cid) return;
+    b.disabled = true;
+    fetch(limparUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': tok,
+        'X-CSRF-Token': tok
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({ csrf_token: tok, contrato_id: parseInt(cid, 10) })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.ok) window.location.reload();
+        else b.disabled = false;
+      })
+      .catch(function () { b.disabled = false; });
+  });
+})();
+</script>
 <script>
 (function () {
   var tbody = document.getElementById('cron-matriz-tbody');
@@ -516,6 +589,22 @@
     if (act === 'in') applyZoom(zoomAtual + STEP);
     else if (act === 'out') applyZoom(zoomAtual - STEP);
     else if (act === 'reset') applyZoom(1);
+  });
+})();
+</script>
+<script>
+(function () {
+  var c = document.getElementById('cronSimCollapse');
+  var lbl = document.getElementById('cronSimToggleLabel');
+  var btn = document.getElementById('btnCronSimToggle');
+  if (!c || !lbl) return;
+  c.addEventListener('hidden.bs.collapse', function () {
+    lbl.textContent = 'Mostrar';
+    if (btn) btn.setAttribute('aria-expanded', 'false');
+  });
+  c.addEventListener('shown.bs.collapse', function () {
+    lbl.textContent = 'Ocultar';
+    if (btn) btn.setAttribute('aria-expanded', 'true');
   });
 })();
 </script>

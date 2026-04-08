@@ -438,8 +438,15 @@ def editar(id):
 def api_listar():
     """
     API que retorna uma lista de itens de estoque (Materiais e Produtos Compostos) para uso em selects.
+    Parâmetro opcional: somente_material=1 — apenas registros de estoque do tipo material.
     """
     search_term = request.args.get('q', '')
+    somente_material = request.args.get('somente_material', '').lower() in (
+        '1',
+        'true',
+        'yes',
+        'sim',
+    )
 
     # Query base no Estoque, carregando relacionamentos para evitar N+1 queries
     query = Estoque.query.options(
@@ -448,6 +455,11 @@ def api_listar():
     ).filter(
         db.or_(Estoque.material_id.isnot(None), Estoque.ProdComp_id.isnot(None))
     )
+    if somente_material:
+        query = query.filter(
+            Estoque.tipo_item == 'material',
+            Estoque.material_id.isnot(None),
+        )
 
     # Aplicar filtro de busca se houver
     if search_term:

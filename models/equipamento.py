@@ -3,6 +3,7 @@ from models.database import db
 
 EQ_STATUS = [
         'Ativo',
+        'Pendente',
         'Em Manutenção',
         'Aguardando Reparo',
         'Emprestado',
@@ -69,6 +70,7 @@ class Manutencao(db.Model):
     status = db.Column(db.String(20), default='Pendente')  # Pendente, Em Andamento, Concluída
     observacoes = db.Column(db.Text)
     nota_fiscal_id = db.Column(db.Integer, db.ForeignKey('NotaFiscal.id'), nullable=True)
+    dados_adicionais = db.Column(db.Text, nullable=True)
     data_cadastro = db.Column(db.DateTime, default=datetime.utcnow)
     data_atualizacao = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 

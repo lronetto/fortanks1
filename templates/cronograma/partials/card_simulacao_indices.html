@@ -1,0 +1,136 @@
+{# Simulação local dos índices TEMPO_* (dias/peça) e TEMPOS_* (placas/semana) por tanque (não persiste no servidor). #}
+<div class="card shadow mb-4" id="cron-sim-indices-card"
+     data-contrato-id="{{ contrato.id }}"
+     data-sim-aplicar-url="{{ url_for('cronograma.matriz_semanal_simulacao_aplicar') }}"
+     data-sim-limpar-url="{{ url_for('cronograma.matriz_semanal_simulacao_limpar') }}">
+    <div class="card-header py-2 d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h6 class="m-0 font-weight-bold text-primary">
+            <i class="fas fa-flask"></i> Simulação — índices TEMPO_* (dias/peça) e TEMPOS_* (placas/semana)
+        </h6>
+        <div class="d-flex flex-wrap gap-2 align-items-center">
+            {% if sim_indices.colunas|length > 0 and sim_indices.tem_tanques %}
+            <button type="button" class="btn btn-sm btn-primary" id="btnCronSimExecutar" title="Recalcular prazo e dias previstos na matriz com os valores acima">
+                <i class="fas fa-play me-1" aria-hidden="true"></i> Executar simulação
+            </button>
+            {% endif %}
+            <button class="btn btn-sm btn-outline-secondary" type="button" data-bs-toggle="collapse"
+                    data-bs-target="#cronSimCollapse" aria-expanded="true" aria-controls="cronSimCollapse"
+                    id="btnCronSimToggle">
+                <i class="fas fa-compress-alt me-1" aria-hidden="true"></i><span id="cronSimToggleLabel">Ocultar</span>
+            </button>
+        </div>
+    </div>
+    <div class="collapse show" id="cronSimCollapse">
+        <div class="card-body">
+            <p class="text-muted small mb-2">
+                Tanques do projeto e valores atuais dos <strong>dados adicionais</strong> do cadastro. Altere os números para simular;
+                os valores <strong>não são gravados</strong> — use o cadastro do tanque para alterar definitivamente.
+            </p>
+            {% if not sim_indices.tem_tanques %}
+            <div class="alert alert-light border mb-0">Não há tanques cadastrados neste projeto.</div>
+            {% elif sim_indices.colunas|length == 0 %}
+            <div class="alert alert-light border mb-0">
+                Nenhum índice <code>TEMPO_*</code> ou <code>TEMPOS_*</code> encontrado nos dados adicionais dos tanques.
+                Cadastre em <strong>Tanques → dados adicionais → índices</strong> (ex.: <code>TEMPOS_T</code> para um ritmo único no tanque, ou <code>TEMPO_PN</code> / <code>TEMPOS_PN</code>).
+            </div>
+            {% else %}
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm align-middle mb-0" style="font-size: 0.85rem;">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="text-nowrap">Tanque</th>
+                            {% for col in sim_indices.colunas %}
+                            <th class="text-center text-nowrap font-monospace small" title="Dias por peça">{{ col }}</th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for lin in sim_indices.linhas %}
+                        <tr>
+                            <td class="text-nowrap">{{ lin.nome }}</td>
+                            {% for col in sim_indices.colunas %}
+                            {% set v = lin.valores[col] %}
+                            <td class="p-1" style="min-width: 5.5rem;">
+                                <input type="number" class="form-control form-control-sm text-end font-monospace py-1"
+                                       step="any" min="0" inputmode="decimal"
+                                       placeholder="—"
+                                       {% if v is not none %}value="{{ v }}"{% endif %}
+                                       aria-label="{{ lin.nome }} — {{ col }}"
+                                       data-cron-sim-input="1"
+                                       data-cron-sim-tanque="{{ lin.tanque_id }}"
+                                       data-cron-sim-col="{{ col }}">
+                            </td>
+                            {% endfor %}
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+<script>
+(function () {
+  var card = document.getElementById('cron-sim-indices-card');
+  if (!card) return;
+  var aplicarUrl = card.getAttribute('data-sim-aplicar-url');
+  var cid = card.getAttribute('data-contrato-id');
+  var btn = document.getElementById('btnCronSimExecutar');
+  if (!btn || !aplicarUrl || !cid) return;
+
+  function csrfToken() {
+    var m = document.querySelector('meta[name="csrf-token"]');
+    return m ? m.getAttribute('content') : '';
+  }
+
+  btn.addEventListener('click', function () {
+    var tok = csrfToken();
+    if (!tok) return;
+    var indices = {};
+    var tids = [];
+    card.querySelectorAll('input[data-cron-sim-input]').forEach(function (inp) {
+      var tid = inp.getAttribute('data-cron-sim-tanque');
+      if (tid && tids.indexOf(tid) === -1) tids.push(tid);
+    });
+    tids.forEach(function (tid) { indices[tid] = {}; });
+    card.querySelectorAll('input[data-cron-sim-input]').forEach(function (inp) {
+      var tid = inp.getAttribute('data-cron-sim-tanque');
+      var col = inp.getAttribute('data-cron-sim-col');
+      if (!tid || !col) return;
+      var raw = (inp.value || '').trim().replace(',', '.');
+      if (raw === '') return;
+      var n = parseFloat(raw);
+      if (isNaN(n)) return;
+      indices[tid][col] = n;
+    });
+    btn.disabled = true;
+    fetch(aplicarUrl, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-Requested-With': 'XMLHttpRequest',
+        'X-CSRFToken': tok,
+        'X-CSRF-Token': tok
+      },
+      credentials: 'same-origin',
+      body: JSON.stringify({
+        csrf_token: tok,
+        contrato_id: parseInt(cid, 10),
+        indices: indices
+      })
+    })
+      .then(function (r) { return r.json(); })
+      .then(function (d) {
+        if (d && d.ok) {
+          window.location.reload();
+        } else {
+          btn.disabled = false;
+        }
+      })
+      .catch(function () {
+        btn.disabled = false;
+      });
+  });
+})();
+</script>

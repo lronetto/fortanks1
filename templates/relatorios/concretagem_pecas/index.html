@@ -163,9 +163,10 @@
         <div class="col-12">
             <div class="card">
                 <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-chart-line"></i> Quantidade de Peças por Mês</h5>
+                    <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Quantidade de Peças por Mês</h5>
                 </div>
                 <div class="card-body">
+                    <p class="text-muted small mb-2">Barras agrupadas: <strong>previsto</strong> (cronograma do projeto selecionado) e <strong>realizado</strong> (peças concretadas). Sem projeto no filtro, o previsto fica zero.</p>
                     <div class="chart-container">
                         <canvas id="chartMes"></canvas>
                     </div>
@@ -470,14 +471,22 @@
         // Dados iniciais para os gráficos de quantidade
         const dadosMes = {
             labels: {{ labels_mes|tojson }},
-            datasets: [{
-                label: 'Quantidade de Peças',
-                data: {{ valores_mes|tojson }},
-                backgroundColor: 'rgba(58, 114, 171, 0.6)',
-                borderColor: 'rgba(58, 114, 171, 1)',
-                borderWidth: 2,
-                fill: true
-            }]
+            datasets: [
+                {
+                    label: 'Previsto (cronograma)',
+                    data: {{ valores_previsto_mes|tojson }},
+                    backgroundColor: 'rgba(54, 162, 235, 0.72)',
+                    borderColor: 'rgba(13, 110, 253, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Realizado (concretado)',
+                    data: {{ valores_mes|tojson }},
+                    backgroundColor: 'rgba(40, 167, 69, 0.72)',
+                    borderColor: 'rgba(25, 135, 84, 1)',
+                    borderWidth: 1
+                }
+            ]
         };
 
         const dadosSemana = {
@@ -564,6 +573,34 @@
             }
         };
 
+        const optionsQuantidadeMesBarras = {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                xAxes: [{
+                    barPercentage: 0.85,
+                    categoryPercentage: 0.7
+                }],
+                yAxes: [{
+                    ticks: {
+                        beginAtZero: true
+                    },
+                    scaleLabel: {
+                        display: true,
+                        labelString: 'Placas'
+                    }
+                }]
+            },
+            legend: {
+                display: true,
+                position: 'top'
+            },
+            tooltips: {
+                mode: 'index',
+                intersect: false
+            }
+        };
+
         const optionsMetros = {
             responsive: true,
             maintainAspectRatio: false,
@@ -593,14 +630,14 @@
             }
         };
 
-        // Criar gráfico mensal - quantidade
+        // Criar gráfico mensal - quantidade (barras: previsto x realizado)
         const ctxMesEl = document.getElementById('chartMes');
         if (ctxMesEl) {
             const ctxMes = ctxMesEl.getContext('2d');
             chartMes = new Chart(ctxMes, {
-                type: 'line',
+                type: 'bar',
                 data: dadosMes,
-                options: optionsQuantidade
+                options: optionsQuantidadeMesBarras
             });
         }
 
@@ -699,10 +736,13 @@
     }
 
     function atualizarGraficos(data) {
-        // Atualizar gráfico mensal - quantidade
+        // Atualizar gráfico mensal - quantidade (previsto + realizado)
         if (chartMes) {
             chartMes.data.labels = data.mes.labels;
-            chartMes.data.datasets[0].data = data.mes.valores;
+            var prevArr = data.mes.previsto || [];
+            var realArr = data.mes.valores || [];
+            if (chartMes.data.datasets[0]) chartMes.data.datasets[0].data = prevArr;
+            if (chartMes.data.datasets[1]) chartMes.data.datasets[1].data = realArr;
             chartMes.update();
         }
         

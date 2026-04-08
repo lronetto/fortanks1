@@ -113,3 +113,22 @@ def primeiro_dia_apos_carga(
     return primeiro_dia_apos_trabalho_uteis(
         total_unidades, inicio, calendario, feriados if feriados is not None else set(),
     )
+
+
+def dias_corridos_na_carga(
+    total_dias: float,
+    inicio: date,
+    calendario: Optional[CronogramaCalendario],
+    feriados: Optional[Set[date]],
+) -> int:
+    """
+    Dias corridos de calendário entre o primeiro e o último dia da carga prevista (inclusive).
+    Usa a mesma lógica de distribuição que `distribuir_carga_por_semana` / `primeiro_dia_apos_carga`.
+    """
+    if total_dias <= 1e-9:
+        return 0
+    prox = primeiro_dia_apos_carga(total_dias, inicio, calendario, feriados)
+    ultimo = prox - timedelta(days=1)
+    if ultimo < inicio:
+        return 0
+    return (ultimo - inicio).days + 1

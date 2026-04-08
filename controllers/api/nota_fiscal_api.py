@@ -529,7 +529,7 @@ def register(nota_fiscal_bp):
                 item.vincular(fator_conversao, material_id)
 
             try:
-                sucesso, mensagem, _ = item.importar_para_estoque(
+                sucesso, mensagem, _ = item.importar_para_estoque_automatico(
                     usuario_id=current_user.id,
                     centro_custo_id=centro_custo_id if centro_custo_id else None,
                     observacao=observacao
@@ -556,6 +556,82 @@ def register(nota_fiscal_bp):
                 "itens_ja_importados": itens_ja_importados,
                 "itens_com_erro": len(itens_com_erro),
                 "total_itens_selecionados": len(itens),
+            }
+        )
+
+    @nota_fiscal_bp.route("/api/importar-item-estoque/<int:item_id>", methods=["POST"])
+    @login_required
+    def api_importar_item_estoque(item_id):
+        """
+        Importa um único item da NF para o estoque (form-urlencoded: observacao opcional).
+        Usado pelos modais de importar/visualizar itens.
+        """
+        observacao = (request.form.get("observacao") or "").strip() or None
+        centro_raw = request.form.get("centro_custo_id")
+        centro_custo_id = int(centro_raw) if centro_raw and str(centro_raw).isdigit() else None
+
+        item = NotaFiscalItem.query.get_or_404(item_id)
+
+        if item.importado_estoque:
+            return jsonify(
+                {
+                    "success": True,
+                    "message": "Item já estava importado para o estoque.",
+                    "itens_importados": 0,
+                    "itens_ja_importados": 1,
+                    "itens_similares_encontrados": 0,
+                    "itens_com_erro": 0,
+                }
+            )
+
+        if not item.material_id:
+            return jsonify({"success": False, "message": "Item não possui material vinculado."}), 400
+
+        material = Materiais.query.get_or_404(item.material_id)
+
+        fator_conversao = item.fator_conversao_aplicado
+        if fator_conversao is None:
+            if comparar_unidades(item.unidade, material.unidade_obj.nome):
+                fator_conversao = 1
+            else:
+                fator_conversao = get_conversao_unidade(item.unidade, material.unidade_obj.nome)
+
+        if not fator_conversao and not comparar_unidades(item.unidade, material.unidade_obj.nome):
+            return jsonify(
+                {
+                    "success": False,
+                    "message": (
+                        f"Fator de conversão não encontrado para as unidades: "
+                        f"{item.unidade} e {material.unidade_obj.nome}"
+                    ),
+                }
+            ), 400
+
+        item.fator_conversao_aplicado = fator_conversao
+        db.session.commit()
+
+        try:
+            sucesso, mensagem, _ = item.importar_para_estoque_automatico(
+                usuario_id=current_user.id,
+                centro_custo_id=centro_custo_id,
+                observacao=observacao
+                or f"Importação da NF {item.nota_fiscal.numero_nf if item.nota_fiscal else 'N/A'}",
+            )
+        except Exception as e:
+            logger.exception("api_importar_item_estoque item_id=%s", item_id)
+            return jsonify({"success": False, "message": str(e)}), 500
+
+        if not sucesso:
+            return jsonify({"success": False, "message": mensagem or "Erro ao importar item."}), 400
+
+        return jsonify(
+            {
+                "success": True,
+                "message": mensagem or "Item importado com sucesso!",
+                "itens_importados": 1,
+                "itens_ja_importados": 0,
+                "itens_similares_encontrados": 0,
+                "itens_com_erro": 0,
             }
         )
 

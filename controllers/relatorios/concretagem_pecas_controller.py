@@ -4,6 +4,9 @@ from models.contrato import Contrato
 from models.concreto import ConcretoConcretagens, ConcretoConcretagensTanques
 from models.database import db
 from datetime import datetime, timedelta
+
+from controllers.cronograma.matriz_routes import ler_indices_simulacao_sessao
+from utils.concretagem_previsto_cronograma import pecas_previsto_por_mes_alinhado
 import json
 import pandas as pd
 import io
@@ -211,6 +214,21 @@ def index():
     # Preparar dados para gráficos
     labels_mes = [f"{v['mes']:02d}/{v['ano']}" for v in dados_mes.values()]
     valores_mes = [v['quantidade'] for v in dados_mes.values()]
+    if contrato_id and dados_mes:
+        try:
+            valores_previsto_mes = pecas_previsto_por_mes_alinhado(
+                contrato_id,
+                data_inicio,
+                data_fim,
+                dados_mes,
+                tanque_id=tanque_id,
+                grupo_id=grupo_id,
+                indices_por_tanque=ler_indices_simulacao_sessao(contrato_id),
+            )
+        except Exception:
+            valores_previsto_mes = [0.0] * len(valores_mes)
+    else:
+        valores_previsto_mes = [0.0] * len(valores_mes)
     valores_concretagens_mes = [v.get('quantidade_concretagens', 0) for v in dados_mes.values()]
     metros_placas_mes = [round(v.get('metros_placas', 0), 2) for v in dados_mes.values()]
     
@@ -257,6 +275,7 @@ def index():
         dados_semana=dados_semana,
         labels_mes=labels_mes,
         valores_mes=valores_mes,
+        valores_previsto_mes=valores_previsto_mes,
         valores_concretagens_mes=valores_concretagens_mes,
         metros_placas_mes=metros_placas_mes,
         labels_semana=labels_semana,
@@ -334,7 +353,24 @@ def api_dados():
     )
     dados_mes = agrupar_por_mes(dados)
     dados_semana = agrupar_por_semana(dados)
-    
+
+    valores_mes_api = [v['quantidade'] for v in dados_mes.values()]
+    if contrato_id and dados_mes and data_inicio is not None and data_fim is not None:
+        try:
+            previsto_mes_api = pecas_previsto_por_mes_alinhado(
+                contrato_id,
+                data_inicio,
+                data_fim,
+                dados_mes,
+                tanque_id=tanque_id,
+                grupo_id=grupo_id,
+                indices_por_tanque=ler_indices_simulacao_sessao(contrato_id),
+            )
+        except Exception:
+            previsto_mes_api = [0.0] * len(valores_mes_api)
+    else:
+        previsto_mes_api = [0.0] * len(valores_mes_api)
+
     # Preparar dados das tabelas
     resumo_mes = []
     for chave, valor in dados_mes.items():
@@ -375,7 +411,8 @@ def api_dados():
     return jsonify({
         'mes': {
             'labels': [f"{v['mes']:02d}/{v['ano']}" for v in dados_mes.values()],
-            'valores': [v['quantidade'] for v in dados_mes.values()],
+            'valores': valores_mes_api,
+            'previsto': previsto_mes_api,
             'concretagens': [v.get('quantidade_concretagens', 0) for v in dados_mes.values()],
             'metros_placas': [round(v.get('metros_placas', 0), 2) for v in dados_mes.values()]
         },

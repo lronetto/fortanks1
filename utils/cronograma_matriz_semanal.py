@@ -25,6 +25,7 @@ from utils.cronograma_calculo_pecas import (
     total_placas_por_tanque_contrato,
 )
 from utils.cronograma_distribuicao_uteis import (
+    dias_corridos_na_carga,
     distribuir_carga_por_semana,
     primeiro_dia_apos_carga,
 )
@@ -168,7 +169,7 @@ def _dias_efetivos_por_item(
     dias_tank: Dict[int, float],
 ) -> Dict[int, float]:
     """
-    Mesma lógica das placas efetivas: dias totais do tanque (peça × índices TEMPO_*)
+    Mesma lógica das placas efetivas: dias totais do tanque (TEMPO_* dias/peça ou TEMPOS_* placas/semana)
     repartidos pelo peso; itens sem tanque somam os filhos na hierarquia.
     """
     memo: Dict[int, float] = {}
@@ -277,11 +278,14 @@ def montar_matriz_previsto_real(
     contrato_id: int,
     data_inicio: date,
     data_fim: date,
+    indices_por_tanque: Optional[Dict[int, Dict[str, float]]] = None,
+    ordenar_por_indice: bool = False,
 ) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]], List[float]]:
     """
     Retorna (semanas, linhas, barras_dias_por_semana).
     Cada linha: indice, nome, tanque_nome, previsto e real em quantidade de placas por week_key.
-    As linhas vêm ordenadas pelo início efetivo do previsto (cronológico), não só pelo índice hierárquico.
+    Ordem das linhas: por padrão cronológica (início efetivo do previsto); com `ordenar_por_indice=True`,
+    pela ordem do índice (`indice_sort`).
 
     Início do previsto (antes de predecessor): data do item, senão data prevista do tanque no cronograma,
     senão o início do intervalo da matriz. Com predecessor que tem tanque (execução direta), finish-to-start
@@ -291,6 +295,9 @@ def montar_matriz_previsto_real(
     Se existir vínculo CronogramaVinculoCalendario por prefixo de índice, a distribuição do previsto
     (e o FS do predecessor com tanque) usa dias úteis e feriados daquele calendário; prefixo mais longo
     prevalece. Sem vínculo, mantém o comportamento anterior (dias corridos nas semanas).
+
+    `indices_por_tanque`: opcional, mapa tanque_id -> { TEMPO_* / TEMPOS_* } para simulação (sobrepõe o cadastro).
+    `ordenar_por_indice`: se True, ordena as linhas pela hierarquia de índices em vez da ordem cronológica.
     """
     semanas = semanas_no_intervalo(data_inicio, data_fim)
     week_keys = [s['key'] for s in semanas]
@@ -299,7 +306,9 @@ def montar_matriz_previsto_real(
         return semanas, [], []
 
     placas_tank = total_placas_por_tanque_contrato(contrato_id)
-    dias_tank = total_dias_por_tanque_contrato(contrato_id)
+    dias_tank = total_dias_por_tanque_contrato(
+        contrato_id, indices_por_tanque=indices_por_tanque
+    )
     ct_map = {
         r.tanque_id: r
         for r in CronogramaTanque.query.filter(CronogramaTanque.contrato_id == contrato_id).all()
@@ -352,6 +361,7 @@ def montar_matriz_previsto_real(
     ordenados = _ordenar_itens_topologico(itens)
     inicio_efetivo: Dict[int, date] = {}
     previsto_por_item: Dict[int, Dict[str, float]] = {}
+    dias_corridos_por_item: Dict[int, int] = {}
 
     for it in ordenados:
         base = inicio_base_por_item.get(it.id, data_inicio)
@@ -360,36 +370,47 @@ def montar_matriz_previsto_real(
             pred = by_id[pid]
             ip = inicio_efetivo[pid]
             # FS: dia após o fim da carga do predecessor quando ele tem execução no tanque.
-            # Predecessor sem tanque (só agrega filhos na hierarquia): não usar a soma das
-            # placas dos filhos como duração — isso empurrava o sucessor meses adiante e
-            # esvaziava o previsto nas semanas do item âncora (ex.: 1.3 → 1.3.1).
+            # Duração da carga = dias de obra (TEMPO_* ou equivalente via TEMPOS_*), não só a contagem de placas.
+            # Predecessor sem tanque (só agrega filhos): duração 0 para não empurrar o sucessor.
             if pred.tanque_id and pred.id in share:
-                placas_pred = placas_efetivas.get(pid, 0.0)
+                dias_pred = float(dias_efetivos.get(pid, 0.0) or 0.0)
             else:
-                placas_pred = 0.0
+                dias_pred = 0.0
             pred_cal = cal_por_item.get(pid)
             pred_fer: Optional[Set] = (
                 feriados_por_cal.get(pred_cal.id) if pred_cal else None
             )
-            prox = primeiro_dia_apos_carga(placas_pred, ip, pred_cal, pred_fer)
+            prox = primeiro_dia_apos_carga(dias_pred, ip, pred_cal, pred_fer)
             inicio_eff = max(prox, base)
         else:
             inicio_eff = base
         inicio_efetivo[it.id] = inicio_eff
 
-        pecas_item = placas_efetivas.get(it.id, 0.0)
+        dias_item = float(dias_efetivos.get(it.id, 0.0) or 0.0)
+        pecas_item = float(placas_efetivas.get(it.id, 0.0) or 0.0)
         pweek: Dict[str, float] = {k: 0.0 for k in week_keys}
+        dc_item = 0
         if it.tanque_id and it.id in share:
             it_cal = cal_por_item.get(it.id)
             it_fer: Optional[Set] = (
                 feriados_por_cal.get(it_cal.id) if it_cal else None
             )
-            dist = distribuir_carga_por_semana(pecas_item, inicio_eff, it_cal, it_fer)
+            # Total a distribuir = dias de obra (Σ peça × TEMPO_* ou carga TEMPOS_*), alinhado ao prazo;
+            # o calendário/feriados aplicam-se a esses dias (úteis ou corridos se sem cal).
+            dist = distribuir_carga_por_semana(dias_item, inicio_eff, it_cal, it_fer)
+            dweek: Dict[str, float] = {k: 0.0 for k in week_keys}
             for seg in dist:
                 k = seg['semana_inicio'].isoformat()
-                if k in pweek:
-                    pweek[k] = round(pweek[k] + float(seg['dias']), 4)
+                if k in dweek:
+                    dweek[k] = round(dweek[k] + float(seg['dias']), 4)
+            if dias_item > 1e-9 and pecas_item > 1e-9:
+                for wk in week_keys:
+                    dw = float(dweek.get(wk, 0.0) or 0.0)
+                    pweek[wk] = round(pecas_item * (dw / dias_item), 4)
+            if dias_item > 1e-9:
+                dc_item = dias_corridos_na_carga(dias_item, inicio_eff, it_cal, it_fer)
         previsto_por_item[it.id] = pweek
+        dias_corridos_por_item[it.id] = dc_item
 
     # Itens sem tanque: previsto = soma dos filhos diretos (já com previsto preenchido, do mais profundo ao topo)
     itens_por_profundidade = sorted(
@@ -408,6 +429,16 @@ def montar_matriz_previsto_real(
             for k in week_keys:
                 acc[k] = round(acc[k] + float(pw.get(k, 0.0)), 4)
         previsto_por_item[it.id] = acc
+
+    for it in itens_por_profundidade:
+        if it.tanque_id and it.id in share:
+            continue
+        filhos = _filhos_diretos_indice(it.indice or '', itens)
+        if not filhos:
+            continue
+        dias_corridos_por_item[it.id] = sum(
+            int(dias_corridos_por_item.get(ch.id, 0)) for ch in filhos
+        )
 
     real_por_item: Dict[int, Dict[str, float]] = {}
     for it in itens:
@@ -434,19 +465,24 @@ def montar_matriz_previsto_real(
 
     todos_indices = [(x.indice or '').strip() for x in itens]
 
-    # Ordem das linhas na tela/export: cronológica pelo início efetivo do previsto (FS + calendário);
-    # desempate pelo índice para estabilidade.
-    itens_ordem_crono = sorted(
-        itens,
-        key=lambda x: (
-            inicio_efetivo.get(x.id, data_inicio),
-            x.indice_sort or '',
-            x.id,
-        ),
-    )
+    # Ordem das linhas na tela/export: cronológica (padrão) ou por índice (árvore do cronograma).
+    if ordenar_por_indice:
+        itens_ordem_exibicao = sorted(
+            itens,
+            key=lambda x: (x.indice_sort or '', x.id),
+        )
+    else:
+        itens_ordem_exibicao = sorted(
+            itens,
+            key=lambda x: (
+                inicio_efetivo.get(x.id, data_inicio),
+                x.indice_sort or '',
+                x.id,
+            ),
+        )
 
     linhas: List[Dict[str, Any]] = []
-    for it in itens_ordem_crono:
+    for it in itens_ordem_exibicao:
         prev = previsto_por_item.get(it.id, {k: 0.0 for k in week_keys})
         real: Dict[str, float] = real_por_item.get(it.id, {k: 0.0 for k in week_keys})
 
@@ -467,7 +503,11 @@ def montar_matriz_previsto_real(
             'indice': it.indice or '',
             'nome': it.nome or '',
             'tanque_nome': tanque_nomes.get(it.tanque_id, '—') if it.tanque_id else '—',
+            'tanque_id': it.tanque_id,
+            # Curva S / totais globais: somar só linhas com carga própria no tanque (evita duplicar agregadores).
+            'curva_s_contar': bool(it.tanque_id and it.id in share),
             'prazo_dias_total': round(dias_efetivos.get(it.id, 0.0), 4),
+            'dias_corridos': int(dias_corridos_por_item.get(it.id, 0)),
             'previsto': prev,
             'real': real,
             'previsto_acum': previsto_acum,
@@ -510,7 +550,9 @@ def agregar_curva_s_projeto(
     linhas: List[Dict[str, Any]],
 ) -> Tuple[List[str], List[float], List[float], List[float], List[float], float]:
     """
-    Agrega todos os itens por semana e calcula acumulados (curva S).
+    Agrega por semana e calcula acumulados (curva S).
+    Usa apenas linhas com `curva_s_contar` (itens com tanque e carga própria), para não somar
+    de novo o previsto/real já agregado nos itens pai da hierarquia.
     Retorna labels, placas acum. previsto/real, % acum. (base = previsto final no período),
     e max_y sugerido para o eixo (>=100 se real ultrapassar a meta).
     """
@@ -520,9 +562,10 @@ def agregar_curva_s_projeto(
     acc_r = 0.0
     curve_p: List[float] = []
     curve_r: List[float] = []
+    linhas_curva = [r for r in linhas if r.get('curva_s_contar')]
     for wk in week_keys:
-        sp = sum(float(row['previsto'].get(wk, 0.0)) for row in linhas)
-        sr = sum(float(row['real'].get(wk, 0.0)) for row in linhas)
+        sp = sum(float(row['previsto'].get(wk, 0.0)) for row in linhas_curva)
+        sr = sum(float(row['real'].get(wk, 0.0)) for row in linhas_curva)
         acc_p = round(acc_p + sp, 4)
         acc_r = round(acc_r + sr, 4)
         curve_p.append(acc_p)
@@ -541,6 +584,25 @@ def agregar_curva_s_projeto(
         max_pct = max(max_pct, max(pct_r))
     max_y = max(100.0, round(max_pct + 5.0, 0))
     return labels, curve_p, curve_r, pct_p, pct_r, max_y
+
+
+def totais_semana_previsto_real_curva_s(
+    semanas: List[Dict[str, Any]],
+    linhas: List[Dict[str, Any]],
+) -> Tuple[List[float], List[float]]:
+    """
+    Previsto e real por semana (não acumulado), mesmas linhas que `agregar_curva_s_projeto`.
+    """
+    week_keys = [s['key'] for s in semanas]
+    linhas_curva = [r for r in linhas if r.get('curva_s_contar')]
+    sem_p: List[float] = []
+    sem_r: List[float] = []
+    for wk in week_keys:
+        sp = sum(float(row['previsto'].get(wk, 0.0) or 0.0) for row in linhas_curva)
+        sr = sum(float(row['real'].get(wk, 0.0) or 0.0) for row in linhas_curva)
+        sem_p.append(round(sp, 4))
+        sem_r.append(round(sr, 4))
+    return sem_p, sem_r
 
 
 def max_data_concretagem_contrato(contrato_id: int) -> Optional[date]:

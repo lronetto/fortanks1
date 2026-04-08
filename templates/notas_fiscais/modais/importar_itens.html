@@ -136,6 +136,24 @@
             const itemId = $(this).data('item-id');
             desvincularMaterial(itemId);
         });
+
+        // Abrir modal de novo material (cadastro) com dados do item da NF
+        $(document).on('click', '.btn-criar-material-do-item', function(e) {
+            e.preventDefault();
+            const id = parseInt($(this).data('item-id'), 10);
+            const item = (window.todosOsItensImportacao || []).find(function(i) { return i.id === id; });
+            if (!item) {
+                if (typeof mostrarAlerta === 'function') {
+                    mostrarAlerta('Erro', 'Item não encontrado. Recarregue a lista de itens.', 'error');
+                } else {
+                    alert('Item não encontrado. Recarregue a lista de itens.');
+                }
+                return;
+            }
+            if (typeof window.abrirNovoMaterialDesdeItemNf === 'function') {
+                window.abrirNovoMaterialDesdeItemNf(item);
+            }
+        });
     });
     // Expor função globalmente para uso com DataTables
     window.carregarItensImportacao = function(notaId) {
@@ -229,6 +247,12 @@
                     <td id="material_nome_${item.id}">${materialNome}</td>
                     <td>${item.material_unidade || '-'}</td>
                     <td>`
+            html += `
+                        <button type="button" class="btn btn-sm btn-secondary btn-criar-material-do-item"
+                                data-item-id="${item.id}"
+                                title="Criar material a partir deste item">
+                            <i class="fas fa-box-open"></i>
+                        </button>`;
             if(item.material_id === null) {
                 html += `<button type="button" class="btn btn-sm btn-primary btn-vincular-material" 
                                 data-item-id="${item.id}"
@@ -302,7 +326,6 @@
                             <i class="fas fa-unlink"></i>
                         </button>`;
             }
-            html += `</div>`;
             html += `
                     </td>
                 </tr>
@@ -999,7 +1022,7 @@
         // Obter token CSRF
         const csrfToken = $('input[name="csrf_token"]').val();
         
-        fetch(`/notas-fiscais/api/importar-item-estoque/${itemId}`, {
+        fetch(`{{ url_for('nota_fiscal.api_importar_item_estoque', item_id=999999999) }}`.replace('999999999', String(itemId)), {
             method: 'POST',
             headers: {
                 'X-CSRFToken': csrfToken,
@@ -1417,6 +1440,256 @@
             fecharModal('#modalImportarItens');
         });
     }
+
+    window._nfImportItemContext = null;
+
+    function preencherUnidadeSelectNovoMaterialPorNome(unidadeNome) {
+        if (!unidadeNome) {
+            return;
+        }
+        const sel = document.getElementById('unidade');
+        if (!sel) {
+            return;
+        }
+        const alvo = String(unidadeNome).trim().toLowerCase();
+        let found = false;
+        for (let i = 0; i < sel.options.length; i++) {
+            const opt = sel.options[i];
+            const t = opt.text.trim().toLowerCase();
+            if (opt.value && (t === alvo || t.indexOf(alvo) !== -1 || alvo.indexOf(t) !== -1)) {
+                sel.value = opt.value;
+                found = true;
+                break;
+            }
+        }
+        if (!found && window.jQuery) {
+            const $btn = window.jQuery('#btn-alternar-unidade-novo');
+            if ($btn.length) {
+                $btn.trigger('click');
+            }
+            window.jQuery('#unidade_texto_novo').val(String(unidadeNome).trim());
+        }
+    }
+
+    window.abrirNovoMaterialDesdeItemNf = function(item) {
+        window._nfImportItemContext = { itemId: item.id, ncm: item.ncm || null };
+        const f = document.getElementById('form-novo-material');
+        if (f) {
+            f.reset();
+        }
+        if (window.jQuery) {
+            window.jQuery('#unidade').show();
+            window.jQuery('#unidade_texto_novo').hide().val('');
+            const $alt = window.jQuery('#btn-alternar-unidade-novo');
+            if ($alt.length) {
+                $alt.show();
+            }
+            if (window.jQuery('.select2-plano-conta-novo').length) {
+                window.jQuery('.select2-plano-conta-novo').val(null).trigger('change');
+            }
+            window.jQuery('#preview_imagem_material_novo').hide().attr('src', '');
+            window.jQuery('#imagem_material_novo').val('');
+        }
+
+        const desc = (item.descricao || '').trim();
+        const inf = item.infAdProd ? String(item.infAdProd).trim() : '';
+        const descricaoTexto = inf ? (desc + (desc ? '\n' : '') + inf) : desc;
+
+        const codigoEl = document.getElementById('codigo');
+        const codigoErpEl = document.getElementById('codigo_erp');
+        const nomeEl = document.getElementById('nome');
+        const descEl = document.getElementById('descricao');
+        const mascaraEl = document.getElementById('mascara');
+        const formulaEl = document.getElementById('formula_calculo');
+        const pcEl = document.getElementById('pc');
+        const catEl = document.getElementById('categoria');
+        if (codigoEl) {
+            codigoEl.value = item.codigo || '';
+        }
+        if (codigoErpEl) {
+            codigoErpEl.value = '';
+        }
+        if (nomeEl) {
+            nomeEl.value = (desc || '').toUpperCase();
+        }
+        if (descEl) {
+            descEl.value = descricaoTexto;
+        }
+        if (mascaraEl) {
+            mascaraEl.value = '';
+        }
+        if (formulaEl) {
+            formulaEl.value = '';
+        }
+        if (pcEl) {
+            pcEl.value = '';
+        }
+        if (catEl) {
+            catEl.selectedIndex = 0;
+        }
+
+        preencherUnidadeSelectNovoMaterialPorNome(item.unidade || '');
+
+        const mEl = document.getElementById('modalNovoMaterial');
+        if (!mEl) {
+            if (typeof mostrarAlerta === 'function') {
+                mostrarAlerta('Erro', 'Modal de novo material não está disponível nesta página.', 'error');
+            }
+            window._nfImportItemContext = null;
+            return;
+        }
+        const modal = new bootstrap.Modal(mEl, { backdrop: true });
+        modal.show();
+    };
+
+    document.addEventListener('submit', function(e) {
+        const form = e.target;
+        if (!form || form.id !== 'form-novo-material') {
+            return;
+        }
+        const ctx = window._nfImportItemContext;
+        if (!ctx || !ctx.itemId) {
+            return;
+        }
+        e.preventDefault();
+        e.stopImmediatePropagation();
+
+        const ncmItem = ctx.ncm || null;
+
+        const nome = (document.getElementById('nome') && document.getElementById('nome').value || '').trim();
+        const categoria = document.getElementById('categoria') ? document.getElementById('categoria').value : '';
+        if (!nome) {
+            if (typeof mostrarAlerta === 'function') {
+                mostrarAlerta('Atenção', 'O nome do material é obrigatório.', 'warning');
+            }
+            return;
+        }
+        if (!categoria) {
+            if (typeof mostrarAlerta === 'function') {
+                mostrarAlerta('Atenção', 'A categoria do material é obrigatória.', 'warning');
+            }
+            return;
+        }
+
+        let unidadeSel = '';
+        let unidadeTxt = '';
+        if (window.jQuery) {
+            unidadeSel = window.jQuery('#unidade').val() || '';
+            if (window.jQuery('#unidade_texto_novo').is(':visible')) {
+                unidadeTxt = (window.jQuery('#unidade_texto_novo').val() || '').trim();
+            }
+        } else {
+            const u = document.getElementById('unidade');
+            unidadeSel = u ? u.value : '';
+        }
+
+        const csrf = (typeof $ !== 'undefined' && $('meta[name="csrf-token"]').attr('content')) ||
+            (typeof $ !== 'undefined' && $('input[name="csrf_token"]').first().val()) || '';
+
+        const payload = {
+            nome: nome.toUpperCase(),
+            categoria: categoria,
+            codigo: (document.getElementById('codigo') && document.getElementById('codigo').value || '').trim() || null,
+            descricao: (document.getElementById('descricao') && document.getElementById('descricao').value || '').trim(),
+            codigo_erp: (document.getElementById('codigo_erp') && document.getElementById('codigo_erp').value || '').trim() || null,
+            plano_conta: (document.getElementById('plano_conta') && document.getElementById('plano_conta').value) || null,
+            mascara: (document.getElementById('mascara') && document.getElementById('mascara').value || '').trim() || null,
+            formula_calculo: (document.getElementById('formula_calculo') && document.getElementById('formula_calculo').value || '').trim() || null,
+            unidade_id: unidadeSel || null,
+            unidade_nome: unidadeTxt || null,
+            ncm: ncmItem,
+            csrf_token: csrf
+        };
+
+        const btnSalvar = form.querySelector('button[type="submit"]');
+        if (btnSalvar) {
+            btnSalvar.disabled = true;
+        }
+
+        fetch('{{ url_for("material.api_criar") }}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrf || ''
+            },
+            body: JSON.stringify(payload)
+        })
+            .then(function(response) {
+                return response.json().then(function(body) {
+                    return { ok: response.ok, body: body };
+                });
+            })
+            .then(function(res) {
+                if (!res.ok || !res.body.success) {
+                    const msg = (res.body && res.body.message) ? res.body.message : 'Não foi possível criar o material.';
+                    if (typeof mostrarAlerta === 'function') {
+                        mostrarAlerta('Erro', msg, 'error');
+                    }
+                    return;
+                }
+                const mid = res.body.material && res.body.material.id;
+                if (!mid) {
+                    if (typeof mostrarAlerta === 'function') {
+                        mostrarAlerta('Erro', 'Resposta inválida ao criar material.', 'error');
+                    }
+                    return;
+                }
+                const fd = new FormData();
+                fd.append('csrf_token', csrf || '');
+                fd.append('material_id', String(mid));
+                return fetch('/notas-fiscais/api/vincular-material/' + ctx.itemId, {
+                    method: 'POST',
+                    body: fd
+                })
+                    .then(function(r) {
+                        return r.json();
+                    })
+                    .then(function(vdata) {
+                        if (!vdata.success) {
+                            const base = res.body.message || 'Material criado.';
+                            const extra = vdata.message || 'erro ao vincular';
+                            if (typeof mostrarAlerta === 'function') {
+                                mostrarAlerta('Atenção', base + ' Não foi possível vincular ao item: ' + extra, 'warning');
+                            }
+                        } else {
+                            if (typeof mostrarAlerta === 'function') {
+                                mostrarAlerta('Sucesso', (res.body.message || 'Material criado e vinculado ao item.'), 'success');
+                            }
+                            const modalEl = document.getElementById('modalNovoMaterial');
+                            const modalInst = bootstrap.Modal.getInstance(modalEl);
+                            if (modalInst) {
+                                modalInst.hide();
+                            }
+                            const notaId = document.getElementById('importacao_nf_id');
+                            const nid = notaId ? notaId.value : null;
+                            if (nid && typeof window.carregarItensImportacao === 'function') {
+                                window.carregarItensImportacao(nid);
+                            }
+                        }
+                        window._nfImportItemContext = null;
+                    });
+            })
+            .catch(function(err) {
+                console.error(err);
+                if (typeof mostrarAlerta === 'function') {
+                    mostrarAlerta('Erro', 'Erro ao criar ou vincular material.', 'error');
+                }
+            })
+            .finally(function() {
+                if (btnSalvar) {
+                    btnSalvar.disabled = false;
+                }
+            });
+    }, true);
+
+    (function() {
+        const el = document.getElementById('modalNovoMaterial');
+        if (el) {
+            el.addEventListener('hidden.bs.modal', function() {
+                window._nfImportItemContext = null;
+            });
+        }
+    })();
 
     // Função para desvincular material do item
     function desvincularMaterial(itemId) {
