@@ -11,7 +11,7 @@ from decimal import Decimal
 from models.produto_composto import ProdutoComposto
 from models.unidade import Unidades
 from models.material import Materiais
-from models.estoque import EstoqueMovimentacoes
+from models.estoque import Estoque, EstoqueMovimentacoes
 import traceback
 import logging
 
@@ -89,6 +89,76 @@ def limpar_data_producao_dados_adicionais_usinagem_str(dados_raw):
         d = {}
     d['data_producao'] = None
     return json.dumps(d, ensure_ascii=False)
+
+
+def registrar_entrada_estoque_produto_composto_producao_peca(
+    produto_composto,
+    quantidade,
+    nomes_pecas_grupo,
+    data_movimento,
+    usuario_id,
+    log=True,
+):
+    """
+    Registra entrada no Estoque do produto composto vinculado à peça do tanque (ProdComp_id).
+    Se não existir item de estoque do tipo produto_composto para o produto, cria um (mesmo padrão
+    do cadastro de produto composto: quantidade 0, localização Estoque Matriz).
+    Usa origem_tipo 'producao_peca' e observação com nomes das peças para o mesmo critério de
+    reversão em _remover_movimentacoes_producao_peca_escopo_concretagens (desfazer produção).
+    """
+    if not produto_composto or quantidade is None:
+        return False
+    try:
+        qtd = int(quantidade)
+    except (TypeError, ValueError):
+        return False
+    if qtd <= 0:
+        return False
+    estoque_pc = Estoque.query.filter_by(
+        ProdComp_id=produto_composto.id,
+        tipo_item='produto_composto',
+    ).first()
+    if not estoque_pc:
+        estoque_pc = Estoque(
+            produto_composto=produto_composto,
+            quantidade=0,
+            tipo_item='produto_composto',
+            localizacao='Estoque Matriz',
+        )
+        if usuario_id:
+            estoque_pc.usuario_id = usuario_id
+        db.session.add(estoque_pc)
+        db.session.flush()
+        if log:
+            logging.info(
+                'Produção de peças: criado item de estoque para produto composto ID %s (%s).',
+                produto_composto.id,
+                produto_composto.nome or '',
+            )
+    nomes_txt = ', '.join(nomes_pecas_grupo) if nomes_pecas_grupo else ''
+    motivo = (
+        f'Produção peças — {produto_composto.nome or ""} — Peças: {nomes_txt} — Qtd: {qtd}'
+    )
+    try:
+        mov_ent = EstoqueMovimentacoes()
+        mov_ent.adicionar(
+            quantidade=qtd,
+            estoque_id=estoque_pc.id,
+            origem_id=produto_composto.id,
+            origem_tipo='producao_peca',
+            usuario_id=usuario_id,
+            motivo=motivo,
+        )
+        mov_ent.data_movimento = data_movimento
+        mov_ent.save(log=log)
+        return True
+    except Exception as e:
+        logging.error(
+            'Erro ao registrar entrada de estoque do produto composto %s: %s',
+            produto_composto.id,
+            str(e),
+        )
+        return False
 
 
 def processar_producao_por_pecas(pecas_list, usuario_id=1, log=True, _usinagem=True):
@@ -185,6 +255,14 @@ def processar_producao_por_pecas(pecas_list, usuario_id=1, log=True, _usinagem=T
             except Exception as e:
                 logging.warning(f"Erro ao salvar data_producao na peça {peca.id}: {str(e)}")
                 continue
+        registrar_entrada_estoque_produto_composto_producao_peca(
+            produto_composto,
+            quantidade_grupo,
+            nomes_pecas_grupo,
+            dia_date,
+            usuario_id,
+            log=log,
+        )
     if materiais_necessarios:
         for info in materiais_necessarios.values():
             try:

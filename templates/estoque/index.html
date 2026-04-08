@@ -3,6 +3,8 @@
 {% block title %}Controle de Estoque{% endblock %}
 
 {% block content %}
+<input type="hidden" id="csrf_token_global" value="{{ csrf_token() }}">
+
 <div class="container-fluid py-4">
     <div class="d-sm-flex justify-content-between mb-4">
         <h1 class="h3 mb-0 text-gray-800">Controle de Estoque</h1>
@@ -86,12 +88,13 @@
         </div>
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-bordered" id="dataTable" width="100%" cellspacing="0">
+                <table class="table table-bordered table-hover" id="tabelaEstoque" width="100%" cellspacing="0">
                     <thead>
                         <tr>
                             <th>Tipo</th>
                             <th>Código</th>
-                            <th>Material</th>
+                            <th>ID item</th>
+                            <th>Material / Produto composto</th>
                             <th>Nome / Descrição</th>
                             <th>Quantidade</th>
                             <th>Localização</th>
@@ -99,151 +102,8 @@
                             <th>Ações</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {% for item in items.items %}
-                        <tr>
-                            <td>{{ item.tipo_item|capitalize }}</td>
-                            <td>
-                                {{ item.id or "N/A" }}
-                            </td>
-                            <td>
-                                {% if item.material %}
-                                    {{ item.material.id or "N/A" }}
-                                {% elif item.produto_composto %}
-                                    {{ item.produto_composto.id or "N/A" }}
-                                {% elif item.epi %}
-                                    {{ item.epi.id or "N/A" }}
-                                {% else %}
-                                    N/A
-                                {% endif %}
-                            </td>
-                            <td>
-                                {% if item.tipo_item == "material" %}
-                                    <a href="#" class="link-historico-estoque" 
-                                       data-estoque-id="{{ item.id }}"
-                                       data-material-id="{% if item.material %}{{ item.material.id }}{% else %}0{% endif %}"
-                                       data-codigo="{% if item.material %}{{ item.material.id or 'N/A' }}{% else %}N/A{% endif %}"
-                                       data-nome="{{ item.material.nome }}"
-                                       data-quantidade-atual="{{ item.quantidade }}"
-                                       data-agrupar-material="{% if form_filtro.ignorar_localizacoes.data %}true{% else %}false{% endif %}"
-                                       data-bs-toggle="modal" 
-                                       data-bs-target="#modalHistoricoEstoque"
-                                       title="Clique para ver o histórico">
-                                        {{ item.material.nome }}
-                                    </a>
-                                {% elif item.tipo_item == "produto_composto" %}
-                                    <a href="#" class="link-historico-estoque" 
-                                       data-estoque-id="{{ item.id }}"
-                                       data-codigo="{% if item.produto_composto %}{{ item.produto_composto.id or 'N/A' }}{% else %}N/A{% endif %}"
-                                       data-nome="{{ item.produto_composto.nome }}"
-                                       data-quantidade-atual="{{ item.quantidade }}"
-                                       data-bs-toggle="modal" 
-                                       data-bs-target="#modalHistoricoEstoque"
-                                       title="Clique para ver o histórico">
-                                        {{ item.produto_composto.nome }}
-                                    </a>
-                                {% else %}
-                                    Item sem descrição
-                                {% endif %}
-                            </td>
-                            <td class="text-right">
-                                {{ "%.2f"|format(item.quantidade|float) }}
-                                {% if item.material %}
-                                    {{ item.material.unidade or "" }}
-                                {% endif %}
-                            </td>
-                            <td>{{ item.localizacao or "Não especificado" }}</td>
-                            <td>
-                                {% if item.status_estoque == "Esgotado" %}
-                                    <span class="badge badge-danger">Esgotado</span>
-                                {% elif item.status_estoque == "Crítico" %}
-                                    <span class="badge badge-warning">Crítico</span>
-                                {% elif item.status_estoque == "Excesso" %}
-                                    <span class="badge badge-info">Excesso</span>
-                                {% else %}
-                                    <span class="badge badge-success">Normal</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-center">
-                                <div class="btn-group">
-                                    <button type="button" class="btn btn-info btn-sm btn-visualizar-item" 
-                                            data-id="{{ item.id }}"
-                                            data-tipo-item="{{ item.tipo_item }}"
-                                            data-codigo="{% if item.material %}{{ item.material.id or 'N/A' }}{% elif item.produto_composto %}{{ item.produto_composto.id or 'N/A' }}{% elif item.epi %}{{ item.epi.id or 'N/A' }}{% else %}N/A{% endif %}"
-                                            data-nome="{% if item.tipo_item == 'material' %}{{ item.material.nome }}{% elif item.tipo_item == 'produto_composto' %}{{ item.produto_composto.nome }}{% else %}Item sem descrição{% endif %}"
-                                            data-localizacao="{{ item.localizacao or 'Não especificado' }}"
-                                            data-quantidade="{{ item.quantidade }}"
-                                            data-quantidade-minima="{{ item.quantidade_minima or 0 }}"
-                                            data-quantidade-maxima="{{ item.quantidade_maxima or 0 }}"
-                                            data-status-badge="{% if item.status_estoque == 'Esgotado' %}<span class='badge badge-danger'>Esgotado</span>{% elif item.status_estoque == 'Crítico' %}<span class='badge badge-warning'>Crítico</span>{% elif item.status_estoque == 'Excesso' %}<span class='badge badge-info'>Excesso</span>{% else %}<span class='badge badge-success'>Normal</span>{% endif %}"
-                                            data-lote="{{ item.lote or '' }}"
-                                            data-data-validade="{{ item.data_validade or '' }}"
-                                            data-data-criacao="{{ item.data_criacao.strftime('%d/%m/%Y') if item.data_criacao else '' }}"
-                                            data-data-atualizacao="{{ item.data_atualizacao.strftime('%d/%m/%Y') if item.data_atualizacao else '' }}"
-                                            data-bs-toggle="modal" data-bs-target="#modalVisualizarItem"
-                                            title="Visualizar">
-                                        <i class="fas fa-eye"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-primary btn-sm btn-editar-item" 
-                                            data-id="{{ item.id }}"
-                                            data-tipo-item="{{ item.tipo_item }}"
-                                            data-material-id="{% if item.material %}{{ item.material.id }}{% else %}0{% endif %}"
-                                            data-quantidade="{{ item.quantidade }}"
-                                            data-quantidade-minima="{{ item.quantidade_minima or 0 }}"
-                                            data-quantidade-maxima="{{ item.quantidade_maxima or 0 }}"
-                                            data-lote="{{ item.lote or '' }}"
-                                            data-data-validade="{{ item.data_validade or '' }}"
-                                            data-localizacao="{{ item.localizacao or '' }}"
-                                            data-bs-toggle="modal" data-bs-target="#modalEditarItem"
-                                            title="Editar">
-                                        <i class="fas fa-edit"></i>
-                                    </button>
-                                    <button type="button" class="btn btn-danger btn-sm btn-excluir-item" 
-                                            data-url="{{ url_for('estoque.excluir', id=item.id) }}"
-                                            data-nome="{% if item.tipo_item == 'material' %}{{ item.material.nome }}{% elif item.tipo_item == 'produto_composto' %}{{ item.produto_composto.nome }}{% else %}Item sem descrição{% endif %}"
-                                            data-codigo="{% if item.material %}{{ item.material.id or 'N/A' }}{% elif item.produto_composto %}{{ item.produto_composto.id or 'N/A' }}{% elif item.epi %}{{ item.epi.id or 'N/A' }}{% else %}N/A{% endif %}"
-                                            data-quantidade="{{ item.quantidade }}"
-                                            title="Excluir">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </div>
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="7" class="text-center">Nenhum item encontrado</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
+                    <tbody></tbody>
                 </table>
-            </div>
-            
-            <!-- Paginação -->
-            <div class="d-flex justify-content-between align-items-center mt-3">
-                <div>
-                    Mostrando {{ items.items|length }} de {{ items.total }} itens
-                </div>
-                <nav aria-label="Navegação de página">
-                    <ul class="pagination">
-                        {% for page in items.iter_pages() %}
-                            {% if page %}
-                                {% if page != items.page %}
-                                    <li class="page-item">
-                                        <a class="page-link" href="{{ url_for('estoque.index', page=page, tipo_item=form_filtro.tipo_item.data or '', status_estoque=form_filtro.status_estoque.data or '', localizacao=form_filtro.localizacao.data or '', termo_busca=form_filtro.termo_busca.data or '', ignorar_localizacoes='on' if form_filtro.ignorar_localizacoes.data else '') }}">{{ page }}</a>
-                                    </li>
-                                {% else %}
-                                    <li class="page-item active">
-                                        <span class="page-link">{{ page }}</span>
-                                    </li>
-                                {% endif %}
-                            {% else %}
-                                <li class="page-item disabled">
-                                    <span class="page-link">...</span>
-                                </li>
-                            {% endif %}
-                        {% endfor %}
-                    </ul>
-                </nav>
             </div>
         </div>
     </div>
@@ -259,9 +119,6 @@
 {% endblock %}
 
 {% block scripts %}
-<!-- Certifique-se de que jQuery e Bootstrap estejam disponíveis -->
-<script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 
@@ -273,33 +130,135 @@
     font-weight: 500;
     transition: all 0.2s ease;
 }
-
 .link-historico-estoque:hover {
     color: #224abe;
     text-decoration: underline;
 }
-
-.link-historico-estoque:active {
-    color: #1e3a8a;
-}
 </style>
 
 <script>
-$(document).ready(function() {
-    // Inicializar DataTable se necessário
-    if ($.fn.DataTable) {
-        $('#dataTable').DataTable({
-            "language": {
-                "url": "//cdn.datatables.net/plug-ins/1.10.24/i18n/Portuguese-Brasil.json"
-            },
-            "pageLength": 25,
-            "responsive": true,
-            "order": [[0, "desc"]]
-        });
+(function() {
+    var urlApiEstoque = "{{ url_for('estoque.api_datatables') }}" + (window.location.search || '');
+    var urlExcluirBase = "{{ url_for('estoque.excluir', id=999999999) }}";
+    var dtLang = null;
+
+    function urlExcluirFor(id) {
+        return urlExcluirBase.replace('999999999', String(id));
     }
-    
-    // Inicializar tooltips
-    $('[data-bs-toggle="tooltip"]').tooltip();
-});
+
+    function escapeAttr(s) {
+        if (s === undefined || s === null) return '';
+        return String(s).replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+
+    function colNomeDescricao(row) {
+        var nome = row.nome_descricao || '';
+        if (row.tipo_item === 'material') {
+            return '<a href="#" class="link-historico-estoque" ' +
+                'data-estoque-id="' + row.estoque_id + '" ' +
+                'data-material-id="' + (row.material_id || 0) + '" ' +
+                'data-codigo="' + escapeAttr(row.codigo_historico) + '" ' +
+                'data-nome="' + escapeAttr(nome) + '" ' +
+                'data-quantidade-atual="' + row.quantidade + '" ' +
+                'data-agrupar-material="' + (row.ignorar_agrupar ? 'true' : 'false') + '" ' +
+                'data-bs-toggle="modal" data-bs-target="#modalHistoricoEstoque" title="Clique para ver o histórico">' +
+                escapeAttr(nome) + '</a>';
+        }
+        if (row.tipo_item === 'produto_composto') {
+            return '<a href="#" class="link-historico-estoque" ' +
+                'data-estoque-id="' + row.estoque_id + '" ' +
+                'data-codigo="' + escapeAttr(row.codigo_historico) + '" ' +
+                'data-nome="' + escapeAttr(nome) + '" ' +
+                'data-quantidade-atual="' + row.quantidade + '" ' +
+                'data-bs-toggle="modal" data-bs-target="#modalHistoricoEstoque" title="Clique para ver o histórico">' +
+                escapeAttr(nome) + '</a>';
+        }
+        return escapeAttr(nome || 'Item sem descrição');
+    }
+
+    function colAcoes(row) {
+        var nomeBtn = escapeAttr(row.nome_descricao || '');
+        var tipo = row.tipo_item || '';
+        var urlExcluir = urlExcluirFor(row.estoque_id);
+
+        return '<div class="btn-group btn-group-sm">' +
+            '<button type="button" class="btn btn-info btn-visualizar-item" ' +
+            'data-id="' + row.estoque_id + '" data-tipo-item="' + escapeAttr(tipo) + '" ' +
+            'data-codigo="' + escapeAttr(row.ref_id) + '" data-nome="' + nomeBtn + '" ' +
+            'data-localizacao="' + escapeAttr(row.localizacao) + '" data-quantidade="' + row.quantidade + '" ' +
+            'data-quantidade-minima="' + row.quantidade_minima + '" data-quantidade-maxima="' + row.quantidade_maxima + '" ' +
+            'data-status-estoque="' + escapeAttr(row.status_estoque || '') + '" ' +
+            'data-lote="' + escapeAttr(row.lote) + '" data-data-validade="' + escapeAttr(row.data_validade) + '" ' +
+            'data-data-criacao="' + escapeAttr(row.data_criacao) + '" data-data-atualizacao="' + escapeAttr(row.data_atualizacao) + '" ' +
+            'data-bs-toggle="modal" data-bs-target="#modalVisualizarItem" title="Visualizar"><i class="fas fa-eye"></i></button>' +
+            '<button type="button" class="btn btn-primary btn-editar-item" ' +
+            'data-id="' + row.estoque_id + '" data-tipo-item="' + escapeAttr(tipo) + '" ' +
+            'data-material-id="' + (row.material_id || 0) + '" data-quantidade="' + row.quantidade + '" ' +
+            'data-quantidade-minima="' + row.quantidade_minima + '" data-quantidade-maxima="' + row.quantidade_maxima + '" ' +
+            'data-lote="' + escapeAttr(row.lote) + '" data-data-validade="' + escapeAttr(row.data_validade) + '" ' +
+            'data-localizacao="' + escapeAttr(row.localizacao) + '" ' +
+            'data-bs-toggle="modal" data-bs-target="#modalEditarItem" title="Editar"><i class="fas fa-edit"></i></button>' +
+            '<button type="button" class="btn btn-danger btn-excluir-item" ' +
+            'data-url="' + escapeAttr(urlExcluir) + '" data-nome="' + nomeBtn + '" ' +
+            'data-codigo="' + escapeAttr(row.ref_id) + '" data-quantidade="' + row.quantidade + '" ' +
+            'title="Excluir"><i class="fas fa-trash"></i></button>' +
+            '</div>';
+    }
+
+    function initTable() {
+        if ($.fn.DataTable.isDataTable('#tabelaEstoque')) {
+            $('#tabelaEstoque').DataTable().destroy();
+        }
+        var opts = {
+            processing: true,
+            serverSide: false,
+            ajax: {
+                url: urlApiEstoque,
+                type: 'GET',
+                dataSrc: 'data',
+                error: function(xhr) {
+                    console.error('Erro ao carregar estoque:', xhr.status, xhr.responseText);
+                    alert('Não foi possível carregar os itens de estoque.');
+                }
+            },
+            columns: [
+                { data: 'tipo_label' },
+                { data: 'estoque_id' },
+                { data: 'ref_id' },
+                { data: 'nome_produto_ou_material', defaultContent: '' },
+                { data: null, orderable: false, render: function(x, t, row) { return colNomeDescricao(row); } },
+                {
+                    data: null,
+                    className: 'text-end',
+                    render: function(x, t, row) {
+                        var u = row.unidade ? ' ' + row.unidade : '';
+                        return (row.quantidade_fmt || '0.00') + u;
+                    }
+                },
+                { data: 'localizacao' },
+                { data: 'status_badge_html', orderable: false, render: function(d) { return d || ''; } },
+                { data: null, orderable: false, searchable: false, render: function(x, t, row) { return colAcoes(row); } }
+            ],
+            order: [[3, 'asc']],
+            pageLength: 25,
+            lengthMenu: [10, 25, 50, 100],
+            responsive: true,
+            dom: "<'row'<'col-sm-12 col-md-6'l><'col-sm-12 col-md-6'f>>" +
+                 "<'row'<'col-sm-12'tr>>" +
+                 "<'row'<'col-sm-12 col-md-5'i><'col-sm-12 col-md-7'p>>"
+        };
+        if (dtLang) opts.language = dtLang;
+        $('#tabelaEstoque').DataTable(opts);
+        window.recarregarTabelaEstoque = function() {
+            if ($.fn.DataTable.isDataTable('#tabelaEstoque')) {
+                $('#tabelaEstoque').DataTable().ajax.reload(null, false);
+            }
+        };
+    }
+
+    $.getJSON("{{ url_for('static', filename='js/datatables-pt-BR.json') }}")
+        .done(function(json) { dtLang = json; })
+        .always(function() { initTable(); });
+})();
 </script>
-{% endblock %} 
+{% endblock %}

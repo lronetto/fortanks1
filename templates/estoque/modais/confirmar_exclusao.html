@@ -36,7 +36,6 @@
     </div>
 </div>
 
-{% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Função para confirmar exclusão
@@ -56,27 +55,65 @@ document.addEventListener('DOMContentLoaded', function() {
         modal.show();
     }
 
-    // Adicionar evento para os botões de exclusão
-    const deleteButtons = document.querySelectorAll('.btn-excluir-item');
-    deleteButtons.forEach(button => {
-        button.addEventListener('click', function(e) {
-            e.preventDefault();
-            
-            const url = this.getAttribute('data-url');
-            const itemData = {
-                nome: this.getAttribute('data-nome') || '',
-                codigo: this.getAttribute('data-codigo') || '',
-                quantidade: this.getAttribute('data-quantidade') || ''
-            };
-            
-            confirmarExclusao(url, itemData);
-        });
+    $(document).on('click', '.btn-excluir-item', function(e) {
+        e.preventDefault();
+        const url = this.getAttribute('data-url');
+        const itemData = {
+            nome: this.getAttribute('data-nome') || '',
+            codigo: this.getAttribute('data-codigo') || '',
+            quantidade: this.getAttribute('data-quantidade') || ''
+        };
+        confirmarExclusao(url, itemData);
     });
 
     // Função global para compatibilidade com código existente
     window.confirmarExclusao = function(url) {
         confirmarExclusao(url, null);
     };
+
+    $(document).on('submit', '#form-exclusao', function(e) {
+        e.preventDefault();
+        var $form = $(this);
+        var url = $form.attr('action');
+        if (!url) return;
+        var csrf = document.querySelector('meta[name="csrf-token"]');
+        var csrfVal = csrf ? csrf.getAttribute('content') : ($('#csrf_token_global').length ? $('#csrf_token_global').val() : '');
+        $.ajax({
+            url: url,
+            type: 'POST',
+            data: $form.serialize(),
+            dataType: 'json',
+            headers: {
+                'X-Requested-With': 'XMLHttpRequest',
+                'X-CSRFToken': csrfVal
+            },
+            success: function(res) {
+                if (res && res.success) {
+                    var modalEl = document.getElementById('modalConfirmarExclusao');
+                    var modalInst = bootstrap.Modal.getInstance(modalEl);
+                    if (modalInst) modalInst.hide();
+                    if (typeof window.recarregarTabelaEstoque === 'function') {
+                        window.recarregarTabelaEstoque();
+                    } else {
+                        window.location.reload();
+                    }
+                } else {
+                    alert((res && res.message) ? res.message : 'Não foi possível excluir o item.');
+                }
+            },
+            error: function(xhr) {
+                var msg = 'Erro ao excluir o item.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    msg = xhr.responseJSON.message;
+                } else if (xhr.responseText) {
+                    try {
+                        var j = JSON.parse(xhr.responseText);
+                        if (j.message) msg = j.message;
+                    } catch (err) { /* ignore */ }
+                }
+                alert(msg);
+            }
+        });
+    });
 });
 </script>
-{% endblock %}

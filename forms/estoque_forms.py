@@ -36,6 +36,7 @@ class FiltroEstoqueForm(FlaskForm):
     tipo_item = SelectField('Tipo de Item', choices=[
         ('todos', 'Todos'),
         ('material', 'Material'),
+        ('produto_composto', 'Produto composto'),
         ('epi', 'EPI')
     ])
     status_estoque = SelectField('Status do Estoque', choices=[

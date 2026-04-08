@@ -1,3 +1,4 @@
+from time import time
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, abort, send_file
 from flask_login import login_required, current_user
 from flask_wtf.csrf import generate_csrf
@@ -28,68 +29,60 @@ logger = logging.getLogger(__name__)
 # Criar blueprint
 estoque_bp = Blueprint('estoque', __name__)
 
-# Rotas principais de estoque
-@estoque_bp.route('/')
-@login_required
-def index():
-    """
-    Listagem de itens no estoque com filtros
-    """
-    page = request.args.get('page', 1, type=int)
-    form_filtro = FiltroEstoqueForm()
-    
-    # Aplicar filtros da URL aos campos do formulário
-    if request.args.get('tipo_item'):
-        form_filtro.tipo_item.data = request.args.get('tipo_item')
-    if request.args.get('status_estoque'):
-        form_filtro.status_estoque.data = request.args.get('status_estoque')
-    
-    # Obter lista de localizações únicas para o filtro ANTES de aplicar o valor
+
+def _preencher_form_filtro_estoque(req, form_filtro):
+    """Aplica parâmetros GET/POST ao FiltroEstoqueForm e choices de localização."""
+    if req.args.get('tipo_item'):
+        form_filtro.tipo_item.data = req.args.get('tipo_item')
+    if req.args.get('status_estoque'):
+        form_filtro.status_estoque.data = req.args.get('status_estoque')
     localizacoes = db.session.query(Estoque.localizacao).filter(
         Estoque.localizacao != None,
         Estoque.localizacao != ''
     ).distinct().order_by(Estoque.localizacao).all()
     form_filtro.localizacao.choices = [('', 'Todas')] + [(loc[0], loc[0]) for loc in localizacoes]
-    
-    # Aplicar valor de localização após popular as choices
-    localizacao_param = request.args.get('localizacao', '').strip()
+    localizacao_param = req.args.get('localizacao', '').strip()
     if localizacao_param:
         form_filtro.localizacao.data = localizacao_param
-    
-    if request.args.get('termo_busca'):
-        form_filtro.termo_busca.data = request.args.get('termo_busca')
-    
-    # Verificar o checkbox de ignorar localizações
-    # Verificar tanto em args (GET) quanto em form (POST)
-    ignorar_localizacoes_param = request.args.get('ignorar_localizacoes') or request.form.get('ignorar_localizacoes', '')
-    form_filtro.ignorar_localizacoes.data = (ignorar_localizacoes_param == 'on' or 
-                                              ignorar_localizacoes_param == 'True' or 
-                                              ignorar_localizacoes_param == 'true' or
-                                              ignorar_localizacoes_param == '1' or
-                                              bool(ignorar_localizacoes_param))
-    
-    # Log para debug
-    logger.info(f"Filtro ignorar_localizacoes: args={request.args.get('ignorar_localizacoes')}, form={request.form.get('ignorar_localizacoes')}, param={ignorar_localizacoes_param}, data={form_filtro.ignorar_localizacoes.data}")
-    
-    # Consulta base
+    if req.args.get('termo_busca'):
+        form_filtro.termo_busca.data = req.args.get('termo_busca')
+    ignorar_localizacoes_param = req.args.get('ignorar_localizacoes') or req.form.get('ignorar_localizacoes', '')
+    form_filtro.ignorar_localizacoes.data = (
+        ignorar_localizacoes_param == 'on' or
+        ignorar_localizacoes_param == 'True' or
+        ignorar_localizacoes_param == 'true' or
+        ignorar_localizacoes_param == '1' or
+        bool(ignorar_localizacoes_param)
+    )
+
+
+def _obter_itens_estoque_listagem(request):
+    """
+    Retorna (form_filtro, lista de Estoque) com os mesmos filtros/agrupamento da listagem.
+    Lista completa (sem paginação), ordenada, com quantidade ajustada ao saldo real.
+    """
+    form_filtro = FiltroEstoqueForm()
+    _preencher_form_filtro_estoque(request, form_filtro)
+
+    logger.info(
+        f"Filtro ignorar_localizacoes: args={request.args.get('ignorar_localizacoes')}, "
+        f"form={request.form.get('ignorar_localizacoes')}, data={form_filtro.ignorar_localizacoes.data}"
+    )
+
     query = Estoque.query
-    
-    # Aplicar filtros
+
     if form_filtro.tipo_item.data and form_filtro.tipo_item.data != 'todos':
         query = query.filter(Estoque.tipo_item == form_filtro.tipo_item.data)
-    
-    # Aplicar filtro de localização (não aplicar se estiver agrupando por item)
-    # Verificar tanto no form quanto diretamente nos parâmetros da requisição
+
     localizacao_filtro = None
     if form_filtro.localizacao.data:
         localizacao_filtro = str(form_filtro.localizacao.data).strip()
     elif request.args.get('localizacao'):
         localizacao_filtro = request.args.get('localizacao', '').strip()
-    
-    # Aplicar filtro se houver valor e não estiver agrupando
+
     if localizacao_filtro and localizacao_filtro != '' and localizacao_filtro != 'None' and not form_filtro.ignorar_localizacoes.data:
         query = query.filter(Estoque.localizacao == localizacao_filtro)
-    
+
     if form_filtro.termo_busca.data:
         termo = f"%{form_filtro.termo_busca.data}%"
         query = query.outerjoin(Materiais, Estoque.material_id == Materiais.id).outerjoin(
@@ -101,54 +94,42 @@ def index():
                 ProdutoComposto.nome.ilike(termo)
             )
         )
-    
-    # Filtrar por status
+
     if form_filtro.status_estoque.data and form_filtro.status_estoque.data != 'todos':
-        # Implementar filtros mais complexos baseados no status
         if form_filtro.status_estoque.data == 'critico':
             query = query.filter(Estoque.quantidade <= Estoque.quantidade_minima)
         elif form_filtro.status_estoque.data == 'esgotado':
             query = query.filter(Estoque.quantidade <= 0)
         elif form_filtro.status_estoque.data == 'excesso':
             query = query.filter(Estoque.quantidade >= Estoque.quantidade_maxima)
-    
-    # Garantir joins com Material e ProdutoComposto para ordenação
-    # Verificar se os joins já foram feitos (quando há termo de busca)
+
     if not form_filtro.termo_busca.data:
         query = query.outerjoin(Materiais, Estoque.material_id == Materiais.id)\
                      .outerjoin(ProdutoComposto, Estoque.ProdComp_id == ProdutoComposto.id)
-    
-    # Se o filtro de ignorar localizações estiver ativo, agrupar por material/produto
-    # Verificar também diretamente nos parâmetros como fallback
+
     ignorar_ativo = form_filtro.ignorar_localizacoes.data
     if not ignorar_ativo:
         ignorar_param = request.args.get('ignorar_localizacoes') or request.form.get('ignorar_localizacoes', '')
-        ignorar_ativo = (ignorar_param == 'on' or ignorar_param == 'True' or ignorar_param == 'true' or ignorar_param == '1' or bool(ignorar_param))
-    
+        ignorar_ativo = (
+            ignorar_param == 'on' or ignorar_param == 'True' or ignorar_param == 'true' or
+            ignorar_param == '1' or bool(ignorar_param)
+        )
+
     logger.info(f"Verificando agrupamento: form.data={form_filtro.ignorar_localizacoes.data}, ignorar_ativo={ignorar_ativo}")
-    
+
     if ignorar_ativo:
         logger.info("Agrupamento ATIVO - iniciando processo de agrupamento")
-        # Garantir que os relacionamentos são carregados para evitar N+1 queries
-        # Usar options para fazer eager loading dos relacionamentos
-        from sqlalchemy.orm import joinedload
-        # Aplicar eager loading apenas se os joins não foram feitos no termo de busca
-        # Se os joins já foram feitos, os relacionamentos já estão disponíveis
         if not form_filtro.termo_busca.data:
             query = query.options(
                 joinedload(Estoque.material),
                 joinedload(Estoque.produto_composto),
                 joinedload(Estoque.epi)
             )
-        # Buscar todos os itens e agrupar em Python
         all_items = query.order_by(func.coalesce(Materiais.nome, ProdutoComposto.nome).asc()).all()
         logger.info(f"Total de itens encontrados antes do agrupamento: {len(all_items)}")
-        
-        # Agrupar por material_id ou ProdComp_id
+
         grouped = {}
         for item in all_items:
-            # Chave única para agrupamento - usar material_id ou ProdComp_id como chave principal
-            # Se ambos forem None, usar o ID do estoque como fallback
             if item.material_id:
                 key = f"material_{item.material_id}"
                 logger.info(f"Item ID {item.id}: material_id={item.material_id}, quantidade={item.quantidade}, localizacao={item.localizacao}, key={key}")
@@ -156,12 +137,10 @@ def index():
                 key = f"produto_{item.ProdComp_id}"
                 logger.info(f"Item ID {item.id}: ProdComp_id={item.ProdComp_id}, quantidade={item.quantidade}, localizacao={item.localizacao}, key={key}")
             else:
-                # Se não tem material nem produto composto, não agrupar (manter separado)
                 key = f"item_{item.id}"
                 logger.info(f"Item ID {item.id}: sem material/produto, quantidade={item.quantidade}, key={key}")
-            
+
             if key not in grouped:
-                # Criar um novo objeto Estoque agrupado
                 grouped_item = Estoque()
                 grouped_item.id = item.id
                 grouped_item.material_id = item.material_id
@@ -181,88 +160,164 @@ def index():
                 grouped_item.atualizado_em = item.atualizado_em
                 grouped_item.usuario_id = item.usuario_id
                 grouped[key] = grouped_item
-            
-            # Somar saldos reais (não usar item.quantidade diretamente)
+
             saldo_real_item = item.get_saldo_real()
             grouped[key].quantidade += saldo_real_item
-            
-            # Coletar localizações únicas
+
             if item.localizacao:
                 current_loc = grouped[key].localizacao or "Não especificado"
                 if current_loc == "Não especificado":
                     grouped[key].localizacao = item.localizacao
                 elif "," in current_loc:
-                    # Se já tem múltiplas, verificar se a nova localização já está na lista
                     localizacoes_list = current_loc.split(", ")
                     if item.localizacao not in localizacoes_list:
                         grouped[key].localizacao += f", {item.localizacao}"
                 elif current_loc != item.localizacao:
-                    # Se é diferente da primeira, marcar como múltiplas
                     grouped[key].localizacao = f"{current_loc}, {item.localizacao}"
-        
-        # Converter para lista e ordenar
+
         grouped_items = list(grouped.values())
         grouped_items.sort(key=lambda x: (x.material.nome if x.material else x.produto_composto.nome if x.produto_composto else ""))
-        
-        # Recalcular quantidade agrupada usando saldo real de cada estoque
+
         for grouped_item in grouped_items:
-            # Buscar todos os estoques do mesmo material/produto
             if grouped_item.material_id:
                 estoques_grupo = Estoque.query.filter_by(material_id=grouped_item.material_id).all()
             elif grouped_item.ProdComp_id:
                 estoques_grupo = Estoque.query.filter_by(ProdComp_id=grouped_item.ProdComp_id).all()
             else:
                 estoques_grupo = [grouped_item]
-            
-            # Calcular saldo real total
+
             saldo_real_total = Decimal('0.0')
             for estoque in estoques_grupo:
                 saldo_real_total += estoque.get_saldo_real()
-            
             grouped_item.quantidade = saldo_real_total
-        
-        # Log para debug
+
         logger.info(f"Agrupamento: {len(all_items)} itens originais agrupados em {len(grouped_items)} grupos")
         for grouped_item in grouped_items:
             logger.info(f"  Grupo: material_id={grouped_item.material_id}, quantidade={grouped_item.quantidade}, localizacao={grouped_item.localizacao}")
-        
-        # Paginação manual
-        total = len(grouped_items)
-        per_page = 20
-        start = (page - 1) * per_page
-        end = start + per_page
-        paginated_items = grouped_items[start:end]
-        
-        # Criar um objeto paginado manual
-        class PaginatedList:
-            def __init__(self, items, page, per_page, total):
-                self.items = items
-                self.page = page
-                self.per_page = per_page
-                self.total = total
-                self.pages = (total + per_page - 1) // per_page if per_page > 0 else 1
-                
-            def iter_pages(self, left_edge=2, right_edge=2, left_current=2, right_current=5):
-                last = self.pages
-                for num in range(1, last + 1):
-                    if num <= left_edge or \
-                       (num > self.page - left_current - 1 and num < self.page + right_current) or \
-                       num > last - right_edge:
-                        yield num
-        
-        items = PaginatedList(paginated_items, page, per_page, total)
+
+        resultado_itens = grouped_items
     else:
-        # Ordenar pelo nome do material ou pelo nome do produto composto
-        items = query.order_by(func.coalesce(Materiais.nome, ProdutoComposto.nome).asc()).paginate(page=page, per_page=20, error_out=False)
-    
-    # Atualizar quantidade de cada item com o saldo real calculado
-    for item in items.items:
+        resultado_itens = query.order_by(func.coalesce(Materiais.nome, ProdutoComposto.nome).asc()).all()
+
+    for item in resultado_itens:
         saldo_real = item.get_saldo_real()
         if item.quantidade != saldo_real:
-            # Atualizar a quantidade com o saldo real para exibição
             item.quantidade = saldo_real
-    
-    return render_template('estoque/index.html', items=items, form_filtro=form_filtro)
+
+    return form_filtro, resultado_itens
+
+
+def _estoque_row_to_datatables_dict(item, ignorar_agrupar):
+    """Serializa um item de estoque para a grid DataTables (JSON)."""
+    def nome_material_ou_produto():
+        if item.material:
+            return item.material.nome or ''
+        if item.produto_composto:
+            return item.produto_composto.nome or ''
+        if item.epi and getattr(item.epi, 'material', None):
+            return item.epi.material.nome or ''
+        return ''
+
+    def ref_id_val():
+        if item.material:
+            return str(item.material.id or 'N/A')
+        if item.produto_composto:
+            return str(item.produto_composto.id or 'N/A')
+        if item.epi:
+            return str(item.epi.id or 'N/A')
+        return 'N/A'
+
+    def nome_descricao():
+        if item.tipo_item == 'material' and item.material:
+            return item.material.nome
+        if item.tipo_item == 'produto_composto' and item.produto_composto:
+            return item.produto_composto.nome
+        if item.epi and getattr(item.epi, 'material', None):
+            return item.epi.material.nome
+        return 'Item sem descrição'
+
+    def badge_status():
+        s = item.status_estoque
+        if s == 'Esgotado':
+            return '<span class="badge bg-danger">Esgotado</span>'
+        if s == 'Crítico':
+            return '<span class="badge bg-warning text-dark">Crítico</span>'
+        if s == 'Excesso':
+            return '<span class="badge bg-info text-dark">Excesso</span>'
+        return '<span class="badge bg-success">Normal</span>'
+
+    qtd = float(item.quantidade or 0)
+    unidade = ''
+    if item.material:
+        unidade = item.material.unidade_obj.nome or ''
+
+    codigo_hist = 'N/A'
+    if item.material:
+        codigo_hist = str(item.material.id or 'N/A')
+    elif item.produto_composto:
+        codigo_hist = str(item.produto_composto.id or 'N/A')
+
+    criado = item.criado_em.strftime('%d/%m/%Y') if getattr(item, 'criado_em', None) else ''
+    atualizado = item.atualizado_em.strftime('%d/%m/%Y') if getattr(item, 'atualizado_em', None) else ''
+
+    return {
+        'tipo_item': item.tipo_item or '',
+        'tipo_label': (item.tipo_item or '').capitalize(),
+        'estoque_id': item.id,
+        'ref_id': ref_id_val(),
+        'nome_produto_ou_material': nome_material_ou_produto(),
+        'nome_descricao': nome_descricao(),
+        'quantidade': qtd,
+        'quantidade_fmt': f'{qtd:.2f}',
+        'unidade': unidade,
+        'localizacao': item.localizacao or 'Não especificado',
+        'status_estoque': item.status_estoque,
+        'status_badge_html': badge_status(),
+        'ignorar_agrupar': ignorar_agrupar,
+        'material_id': item.material.id if item.material else 0,
+        'codigo_historico': codigo_hist,
+        'data_validade': str(item.data_validade) if item.data_validade else '',
+        'lote': item.lote or '',
+        'quantidade_minima': float(item.quantidade_minima or 0),
+        'quantidade_maxima': float(item.quantidade_maxima or 0),
+        'data_criacao': criado,
+        'data_atualizacao': atualizado,
+    }
+
+
+# Rotas principais de estoque
+@estoque_bp.route('/')
+@login_required
+def index():
+    """
+    Listagem de itens no estoque com filtros (tabela via DataTables + /api/datatables).
+    """
+    form_filtro = FiltroEstoqueForm()
+    _preencher_form_filtro_estoque(request, form_filtro)
+    return render_template('estoque/index.html', form_filtro=form_filtro)
+
+
+@estoque_bp.route('/api/datatables', methods=['GET'])
+@login_required
+def api_datatables():
+    """JSON para DataTables: mesmos filtros da página de estoque."""
+    try:
+        start = datetime.now()
+        form_filtro, itens = _obter_itens_estoque_listagem(request)
+        end = datetime.now()
+        logger.info(f"Tempo de execução: {end - start} segundos")
+        ignorar_agrupar = bool(form_filtro.ignorar_localizacoes.data)
+        if not ignorar_agrupar:
+            ip = request.args.get('ignorar_localizacoes') or request.form.get('ignorar_localizacoes', '')
+            ignorar_agrupar = ip in ('on', 'True', 'true', '1') or bool(ip)
+        start = datetime.now()
+        data = [_estoque_row_to_datatables_dict(item, ignorar_agrupar) for item in itens]
+        end = datetime.now()
+        logger.info(f"Tempo de execução: {end - start} segundos")
+        return jsonify({'data': data})
+    except Exception as e:
+        logger.error(f"api_datatables estoque: {e}", exc_info=True)
+        return jsonify({'data': [], 'error': str(e)}), 500
 
 @estoque_bp.route('/novo', methods=['GET', 'POST'])
 @login_required
@@ -508,21 +563,29 @@ def detalhes(id):
 
 def excluir(id):
     """
-    Excluir item do estoque
+    Excluir item do estoque.
+    Com cabeçalho X-Requested-With: XMLHttpRequest (ou Accept: application/json), retorna JSON para atualizar DataTables sem reload.
     """
+    ajax = (
+        request.headers.get('X-Requested-With') == 'XMLHttpRequest'
+        or 'application/json' in (request.headers.get('Accept') or '')
+    )
     item = Estoque.query.get_or_404(id)
     try:
-        # Excluir movimentações
         EstoqueMovimentacoes.query.filter_by(estoque_id=id).delete()
-        # Excluir item
         db.session.delete(item)
         db.session.commit()
+        if ajax:
+            return jsonify({'success': True, 'message': 'Item excluído com sucesso!'})
         flash('Item excluído com sucesso!', 'success')
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao excluir item do estoque: {str(e)}")
-        flash(f'Erro ao excluir item: {str(e)}', 'danger')
-    
+        msg = f'Erro ao excluir item: {str(e)}'
+        if ajax:
+            return jsonify({'success': False, 'message': msg}), 500
+        flash(msg, 'danger')
+
     return redirect(url_for('estoque.index'))
 
 # Rotas de Movimentação de Estoque

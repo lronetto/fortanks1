@@ -104,7 +104,6 @@
     </div>
 </div>
 
-{% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Função para preencher o modal de visualização
@@ -143,6 +142,14 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
+    function badgeHtmlPorStatus(status) {
+        if (!status) return '-';
+        if (status === 'Esgotado') return '<span class="badge bg-danger">Esgotado</span>';
+        if (status === 'Crítico') return '<span class="badge bg-warning text-dark">Crítico</span>';
+        if (status === 'Excesso') return '<span class="badge bg-info text-dark">Excesso</span>';
+        return '<span class="badge bg-success">Normal</span>';
+    }
+
     // Função para atualizar a barra de progresso
     function atualizarBarraProgresso(quantidade, minima, maxima) {
         const progressBar = document.getElementById('progress-bar');
@@ -169,40 +176,34 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Adicionar evento para o botão de visualizar
-    const viewButtons = document.querySelectorAll('.btn-visualizar-item');
-    viewButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            try {
-                const item = {
-                    id: this.dataset.id,
-                    tipo_item: this.dataset.tipoItem || '',
-                    codigo: this.dataset.codigo || '',
-                    nome: this.dataset.nome || '',
-                    localizacao: this.dataset.localizacao || '',
-                    quantidade: this.dataset.quantidade || '',
-                    quantidade_minima: this.dataset.quantidadeMinima || '',
-                    quantidade_maxima: this.dataset.quantidadeMaxima || '',
-                    status_badge: this.dataset.statusBadge || '',
-                    lote: this.dataset.lote || '',
-                    data_validade: this.dataset.dataValidade || '',
-                    data_criacao: this.dataset.dataCriacao || '',
-                    data_atualizacao: this.dataset.dataAtualizacao || ''
-                };
-                
-                preencherModalVisualizacao(item);
-            } catch (error) {
-                alert('Ocorreu um erro ao processar sua solicitação');
-            }
-        });
+    // Delegação: linhas carregadas via DataTables / AJAX
+    $(document).on('click', '.btn-visualizar-item', function() {
+        try {
+            const st = this.dataset.statusEstoque || '';
+            const item = {
+                id: this.dataset.id,
+                tipo_item: this.dataset.tipoItem || '',
+                codigo: this.dataset.codigo || '',
+                nome: this.dataset.nome || '',
+                localizacao: this.dataset.localizacao || '',
+                quantidade: this.dataset.quantidade || '',
+                quantidade_minima: this.dataset.quantidadeMinima || '',
+                quantidade_maxima: this.dataset.quantidadeMaxima || '',
+                status_badge: badgeHtmlPorStatus(st),
+                lote: this.dataset.lote || '',
+                data_validade: this.dataset.dataValidade || '',
+                data_criacao: this.dataset.dataCriacao || '',
+                data_atualizacao: this.dataset.dataAtualizacao || ''
+            };
+            preencherModalVisualizacao(item);
+        } catch (error) {
+            alert('Ocorreu um erro ao processar sua solicitação');
+        }
     });
 
     // Botão para editar após visualizar
     $('#btn-editar-apos-visualizar').click(function() {
         $('#modalVisualizarItem').modal('hide');
-        // Aqui você pode implementar a lógica para abrir o modal de edição
-        // com os dados já carregados
     });
 });
 </script>
-{% endblock %}

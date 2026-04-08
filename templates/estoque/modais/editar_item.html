@@ -93,7 +93,6 @@
     </div>
 </div>
 
-{% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     // Função para carregar as opções dos selects via Ajax
@@ -147,30 +146,24 @@ document.addEventListener('DOMContentLoaded', function() {
         }
     }
 
-    // Adicionar evento para o botão de editar
-    const editButtons = document.querySelectorAll('.btn-editar-item');
-    editButtons.forEach(button => {
-        button.addEventListener('click', function() {
-            try {
-                const itemId = this.getAttribute('data-id');
-                const item = {
-                    id: this.dataset.id,
-                    tipo_item: this.dataset.tipoItem || '',
-                    material_id: this.dataset.materialId || '',
-                    quantidade: this.dataset.quantidade || '',
-                    quantidade_minima: this.dataset.quantidadeMinima || '',
-                    quantidade_maxima: this.dataset.quantidadeMaxima || '',
-                    lote: this.dataset.lote || '',
-                    data_validade: this.dataset.dataValidade || '',
-                    localizacao: this.dataset.localizacao || ''
-                };
-                
-                preencherModal(item);
-                carregarOpcoesSelects();
-            } catch (error) {
-                alert('Ocorreu um erro ao processar sua solicitação');
-            }
-        });
+    $(document).on('click', '.btn-editar-item', function() {
+        try {
+            const item = {
+                id: this.dataset.id,
+                tipo_item: this.dataset.tipoItem || '',
+                material_id: this.dataset.materialId || '',
+                quantidade: this.dataset.quantidade || '',
+                quantidade_minima: this.dataset.quantidadeMinima || '',
+                quantidade_maxima: this.dataset.quantidadeMaxima || '',
+                lote: this.dataset.lote || '',
+                data_validade: this.dataset.dataValidade || '',
+                localizacao: this.dataset.localizacao || ''
+            };
+            preencherModal(item);
+            carregarOpcoesSelects();
+        } catch (error) {
+            alert('Ocorreu um erro ao processar sua solicitação');
+        }
     });
 
     // Salvar edição
@@ -208,4 +201,3 @@ document.addEventListener('DOMContentLoaded', function() {
     });
 });
 </script>
-{% endblock %}

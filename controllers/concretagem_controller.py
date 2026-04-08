@@ -419,9 +419,10 @@ def api_processar_producao(id):
 
 def _remover_movimentacoes_producao_peca_escopo_concretagens(concretagem_ids):
     """
-    Remove saídas de estoque (origem_tipo producao_peca) associadas às peças/datas
-    das concretagens informadas. Usa produto composto vinculado (tanque+tipo), data da
-    concretagem e nome da peça na observação. Retorna quantidade de movimentações removidas.
+    Remove movimentações de estoque (origem_tipo producao_peca): saídas de materiais e
+    entradas do produto composto vinculado, associadas às peças/datas das concretagens
+    informadas. Usa produto composto (tanque+tipo), data da concretagem e nome da peça
+    na observação. Retorna quantidade de movimentações removidas.
     """
     mov_ids = set()
     for cid in concretagem_ids:

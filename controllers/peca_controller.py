@@ -11,6 +11,7 @@ from models.concreto import (
     ConcretoUsinagens,
     ConcretoConcretagens,
     qualidade_peca_remover_data_producao_de_dados_adicionais,
+    registrar_entrada_estoque_produto_composto_producao_peca,
 )
 from flask_wtf.csrf import generate_csrf
 from flask_login import login_required, current_user
@@ -1748,6 +1749,15 @@ def processar_producao_manual(log, usuario_id=1,total=True,_usinagem=True):
                 except Exception as e:
                     logging.warning(f"Erro ao salvar data_producao na peça {peca.id}: {str(e)}")
                     continue
+
+            registrar_entrada_estoque_produto_composto_producao_peca(
+                produto_composto,
+                quantidade_grupo,
+                nomes_pecas_grupo,
+                dia_date,
+                usuario_id,
+                log=log,
+            )
 
         print(f"Materiais necessários: {len(materiais_necessarios)}")
         if materiais_necessarios:
