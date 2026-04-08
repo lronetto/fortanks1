@@ -50,7 +50,15 @@
       </div>
     </div>
     <div class="row">
-      <div class="table-responsive">
+      <div class="position-relative" id="dtAcabamentoWrapper">
+        <div id="dtAcabamentoLoading" class="position-absolute top-0 start-0 w-100 h-100 d-none align-items-center justify-content-center rounded shadow-sm" style="z-index: 10; background: rgba(var(--bs-body-bg-rgb, 255, 255, 255), 0.92);">
+          <div class="text-center px-3 py-4 rounded border bg-body shadow-sm">
+            <div class="spinner-border text-primary mb-2" role="status" aria-hidden="true"></div>
+            <div class="fw-medium text-body">Carregando dados...</div>
+            <div class="small text-muted">Aguarde</div>
+          </div>
+        </div>
+        <div class="table-responsive">
         <table class="table table-bordered table-striped" id="tabelaAcabamentoTransporte" width="100%" cellspacing="0">
           <thead>
             <tr>
@@ -68,6 +76,7 @@
             <!-- Dados carregados via AJAX -->
           </tbody>
         </table>
+        </div>
       </div>
     </div>
 </div>
@@ -87,8 +96,8 @@ $(document).ready(function() {
         $('#exportNomePeca').val($('#nome_peca').val());
     }
 
-    $('#tabelaAcabamentoTransporte').DataTable({
-        processing: true,
+    var dtAcabamento = $('#tabelaAcabamentoTransporte').DataTable({
+        processing: false,
         serverSide: true,
         ajax: {
             url: '{{ url_for("acabamento_transporte.api_datatables") }}',
@@ -112,7 +121,8 @@ $(document).ready(function() {
             }
         },
         language: {
-            url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json'
+            url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json',
+            processing: '<span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>Carregando...'
         },
         order: [[0, 'asc']],
         pageLength: 25,
@@ -129,19 +139,28 @@ $(document).ready(function() {
         ]
     });
 
+    $('#tabelaAcabamentoTransporte').on('processing.dt', function(e, settings, processing) {
+        var $ov = $('#dtAcabamentoLoading');
+        if (processing) {
+            $ov.removeClass('d-none').addClass('d-flex');
+        } else {
+            $ov.removeClass('d-flex').addClass('d-none');
+        }
+    });
+
     $('#filtro').on('change', function() {
-        $('#tabelaAcabamentoTransporte').DataTable().ajax.reload();
+        dtAcabamento.ajax.reload();
     });
     $('#tanque_id').on('change', function() {
-        $('#tabelaAcabamentoTransporte').DataTable().ajax.reload();
+        dtAcabamento.ajax.reload();
     });
     $('#btnFiltrar').on('click', function() {
-        $('#tabelaAcabamentoTransporte').DataTable().ajax.reload();
+        dtAcabamento.ajax.reload();
     });
     $('#nome_peca').on('keypress', function(e) {
         if (e.which === 13) {
             e.preventDefault();
-            $('#tabelaAcabamentoTransporte').DataTable().ajax.reload();
+            dtAcabamento.ajax.reload();
         }
     });
     syncExportForm();

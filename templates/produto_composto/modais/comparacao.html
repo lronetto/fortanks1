@@ -15,11 +15,69 @@
                     Selecione 2 ou mais produtos na lista e clique em <strong>Comparar</strong>. Aqui você pode ajustar as quantidades de cada produto lado a lado.
                 </div>
 
-                <div class="table-responsive">
-                    <table class="table table-bordered table-sm" id="tabela-comparacao-produtos" width="100%" cellspacing="0">
+                <style>
+                    /* Área com rolagem; cabeçalho (título das colunas) e 1ª coluna fixos ao rolar */
+                    .comparacao-tabela-scroll {
+                        overflow: auto;
+                        max-height: min(65vh, 520px);
+                        -webkit-overflow-scrolling: touch;
+                        border: 1px solid rgba(0, 0, 0, 0.08);
+                        border-radius: 4px;
+                    }
+
+                    /* Bootstrap .table usa width:100%; colgroup + width:auto = soma das colunas */
+                    #tabela-comparacao-produtos {
+                        --col-comparacao: 100px;
+                        --comparacao-sticky-bg: #fff;
+                        table-layout: fixed;
+                        width: auto !important;
+                        max-width: none;
+                        margin-bottom: 0;
+                    }
+                    #tabela-comparacao-produtos col.col-comparacao-col {
+                        width: var(--col-comparacao);
+                    }
+                    #tabela-comparacao-produtos .col-comparacao-fixa {
+                        width: var(--col-comparacao) !important;
+                        min-width: var(--col-comparacao) !important;
+                        max-width: var(--col-comparacao) !important;
+                        box-sizing: border-box;
+                        vertical-align: middle;
+                        word-break: break-word;
+                        overflow-wrap: anywhere;
+                    }
+                    #tabela-comparacao-produtos .input-qtd-comparacao {
+                        max-width: 100%;
+                        box-sizing: border-box;
+                    }
+
+                    #tabela-comparacao-produtos thead th {
+                        position: sticky;
+                        top: 0;
+                        z-index: 3;
+                        background-color: var(--comparacao-sticky-bg);
+                        box-shadow: 0 2px 0 rgba(0, 0, 0, 0.06);
+                    }
+                    #tabela-comparacao-produtos thead th:first-child {
+                        left: 0;
+                        z-index: 5;
+                        box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.06);
+                    }
+                    #tabela-comparacao-produtos tbody td:first-child {
+                        position: sticky;
+                        left: 0;
+                        z-index: 2;
+                        background-color: var(--comparacao-sticky-bg);
+                        box-shadow: 2px 0 4px rgba(0, 0, 0, 0.06);
+                    }
+                </style>
+
+                <div class="comparacao-tabela-scroll">
+                    <table class="table table-bordered table-sm" id="tabela-comparacao-produtos" cellspacing="0">
+                        <colgroup id="comparacao-colgroup"></colgroup>
                         <thead>
                             <tr id="comparacao-header-row">
-                                <th style="min-width: 280px;">Material / Item</th>
+                                <th class="col-comparacao-fixa">Material / Item</th>
                                 <!-- colunas dinâmicas -->
                             </tr>
                         </thead>
@@ -70,11 +128,21 @@
         );
     }
 
+    function atualizarColgroup(produtos) {
+        var $cg = $('#comparacao-colgroup');
+        $cg.empty();
+        $cg.append('<col class="col-comparacao-col">');
+        produtos.forEach(function() {
+            $cg.append('<col class="col-comparacao-col">');
+        });
+    }
+
     function montarHeader(produtos) {
+        atualizarColgroup(produtos);
         var $row = $('#comparacao-header-row');
         $row.find('th:gt(0)').remove();
         produtos.forEach(function(p) {
-            $row.append('<th class="text-center" style="min-width: 190px;">' + escHtml(p.nome || ('Produto ' + p.id)) + '<div class="small text-muted">#' + p.id + '</div></th>');
+            $row.append('<th class="text-center col-comparacao-fixa">' + escHtml(p.nome || ('Produto ' + p.id)) + '<div class="small text-muted">#' + p.id + '</div></th>');
         });
     }
 
@@ -84,11 +152,11 @@
 
         itens.forEach(function(item) {
             var tr = '<tr data-estoque-id="' + item.estoque_id + '">';
-            tr += '<td><strong>' + escHtml(item.nome) + '</strong><div class="small text-muted">Estoque ID: ' + item.estoque_id + '</div></td>';
+            tr += '<td class="col-comparacao-fixa"><strong>' + escHtml(item.nome) + '</strong><div class="small text-muted">Estoque ID: ' + item.estoque_id + '</div></td>';
             produtos.forEach(function(p) {
                 var v = (item.por_produto && Object.prototype.hasOwnProperty.call(item.por_produto, p.id)) ? item.por_produto[p.id] : null;
                 tr += (
-                    '<td class="text-center">' +
+                    '<td class="text-center col-comparacao-fixa">' +
                         '<input type="number" step="0.001" class="form-control form-control-sm input-qtd-comparacao" ' +
                             'data-produto-id="' + p.id + '" value="' + (v == null ? '' : String(v)) + '" placeholder="0">' +
                     '</td>'

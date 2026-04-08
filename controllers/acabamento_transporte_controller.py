@@ -1,3 +1,4 @@
+from operator import or_
 from flask import Blueprint, render_template, request, jsonify, send_file
 from sqlalchemy import func
 from models.concreto import (
@@ -58,17 +59,17 @@ def get_pecas(filtros):
     if filtro == 'acabadas':
         pecas_query = pecas_query.filter(\
             TanquesPecas.qualidade.isnot(None), \
-            TanquesPecas.qualidade.notlike(f'%"acabamento": null%'))
+            func.json_extract(TanquesPecas.qualidade, '$.acabamento').isnot(None))
     elif filtro == 'transportadas':
         pecas_query = pecas_query.filter(\
             TanquesPecas.qualidade.isnot(None), \
-            TanquesPecas.qualidade.notlike(f'%"data_transporte": null%'))
+            func.json_extract(TanquesPecas.qualidade, '$.transporte.data_transporte').notin_(None, 'null', 'None'))
     elif filtro == 'acabada_nao_transportada':
         print('acabada_nao_transportada')
         pecas_query = pecas_query.filter(\
             TanquesPecas.qualidade.isnot(None), \
-            TanquesPecas.qualidade.notlike(f'%"acabamento": null%'), \
-            TanquesPecas.qualidade.like(f'%"data_transporte": null%'))
+            func.json_extract(TanquesPecas.qualidade, '$.acabamento').isnot(None), \
+            func.json_extract(TanquesPecas.qualidade, '$.transporte.data_transporte').in_(None, 'null', 'None'))
     pecas_query = pecas_query.all()
     tanques = Tanques.query.order_by(Tanques.nome).all()
     pecas = []
