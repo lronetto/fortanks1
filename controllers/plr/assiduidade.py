@@ -30,6 +30,7 @@ def assiduidade_index():
         url_dados=url_for('plr.assiduidade_dados'),
         url_template=url_for('plr.relatorio_planilha_assiduidade_template'),
         url_import=url_for('plr.relatorio_planilha_assiduidade_import'),
+        url_preview_meses=url_for('plr.relatorio_planilha_assiduidade_preview_meses'),
         url_next=url_for('plr.assiduidade_index'),
     )
 

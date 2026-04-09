@@ -924,6 +924,11 @@
                                 <i class="fas fa-chart-bar"></i> Relatório de Avaliação
                             </a>
                         </li> -->
+                        <li class="{{ is_active('plr.assiduidade_index') }}">
+                            <a href="{{ url_for('plr.assiduidade_index') }}">
+                                <i class="fas fa-clipboard-check"></i> Assiduidade
+                            </a>
+                        </li>
                         <li class="{{ is_active('plr.relatorio_planilha') }}">
                             <a href="{{ url_for('plr.relatorio_planilha') }}">
                                 <i class="fas fa-file-excel"></i> Relatório Planilha (Cálculo PLR)

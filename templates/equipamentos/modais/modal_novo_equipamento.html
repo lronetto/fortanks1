@@ -1,5 +1,64 @@
+<style>
+    .novo-eq-foto-actions {
+        display: flex;
+        gap: .5rem;
+        flex-wrap: wrap;
+    }
+    .novo-eq-foto-actions .btn {
+        flex: 1 1 auto;
+        min-width: 120px;
+    }
+    .novo-eq-preview-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+        gap: .5rem;
+    }
+    .novo-eq-preview-item {
+        position: relative;
+        aspect-ratio: 1;
+        border-radius: .375rem;
+        overflow: hidden;
+        border: 1px solid var(--bs-border-color);
+    }
+    .novo-eq-preview-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .novo-eq-preview-item .badge-remove {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        cursor: pointer;
+        font-size: .7rem;
+        line-height: 1;
+        padding: .25em .4em;
+        z-index: 2;
+    }
+    @media (max-width: 767.98px) {
+        #novoEquipamentoModal .modal-body {
+            padding: .75rem;
+        }
+        #novoEquipamentoModal .form-control,
+        #novoEquipamentoModal .form-select {
+            font-size: 1rem;
+            min-height: 44px;
+        }
+        #novoEquipamentoModal .btn {
+            min-height: 44px;
+            font-size: 1rem;
+        }
+        #novoEquipamentoModal .modal-footer .btn {
+            flex: 1;
+        }
+        .novo-eq-preview-grid {
+            grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+        }
+    }
+</style>
+
 <div class="modal fade" id="novoEquipamentoModal" tabindex="-1" aria-labelledby="novoEquipamentoModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-dialog modal-lg modal-fullscreen-md-down modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header">
                 <h5 class="modal-title" id="novoEquipamentoModalLabel">Novo Equipamento</h5>
@@ -9,7 +68,7 @@
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body flex-grow-1 overflow-auto">
                     <div class="row mb-3">
-                        <div class="col-md-6">
+                        <div class="col-md-6 mb-3 mb-md-0">
                             <label for="novo_eq_nome" class="form-label">Nome *</label>
                             <div class="equipamento-busca-material-wrap">
                                 <input type="text" class="form-control equipamento-busca-material-input" id="novo_eq_nome" name="nome" required autocomplete="off" placeholder="Digite para buscar material (Equipamento/Ferramenta)" data-busca-url="{{ url_for('equipamento.busca_materiais_equipamento') }}">
@@ -39,7 +98,7 @@
                         </div>
                     </div>
                     <div class="row mb-3">
-                        <div class="col-md-6">
+                        <div class="col-md-6 mb-3 mb-md-0">
                             <label for="novo_eq_propriedade" class="form-label">Propriedade *</label>
                             <select class="form-select" id="novo_eq_propriedade" name="propriedade" required>
                                 <option value="">Selecione...</option>
@@ -55,7 +114,7 @@
                         </div>
                     </div>
                     <div class="row mb-3">
-                        <div class="col-md-6">
+                        <div class="col-md-6 mb-3 mb-md-0">
                             <label for="novo_eq_numero_serie" class="form-label">Número de Série *</label>
                             <input type="text" class="form-control" id="novo_eq_numero_serie" name="numero_serie" required>
                             <div class="invalid-feedback">Por favor, informe o número de série do equipamento.</div>
@@ -78,7 +137,7 @@
                         </div>
                     </div>
                     <div class="row mb-3">
-                        <div class="col-md-6">
+                        <div class="col-md-6 mb-3 mb-md-0">
                             <label for="novo_eq_nota_fiscal_id" class="form-label">Nota fiscal</label>
                             <select class="form-select equipamento-select-nota-fiscal" id="novo_eq_nota_fiscal_id" name="nota_fiscal_id" data-busca-url="{{ url_for('equipamento.busca_notas_fiscais_equipamento') }}" data-placeholder="Buscar pelo número da NF...">
                                 <option value=""></option>
@@ -86,13 +145,31 @@
                             <div class="form-text">Busca notas cadastradas. O número fica no equipamento; o ID da nota em dados adicionais.</div>
                         </div>
                         <div class="col-md-6">
-                            <label for="novo_eq_fotos" class="form-label">Fotos</label>
-                            <input type="file" class="form-control" id="novo_eq_fotos" name="fotos" accept="image/jpeg,image/png,image/webp,image/gif" multiple>
-                            <div class="form-text">Opcional. JPEG, PNG, WebP ou GIF.</div>
+                            <label class="form-label">Fotos</label>
+                            <input type="file" class="d-none" id="novo_eq_fotos" name="fotos" accept="image/jpeg,image/png,image/webp,image/gif" multiple>
+                            <input type="file" class="d-none" id="novo_eq_camera" accept="image/jpeg,image/png" capture="environment">
+                            <div class="novo-eq-foto-actions">
+                                <button type="button" class="btn btn-outline-secondary" id="btnNovoEqGaleria">
+                                    <i class="fas fa-images me-1"></i> Galeria
+                                </button>
+                                <button type="button" class="btn btn-outline-primary" id="btnNovoEqCamera">
+                                    <i class="fas fa-camera me-1"></i> Tirar Foto
+                                </button>
+                            </div>
+                            <div class="form-text mt-1">Opcional. JPEG, PNG, WebP ou GIF.</div>
                         </div>
                     </div>
+                    <div class="mb-3" id="novo_eq_preview_wrap" style="display:none;">
+                        <label class="form-label d-flex justify-content-between align-items-center">
+                            <span>Fotos selecionadas</span>
+                            <button type="button" class="btn btn-sm btn-outline-danger" id="btnNovoEqLimparFotos">
+                                <i class="fas fa-trash me-1"></i> Limpar
+                            </button>
+                        </label>
+                        <div id="novo_eq_preview_grid" class="novo-eq-preview-grid"></div>
+                    </div>
                     <div class="row mb-3">
-                        <div class="col-md-6">
+                        <div class="col-md-6 mb-3 mb-md-0">
                             <label for="novo_eq_data_aquisicao" class="form-label">Data de Aquisição *</label>
                             <input type="date" class="form-control" id="novo_eq_data_aquisicao" name="data_aquisicao" required>
                             <div class="invalid-feedback">Por favor, informe a data de aquisição do equipamento.</div>
@@ -116,13 +193,16 @@
                     </div>
                 </div>
             </form>
-            <div class="modal-footer flex-shrink-0 border-top">
+            <div class="modal-footer flex-shrink-0 border-top gap-2">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" class="btn btn-primary" id="btnSalvarNovoEquipamento" form="novoEquipamentoForm">Salvar</button>
+                <button type="submit" class="btn btn-primary" id="btnSalvarNovoEquipamento" form="novoEquipamentoForm">
+                    <i class="fas fa-check me-1"></i> Salvar
+                </button>
             </div>
         </div>
     </div>
 </div>
+
 <script>
 (function () {
     document.addEventListener('DOMContentLoaded', function () {
@@ -131,6 +211,102 @@
         if (!form || !modalEl) return;
         var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
         var urlNovo = "{{ url_for('equipamento.novo') }}";
+
+        var inputFotos = document.getElementById('novo_eq_fotos');
+        var inputCamera = document.getElementById('novo_eq_camera');
+        var btnGaleria = document.getElementById('btnNovoEqGaleria');
+        var btnCamera = document.getElementById('btnNovoEqCamera');
+        var btnLimpar = document.getElementById('btnNovoEqLimparFotos');
+        var previewWrap = document.getElementById('novo_eq_preview_wrap');
+        var previewGrid = document.getElementById('novo_eq_preview_grid');
+
+        var fotosAcumuladas = new DataTransfer();
+
+        function atualizarPreview() {
+            if (!previewGrid || !previewWrap) return;
+            previewGrid.innerHTML = '';
+            var files = fotosAcumuladas.files;
+            if (!files.length) {
+                previewWrap.style.display = 'none';
+                return;
+            }
+            previewWrap.style.display = 'block';
+            Array.from(files).forEach(function (file, idx) {
+                var item = document.createElement('div');
+                item.className = 'novo-eq-preview-item';
+                var img = document.createElement('img');
+                img.src = URL.createObjectURL(file);
+                img.alt = file.name;
+                img.onload = function () { URL.revokeObjectURL(this.src); };
+                var badge = document.createElement('span');
+                badge.className = 'badge bg-danger badge-remove';
+                badge.innerHTML = '<i class="fas fa-times"></i>';
+                badge.title = 'Remover';
+                badge.dataset.idx = idx;
+                badge.addEventListener('click', function () {
+                    removerFoto(parseInt(this.dataset.idx, 10));
+                });
+                item.appendChild(img);
+                item.appendChild(badge);
+                previewGrid.appendChild(item);
+            });
+        }
+
+        function removerFoto(idx) {
+            var novo = new DataTransfer();
+            var files = fotosAcumuladas.files;
+            for (var i = 0; i < files.length; i++) {
+                if (i !== idx) novo.items.add(files[i]);
+            }
+            fotosAcumuladas = novo;
+            inputFotos.files = fotosAcumuladas.files;
+            atualizarPreview();
+        }
+
+        function limparFotos() {
+            fotosAcumuladas = new DataTransfer();
+            inputFotos.files = fotosAcumuladas.files;
+            atualizarPreview();
+        }
+
+        if (btnGaleria) {
+            btnGaleria.addEventListener('click', function () {
+                inputFotos.click();
+            });
+        }
+
+        if (btnCamera) {
+            btnCamera.addEventListener('click', function () {
+                inputCamera.click();
+            });
+        }
+
+        if (inputFotos) {
+            inputFotos.addEventListener('change', function () {
+                var files = this.files;
+                for (var i = 0; i < files.length; i++) {
+                    fotosAcumuladas.items.add(files[i]);
+                }
+                this.files = fotosAcumuladas.files;
+                atualizarPreview();
+            });
+        }
+
+        if (inputCamera) {
+            inputCamera.addEventListener('change', function () {
+                var files = this.files;
+                for (var i = 0; i < files.length; i++) {
+                    fotosAcumuladas.items.add(files[i]);
+                }
+                inputFotos.files = fotosAcumuladas.files;
+                atualizarPreview();
+                this.value = '';
+            });
+        }
+
+        if (btnLimpar) {
+            btnLimpar.addEventListener('click', limparFotos);
+        }
 
         var dataAquisicao = document.getElementById('novo_eq_data_aquisicao');
         if (dataAquisicao) {
@@ -167,6 +343,7 @@
                     if (data.success) {
                         modal.hide();
                         form.reset();
+                        limparFotos();
                         form.classList.remove('was-validated');
                         if (typeof window.reloadEquipamentosDatatable === 'function') {
                             window.reloadEquipamentosDatatable();
@@ -179,7 +356,7 @@
                 .finally(function () {
                     if (btn) {
                         btn.disabled = false;
-                        btn.innerHTML = 'Salvar';
+                        btn.innerHTML = '<i class="fas fa-check me-1"></i> Salvar';
                     }
                 });
         });
@@ -187,6 +364,7 @@
         modalEl.addEventListener('hidden.bs.modal', function () {
             form.reset();
             form.classList.remove('was-validated');
+            limparFotos();
             var $mat = window.jQuery && window.jQuery('#novo_eq_material_select');
             if ($mat && $mat.length && $mat.data('select2')) {
                 $mat.empty().append(new Option('', '', false, false)).val(null).trigger('change');

@@ -99,7 +99,7 @@ def relatorio_planilha_calcular(ano_inicio, mes_inicio, ano_fim, mes_fim, modelo
     Suporta períodos que abrangem anos diferentes.
     departamentos_ids: lista de IDs de departamento para filtrar (None ou vazia = todos).
     """
-    from utils.plr_calculo import tempo_de_casa_meses, salario_base_plr
+    from utils.plr_calculo import tempo_de_casa_meses, salario_base_plr, nota_media_com_assiduidade
 
     mes_i = int(mes_inicio)
     mes_f = int(mes_fim)
@@ -150,6 +150,12 @@ def relatorio_planilha_calcular(ano_inicio, mes_inicio, ano_fim, mes_fim, modelo
         departamentos_ids_set = set(int(x) for x in departamentos_ids if x is not None)
         colaboradores = [c for c in colaboradores if c.departamento_id and c.departamento_id in departamentos_ids_set]
 
+    all_colab_ids = [c.id for c in colaboradores] or ids_colab
+    assid_map = {}
+    if all_colab_ids:
+        for rec in PlrAssiduidade.query.filter(PlrAssiduidade.colaborador_id.in_(all_colab_ids)).all():
+            assid_map[(rec.colaborador_id, rec.mes, rec.ano)] = assiduidade_pct_por_faltas(rec.faltas)
+
     av_por_colab_mes = {}
     for av in avaliacoes_periodo:
         cid = av.colaborador_id
@@ -157,7 +163,11 @@ def relatorio_planilha_calcular(ano_inicio, mes_inicio, ano_fim, mes_fim, modelo
             av_por_colab_mes[cid] = {}
         mes_key = (av.data.month, av.data.year) if av.data else None
         if mes_key:
-            media = av.nota_media_avaliacao()
+            assid_pct = assid_map.get((cid, mes_key[0], mes_key[1]))
+            if assid_pct is not None:
+                media = nota_media_com_assiduidade(av.avaliacao, assid_pct)
+            else:
+                media = av.nota_media_avaliacao()
             if media is not None:
                 pct = min(100.0, max(0.0, float(media) * 10.0))
                 if mes_key not in av_por_colab_mes[cid]:
@@ -474,6 +484,38 @@ def relatorio_planilha_assiduidade_template():
     )
 
 
+def _parse_meses_do_header(header_row):
+    """
+    Lê os cabeçalhos da planilha (a partir da coluna 3) e retorna lista [(mes, ano), ...]
+    extraídos de rótulos como 'JAN 2025', 'FEV 2025', 'MAR/2025', '01/2025', etc.
+    """
+    abrev_to_num = {abrev: i + 1 for i, abrev in enumerate(MESES_ABREV)}
+    meses = []
+    for cell_val in (header_row[2:] if len(header_row) > 2 else []):
+        if cell_val is None:
+            continue
+        txt = str(cell_val).strip().upper()
+        if not txt:
+            continue
+        parts = txt.replace('/', ' ').replace('-', ' ').split()
+        if len(parts) == 2:
+            label, ano_str = parts[0], parts[1]
+            try:
+                ano = int(ano_str)
+            except ValueError:
+                continue
+            if label in abrev_to_num:
+                meses.append((abrev_to_num[label], ano))
+            else:
+                try:
+                    m = int(label)
+                    if 1 <= m <= 12:
+                        meses.append((m, ano))
+                except ValueError:
+                    continue
+    return meses
+
+
 def _normalizar_cpf(cpf):
     """Retorna CPF apenas com dígitos para comparação."""
     if cpf is None:
@@ -487,40 +529,40 @@ def _mapa_cpf_colaborador():
     return {_normalizar_cpf(c.cpf): c for c in colabs if _normalizar_cpf(c.cpf)}
 
 
+@plr_bp.route('/relatorio-planilha/assiduidade/preview-meses', methods=['POST'])
+def relatorio_planilha_assiduidade_preview_meses():
+    """Retorna JSON com os meses/anos detectados no cabeçalho do arquivo Excel enviado."""
+    arquivo = request.files.get('arquivo') or request.files.get('file')
+    if not arquivo or not arquivo.filename:
+        return jsonify({'ok': False, 'error': 'Nenhum arquivo enviado.'}), 400
+    try:
+        from openpyxl import load_workbook
+        wb = load_workbook(arquivo, read_only=True, data_only=True)
+        ws = wb.active
+        header = next(ws.iter_rows(min_row=1, max_row=1, values_only=True), None)
+    except Exception as e:
+        return jsonify({'ok': False, 'error': f'Erro ao ler o Excel: {e}'}), 400
+    if not header:
+        return jsonify({'ok': False, 'error': 'Planilha sem cabeçalho.'}), 400
+
+    meses = _parse_meses_do_header(list(header))
+    if not meses:
+        return jsonify({'ok': False, 'error': 'Nenhum mês/ano identificado nos cabeçalhos.'}), 400
+
+    labels = [f'{MESES_ABREV[m - 1]}/{a}' for m, a in meses]
+    return jsonify({'ok': True, 'meses': labels})
+
+
 @plr_bp.route('/relatorio-planilha/assiduidade/import', methods=['POST'])
 def relatorio_planilha_assiduidade_import():
-    """Importa planilha Excel de assiduidade (faltas por colaborador por mês) e grava em PlrAssiduidade."""
+    """Importa planilha Excel de assiduidade (faltas por colaborador por mês) e grava em PlrAssiduidade.
+    Os meses/anos são detectados automaticamente a partir dos cabeçalhos do arquivo."""
     if 'arquivo' not in request.files and 'file' not in request.files:
         flash('Nenhum arquivo enviado.', 'danger')
         return redirect(url_for('plr.relatorio_planilha'))
     arquivo = request.files.get('arquivo') or request.files.get('file')
     if not arquivo or not arquivo.filename or not arquivo.filename.lower().endswith(('.xlsx', '.xls')):
         flash('Envie um arquivo Excel (.xlsx).', 'danger')
-        return redirect(url_for('plr.relatorio_planilha'))
-
-    ano_inicio, ano_fim, mes_inicio, mes_fim, _, _, _ = _assiduidade_parse_filtros()
-    if not ano_inicio:
-        flash('Informe o período para importar (use os mesmos filtros do relatório).', 'danger')
-        return redirect(url_for('plr.relatorio_planilha'))
-    try:
-        ano_inicio = int(ano_inicio)
-        ano_fim = int(ano_fim)
-        mes_inicio = int(mes_inicio)
-        mes_fim = int(mes_fim)
-    except (ValueError, TypeError):
-        flash('Período inválido.', 'danger')
-        return redirect(url_for('plr.relatorio_planilha'))
-
-    meses_colunas = []
-    cur_ano, cur_mes = ano_inicio, mes_inicio
-    while (cur_ano < ano_fim) or (cur_ano == ano_fim and cur_mes <= mes_fim):
-        meses_colunas.append((cur_mes, cur_ano))
-        cur_mes += 1
-        if cur_mes > 12:
-            cur_mes = 1
-            cur_ano += 1
-    if not meses_colunas:
-        flash('Período inválido.', 'danger')
         return redirect(url_for('plr.relatorio_planilha'))
 
     try:
@@ -537,8 +579,21 @@ def relatorio_planilha_assiduidade_import():
         return redirect(url_for('plr.relatorio_planilha'))
 
     header = rows[0]
-    num_meses_esperados = len(meses_colunas)
-    colunas_meses = min(num_meses_esperados, max(0, len(header) - 2))
+    meses_colunas = _parse_meses_do_header(header)
+
+    if not meses_colunas:
+        flash(
+            'Não foi possível identificar os meses/ano nos cabeçalhos da planilha. '
+            'Use o formato do template (ex: JAN 2025, FEV 2025).',
+            'danger',
+        )
+        return redirect(url_for('plr.relatorio_planilha'))
+
+    meses_label = ', '.join(
+        f'{MESES_ABREV[m - 1]}/{a}' for m, a in meses_colunas
+    )
+
+    colunas_meses = len(meses_colunas)
     inseridos = 0
     atualizados = 0
     erros = []
@@ -581,10 +636,11 @@ def relatorio_planilha_assiduidade_import():
         flash(f'Erro ao salvar: {e}', 'danger')
         return redirect(url_for('plr.relatorio_planilha'))
 
+    msg_periodo = f' Período detectado: {meses_label}.'
     if erros:
-        flash(f'Importado: {inseridos} novos, {atualizados} atualizados. Avisos: ' + '; '.join(erros[:5]), 'warning')
+        flash(f'Importado: {inseridos} novos, {atualizados} atualizados.{msg_periodo} Avisos: ' + '; '.join(erros[:5]), 'warning')
     else:
-        flash(f'Assiduidade importada: {inseridos} novos, {atualizados} atualizados.', 'success')
+        flash(f'Assiduidade importada: {inseridos} novos, {atualizados} atualizados.{msg_periodo}', 'success')
     next_url = (request.form.get('next') or '').strip()
     if next_url and next_url.startswith('/'):
         return redirect(next_url)
@@ -932,10 +988,11 @@ def _excel_aba_resumo_formulas(wb, resultado, meses_colunas, cpf_para_chapa, est
 
     data_row = 1
     for r in resultado:
-        pcts_meses = r.get('pcts_meses') or []
-        meses_com_avaliacao = [pct for pct in pcts_meses if pct is not None]
-        if len(meses_com_avaliacao) < MIN_MESES_AVALIACAO_RESUMO:
-            continue
+        if False: 
+            pcts_meses = r.get('pcts_meses') or []
+            meses_com_avaliacao = [pct for pct in pcts_meses if pct is not None]
+            if len(meses_com_avaliacao) < MIN_MESES_AVALIACAO_RESUMO:
+                continue
         data_row += 1
         row_idx = data_row
         colab = r['colaborador']
@@ -1032,8 +1089,8 @@ def _excel_aba_resumo_formulas(wb, resultado, meses_colunas, cpf_para_chapa, est
 
 def _excel_abas_meses_formulas(wb, resultado, meses_colunas, cpf_para_chapa, criterios_por_colab_mes, estilos):
     """
-    Cria uma aba por mês apenas com avaliações: CPF, Chapa, Nome, Admissão, Demissão, Função,
-    Assiduidade, Zero Acidente, Segurança, Prazo, % Mês, Qtd Meses, Acum (%). Sem colunas de mês.
+    Cria uma aba por mês com fórmulas: % Mês = soma ponderada dos critérios,
+    Qtd Meses e Acum (%) calculados por fórmulas com referências cruzadas entre abas.
     O Resumo usa o % Mês destas abas (fórmula INDEX/MATCH por CPF).
     """
     header_font = estilos['header_font']
@@ -1044,11 +1101,15 @@ def _excel_abas_meses_formulas(wb, resultado, meses_colunas, cpf_para_chapa, cri
     col_pct_mes = 11
     col_qtd = 12
     col_acum = 13
+    letter_pct_mes = get_column_letter(col_pct_mes)
 
     headers_criterios = [label for _, label in _criterios_headers_com_peso()]
     pesos = _pesos_por_tipo()
+
+    titulos_abas = [_titulo_aba_mes(m, a) for m, a in meses_colunas]
+
     for idx, (mes, ano) in enumerate(meses_colunas):
-        titulo = _titulo_aba_mes(mes, ano)
+        titulo = titulos_abas[idx]
         ws = wb.create_sheet(title=titulo)
         header_mes = [
             'CPF', 'Chapa', 'Nome', 'Admissão', 'Demissão', 'Função',
@@ -1071,10 +1132,7 @@ def _excel_abas_meses_formulas(wb, resultado, meses_colunas, cpf_para_chapa, cri
             admissao = colab.data_admissao.strftime('%d/%m/%Y') if colab.data_admissao else ''
             demissao = colab.data_demissao.strftime('%d/%m/%Y') if colab.data_demissao else ''
             funcao = colab.cargo.nome if colab.cargo else '-'
-            valid_prev = [p for j, p in enumerate(pct_mes_list) if j <= idx and p is not None]
-            qtd_meses = len(valid_prev)
-            num_meses_periodo = idx + 1
-            acum_pct = (sum(valid_prev) / num_meses_periodo) if num_meses_periodo else None
+
             crit_colab = criterios_por_colab_mes.get(colab.id, {})
             crit_mes = crit_colab.get((mes, ano), {}) if crit_colab else {}
             assid = _valor_criterio_ponderado_excel(crit_mes.get('Assiduidade'), pesos.get('Assiduidade'))
@@ -1082,13 +1140,32 @@ def _excel_abas_meses_formulas(wb, resultado, meses_colunas, cpf_para_chapa, cri
             segur = _valor_criterio_ponderado_excel(crit_mes.get('Segurança, Limpeza, Organização'), pesos.get('Segurança, Limpeza, Organização'))
             prazo = _valor_criterio_ponderado_excel(crit_mes.get('Prazo'), pesos.get('Prazo'))
 
-            ws.append([
-                cpf, chapa, (colab.nome or '').upper(), admissao, demissao, funcao,
-                assid, zero_ac, segur, prazo,
-                (pct_mes / 100.0),
-                qtd_meses,
-                (acum_pct / 100.0) if acum_pct is not None else None,
-            ])
+            for col, val in enumerate([cpf, chapa, (colab.nome or '').upper(), admissao, demissao, funcao, assid, zero_ac, segur, prazo], start=1):
+                ws.cell(row=row_idx, column=col, value=val)
+
+            ws.cell(row=row_idx, column=col_pct_mes,
+                    value=f'=G{row_idx}+H{row_idx}+I{row_idx}+J{row_idx}')
+
+            qtd_parts = []
+            sum_parts = []
+            for j in range(idx + 1):
+                if j == idx:
+                    qtd_parts.append(f'IF({letter_pct_mes}{row_idx}>0,1,0)')
+                    sum_parts.append(f'{letter_pct_mes}{row_idx}')
+                else:
+                    tab_ref = f"'{titulos_abas[j]}'"
+                    qtd_parts.append(
+                        f'IF(ISNUMBER(MATCH($A{row_idx},{tab_ref}!$A:$A,0)),1,0)'
+                    )
+                    sum_parts.append(
+                        f'IFERROR(INDEX({tab_ref}!${letter_pct_mes}:${letter_pct_mes},MATCH($A{row_idx},{tab_ref}!$A:$A,0)),0)'
+                    )
+
+            ws.cell(row=row_idx, column=col_qtd,
+                    value=f'={"+".join(qtd_parts)}')
+            num_meses_periodo = idx + 1
+            ws.cell(row=row_idx, column=col_acum,
+                    value=f'=({"+".join(sum_parts)})/{num_meses_periodo}')
 
         ws.freeze_panes = "A2"
         for cell in ws[1]:

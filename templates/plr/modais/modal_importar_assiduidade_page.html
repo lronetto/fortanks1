@@ -11,6 +11,7 @@
             <div class="modal-body">
                 <p class="text-muted small mb-3">
                     Informe o período e baixe o template (CPF, Nome e colunas por mês). Preencha as <strong>faltas</strong> e envie o arquivo.
+                    Os meses/ano serão identificados automaticamente pelos cabeçalhos da planilha.
                 </p>
                 <div class="mb-3">
                     <label class="form-label">Período (para o template)</label>
@@ -38,13 +39,22 @@
                 <form method="POST" action="{{ url_import }}" enctype="multipart/form-data" id="formImportarAssiduidadePage">
                     <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                     <input type="hidden" name="next" value="{{ url_next }}">
-                    <input type="hidden" name="ano_inicio" id="import_page_ano_inicio" value="">
-                    <input type="hidden" name="mes_inicio" id="import_page_mes_inicio" value="">
-                    <input type="hidden" name="ano_fim" id="import_page_ano_fim" value="">
-                    <input type="hidden" name="mes_fim" id="import_page_mes_fim" value="">
                     <label for="arquivo_assiduidade_page" class="form-label">Arquivo Excel preenchido</label>
                     <input type="file" id="arquivo_assiduidade_page" name="arquivo" class="form-control mb-2" accept=".xlsx,.xls" required>
-                    <button type="submit" class="btn btn-primary btn-sm">
+                    <div id="assid_page_preview_meses" class="mb-2 d-none">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="fas fa-calendar-alt text-primary"></i>
+                            <span class="small fw-semibold">Período detectado:</span>
+                            <span id="assid_page_meses_labels" class="small text-success"></span>
+                        </div>
+                    </div>
+                    <div id="assid_page_preview_erro" class="mb-2 d-none">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="fas fa-exclamation-triangle text-warning"></i>
+                            <span id="assid_page_meses_erro_msg" class="small text-danger"></span>
+                        </div>
+                    </div>
+                    <button type="submit" id="btnImportarAssiduidadePage" class="btn btn-primary btn-sm" disabled>
                         <i class="fas fa-file-import"></i> Importar
                     </button>
                 </form>
@@ -55,8 +65,16 @@
 <script>
 (function() {
     var baseUrl = '{{ url_template }}';
+    var previewUrl = '{{ url_preview_meses }}';
+    var csrfToken = '{{ csrf_token() }}';
     var btnTemplate = document.getElementById('btnBaixarTemplateAssiduidadePage');
     var formImport = document.getElementById('formImportarAssiduidadePage');
+    var inputFile = document.getElementById('arquivo_assiduidade_page');
+    var btnImportar = document.getElementById('btnImportarAssiduidadePage');
+    var previewBox = document.getElementById('assid_page_preview_meses');
+    var previewLabels = document.getElementById('assid_page_meses_labels');
+    var erroBox = document.getElementById('assid_page_preview_erro');
+    var erroMsg = document.getElementById('assid_page_meses_erro_msg');
 
     function getPeriodo() {
         var anoI = document.getElementById('import_assid_ano_inicio').value;
@@ -77,6 +95,44 @@
         return baseUrl + '?' + params.toString();
     }
 
+    function resetPreview() {
+        previewBox.classList.add('d-none');
+        erroBox.classList.add('d-none');
+        previewLabels.textContent = '';
+        erroMsg.textContent = '';
+        btnImportar.disabled = true;
+    }
+
+    function detectarMesesDoArquivo() {
+        resetPreview();
+        if (!inputFile.files || !inputFile.files.length) return;
+        var fd = new FormData();
+        fd.append('arquivo', inputFile.files[0]);
+        fd.append('csrf_token', csrfToken);
+        fetch(previewUrl, { method: 'POST', body: fd })
+            .then(function(r) { return r.json(); })
+            .then(function(data) {
+                if (data.ok && data.meses && data.meses.length) {
+                    previewLabels.textContent = data.meses.join(', ');
+                    previewBox.classList.remove('d-none');
+                    erroBox.classList.add('d-none');
+                    btnImportar.disabled = false;
+                } else {
+                    erroMsg.textContent = data.error || 'Não foi possível identificar os meses no arquivo.';
+                    erroBox.classList.remove('d-none');
+                    previewBox.classList.add('d-none');
+                    btnImportar.disabled = true;
+                }
+            })
+            .catch(function() {
+                erroMsg.textContent = 'Erro ao analisar o arquivo.';
+                erroBox.classList.remove('d-none');
+                btnImportar.disabled = true;
+            });
+    }
+
+    inputFile.addEventListener('change', detectarMesesDoArquivo);
+
     if (btnTemplate) {
         btnTemplate.addEventListener('click', function(e) {
             var p = getPeriodo();
@@ -86,16 +142,6 @@
                 return;
             }
             btnTemplate.href = buildTemplateUrl();
-        });
-    }
-
-    if (formImport) {
-        formImport.addEventListener('submit', function() {
-            var p = getPeriodo();
-            document.getElementById('import_page_ano_inicio').value = p.ano_inicio || '';
-            document.getElementById('import_page_mes_inicio').value = p.mes_inicio || '1';
-            document.getElementById('import_page_ano_fim').value = p.ano_fim || '';
-            document.getElementById('import_page_mes_fim').value = p.mes_fim || '12';
         });
     }
 })();

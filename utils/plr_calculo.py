@@ -49,6 +49,45 @@ def assiduidade_pct_por_faltas(faltas):
     return 100.0 - (n * 10.0)
 
 
+def nota_media_com_assiduidade(avaliacao, assiduidade_pct=None):
+    """
+    Calcula a nota média ponderada da avaliação, opcionalmente substituindo o critério
+    'Assiduidade' pelo percentual vindo de PlrAssiduidade (faltas → %).
+    assiduidade_pct: 0-100 (de assiduidade_pct_por_faltas). Convertido para escala 0-10.
+    Retorna nota na escala 0-10 (mesma escala de nota_media_avaliacao).
+    """
+    if not avaliacao or not isinstance(avaliacao, list):
+        return None
+    soma_ponderada = 0.0
+    soma_pesos = 0.0
+    valores_simples = []
+    for item in avaliacao:
+        if isinstance(item, dict) and 'valor' in item:
+            tipo = item.get('tipo', '')
+            if tipo == 'Assiduidade' and assiduidade_pct is not None:
+                v = assiduidade_pct / 10.0
+            else:
+                try:
+                    v = float(item['valor'])
+                except (TypeError, ValueError):
+                    continue
+            peso = item.get('peso')
+            if peso is not None:
+                try:
+                    p = float(peso)
+                    soma_ponderada += v * p
+                    soma_pesos += p
+                except (TypeError, ValueError):
+                    valores_simples.append(v)
+            else:
+                valores_simples.append(v)
+        elif isinstance(item, (int, float)):
+            valores_simples.append(float(item))
+    if soma_pesos > 0:
+        return soma_ponderada / soma_pesos
+    return sum(valores_simples) / len(valores_simples) if valores_simples else None
+
+
 def multiplicador_tempo_casa(tempo_mes):
     """
     Multiplicador do salário base para PLR conforme tempo de casa.

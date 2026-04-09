@@ -17,12 +17,13 @@ from flask_wtf.csrf import generate_csrf
 from sqlalchemy import func
 
 from models.database import db
-from models.plr import PLRColaborador, EfetivoPLR
+from models.plr import PLRColaborador, EfetivoPLR, PlrAssiduidade
 from models.colaborador import Colaborador
 from models.centro_custo import CentroCusto
 from models.plr import ModeloPLR
 from models.departamento import Departamento
 from utils.plr_import_planilha import ler_avaliacoes_planilha
+from utils.plr_calculo import assiduidade_pct_por_faltas, nota_media_com_assiduidade
 
 from . import plr_bp
 from .constantes import CRITERIOS_PADRAO_PLR
@@ -141,10 +142,30 @@ def avaliacoes_dados():
             Colaborador.departamento_id.in_(departamento_ids)
         )
     lista = query.order_by(PLRColaborador.data.desc(), PLRColaborador.id.desc()).all()
+
+    colab_ids = list({av.colaborador_id for av in lista})
+    assid_map = {}
+    if colab_ids:
+        for rec in PlrAssiduidade.query.filter(PlrAssiduidade.colaborador_id.in_(colab_ids)).all():
+            assid_map[(rec.colaborador_id, rec.mes, rec.ano)] = rec.faltas
+
     csrf = generate_csrf()
     data = []
     for av in lista:
-        nota = av.nota_media_avaliacao()
+        av_mes = av.data.month if av.data else None
+        av_ano = av.data.year if av.data else None
+        faltas_rec = assid_map.get((av.colaborador_id, av_mes, av_ano))
+        assid_pct = assiduidade_pct_por_faltas(faltas_rec) if faltas_rec is not None else None
+
+        if assid_pct is not None:
+            nota = nota_media_com_assiduidade(av.avaliacao, assid_pct)
+            assid_val = assid_pct / 10.0
+            assid_label = f'{assid_val:.2f} ({int(faltas_rec)}f)'
+        else:
+            nota = av.nota_media_avaliacao()
+            raw = _valor_por_tipo(av.avaliacao, 'Assiduidade')
+            assid_label = f'{raw:.2f}' if raw is not None else '-'
+
         total_pct = f'{(nota / 10.0) * 100:.1f}%' if nota is not None else '-'
         excluir_url = url_for('plr.avaliacao_excluir', id=av.id)
         acoes = (
@@ -160,7 +181,7 @@ def avaliacoes_dados():
             'colaborador_nome': av.colaborador.nome if av.colaborador else '-',
             'obra_codigo': av.centro_custo.codigo if av.centro_custo else '-',
             'equipe_alocada': ', '.join(av.equipe_alocada) if av.equipe_alocada else '-',
-            'assiduidade': f'{_valor_por_tipo(av.avaliacao, "Assiduidade"):.1f}' if _valor_por_tipo(av.avaliacao, "Assiduidade") is not None else '-',
+            'assiduidade': assid_label,
             'zero_acidente': f'{_valor_por_tipo(av.avaliacao, "Zero Acidente"):.1f}' if _valor_por_tipo(av.avaliacao, "Zero Acidente") is not None else '-',
             'seguranca': f'{_valor_por_tipo(av.avaliacao, "Segurança, Limpeza, Organização"):.1f}' if _valor_por_tipo(av.avaliacao, "Segurança, Limpeza, Organização") is not None else '-',
             'prazo': f'{_valor_por_tipo(av.avaliacao, "Prazo"):.1f}' if _valor_por_tipo(av.avaliacao, "Prazo") is not None else '-',
@@ -233,6 +254,16 @@ def avaliacoes_por_mes():
             dig = re.sub(r'\D', '', str(ef.cpf))
             if len(dig) == 11:
                 cpf_to_secao[dig] = ef.secao or ''
+    assid_mes_map = {}
+    colab_ids_all = [c.id for c in colaboradores]
+    if colab_ids_all:
+        for rec in PlrAssiduidade.query.filter(
+            PlrAssiduidade.colaborador_id.in_(colab_ids_all),
+            PlrAssiduidade.mes == mes,
+            PlrAssiduidade.ano == ano,
+        ).all():
+            assid_mes_map[rec.colaborador_id] = rec.faltas
+
     data = []
     for c in colaboradores:
         av = avaliacoes_mes.get(c.id)
@@ -243,11 +274,23 @@ def avaliacoes_por_mes():
             equipes_str = [str(e).strip() for e in av_ref.equipe_alocada if e]
             if equipe_filtro not in equipes_str:
                 continue
-        v_assid = _valor_por_tipo(av.avaliacao, 'Assiduidade') if av else None
+
+        faltas_rec = assid_mes_map.get(c.id)
+        assid_pct = assiduidade_pct_por_faltas(faltas_rec) if faltas_rec is not None else None
+
+        if av and assid_pct is not None:
+            v_assid = assid_pct / 10.0
+            nota = nota_media_com_assiduidade(av.avaliacao, assid_pct)
+        elif av:
+            v_assid = _valor_por_tipo(av.avaliacao, 'Assiduidade')
+            nota = av.nota_media_avaliacao()
+        else:
+            v_assid = None
+            nota = None
+
         v_zero = _valor_por_tipo(av.avaliacao, 'Zero Acidente') if av else None
         v_seg = _valor_por_tipo(av.avaliacao, 'Segurança, Limpeza, Organização') if av else None
         v_prazo = _valor_por_tipo(av.avaliacao, 'Prazo') if av else None
-        nota = av.nota_media_avaliacao() if av else None
         total_pct = f'{(nota / 10.0) * 100:.1f}%' if nota is not None else None
         cpf_dig = re.sub(r'\D', '', str(c.cpf or '')) if c.cpf else ''
         secao_efetivo = cpf_to_secao.get(cpf_dig, '') if len(cpf_dig) == 11 else ''
@@ -274,6 +317,7 @@ def avaliacoes_por_mes():
             'modelo_plr_id': av.PlrModelo_id if av else (av_ref.PlrModelo_id if av_ref else None),
             'equipe_alocada': (', '.join(av.equipe_alocada) if av and av.equipe_alocada else equipe_str) if (av or equipe_str) else '',
             'assiduidade': v_assid,
+            'assiduidade_faltas': int(faltas_rec) if faltas_rec is not None else None,
             'zero_acidente': v_zero,
             'seguranca': v_seg,
             'prazo': v_prazo,

@@ -1,5 +1,84 @@
+<style>
+    .editar-eq-foto-actions {
+        display: flex;
+        gap: .5rem;
+        flex-wrap: wrap;
+    }
+    .editar-eq-foto-actions .btn {
+        flex: 1 1 auto;
+        min-width: 120px;
+    }
+    .editar-eq-preview-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+        gap: .5rem;
+    }
+    .editar-eq-preview-item {
+        position: relative;
+        aspect-ratio: 1;
+        border-radius: .375rem;
+        overflow: hidden;
+        border: 1px solid var(--bs-border-color);
+    }
+    .editar-eq-preview-item img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+    .editar-eq-preview-item .badge-remove {
+        position: absolute;
+        top: 2px;
+        right: 2px;
+        cursor: pointer;
+        font-size: .7rem;
+        line-height: 1;
+        padding: .25em .4em;
+        z-index: 2;
+    }
+    .editar-eq-foto-atual-card {
+        display: flex;
+        align-items: center;
+        gap: .75rem;
+        padding: .5rem;
+        border-radius: .375rem;
+        background: var(--bs-light);
+        border: 1px solid var(--bs-border-color);
+    }
+    .editar-eq-foto-atual-card img {
+        width: 64px;
+        height: 64px;
+        object-fit: cover;
+        border-radius: .375rem;
+        flex-shrink: 0;
+    }
+    @media (max-width: 767.98px) {
+        #editarEquipamentoModal .modal-body {
+            padding: .75rem;
+        }
+        #editarEquipamentoModal .form-control,
+        #editarEquipamentoModal .form-select {
+            font-size: 1rem;
+            min-height: 44px;
+        }
+        #editarEquipamentoModal .btn {
+            min-height: 44px;
+            font-size: 1rem;
+        }
+        #editarEquipamentoModal .modal-footer .btn {
+            flex: 1;
+        }
+        .editar-eq-foto-atual-card img {
+            width: 56px;
+            height: 56px;
+        }
+        .editar-eq-preview-grid {
+            grid-template-columns: repeat(auto-fill, minmax(70px, 1fr));
+        }
+    }
+</style>
+
 <div class="modal fade" id="editarEquipamentoModal" tabindex="-1" aria-labelledby="editarEquipamentoModalLabel" aria-hidden="true">
-    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+    <div class="modal-dialog modal-lg modal-fullscreen-md-down modal-dialog-scrollable">
         <div class="modal-content">
             <div class="modal-header bg-primary text-white">
                 <h5 class="modal-title" id="editarEquipamentoModalLabel">Editar Equipamento</h5>
@@ -15,10 +94,10 @@
                     </div>
                     <div id="editarEquipamentoFormFields" style="display: none;">
                         <div class="row mb-3">
-                            <div class="col-md-6">
+                            <div class="col-md-6 mb-3 mb-md-0">
                                 <label for="editar_eq_nome" class="form-label">Nome *</label>
                                 <div class="equipamento-busca-material-wrap">
-                                    <input type="text" class="form-control equipamento-busca-material-input" id="editar_eq_nome" name="nome" required autocomplete="off" placeholder="Digite para buscar material (Equipamento/Ferramenta)" data-busca-url="{{ url_for('equipamento.busca_materiais_equipamento') }}">
+                                    <input type="text" class="form-control equipamento-busca-material-input" id="editar_eq_nome" name="nome" required autocomplete="off" placeholder="Digite para buscar material" data-busca-url="{{ url_for('equipamento.busca_materiais_equipamento') }}">
                                     <div class="invalid-feedback">Informe o nome do equipamento.</div>
                                     <div class="equipamento-busca-material-dropdown list-group shadow-sm d-none" role="listbox" aria-label="Materiais sugeridos"></div>
                                 </div>
@@ -51,7 +130,7 @@
                             </div>
                         </div>
                         <div class="row mb-3">
-                            <div class="col-md-6">
+                            <div class="col-md-6 mb-3 mb-md-0">
                                 <label for="editar_eq_tipo" class="form-label">Tipo *</label>
                                 <select class="form-select" id="editar_eq_tipo" name="tipo" required>
                                     <option value="">Selecione...</option>
@@ -70,7 +149,7 @@
                             </div>
                         </div>
                         <div class="row mb-3">
-                            <div class="col-md-6">
+                            <div class="col-md-6 mb-3 mb-md-0">
                                 <label for="editar_eq_modelo" class="form-label">Modelo</label>
                                 <input type="text" class="form-control" id="editar_eq_modelo" name="modelo">
                             </div>
@@ -80,7 +159,7 @@
                             </div>
                         </div>
                         <div class="row mb-3">
-                            <div class="col-md-6">
+                            <div class="col-md-6 mb-3 mb-md-0">
                                 <label for="editar_eq_nota_fiscal_id" class="form-label">Nota fiscal</label>
                                 <select class="form-select equipamento-select-nota-fiscal" id="editar_eq_nota_fiscal_id" name="nota_fiscal_id" data-busca-url="{{ url_for('equipamento.busca_notas_fiscais_equipamento') }}">
                                     <option value=""></option>
@@ -93,7 +172,7 @@
                             </div>
                         </div>
                         <div class="row mb-3">
-                            <div class="col-md-6">
+                            <div class="col-md-6 mb-3 mb-md-0">
                                 <label for="editar_eq_status" class="form-label">Status *</label>
                                 <select class="form-select" id="editar_eq_status" name="status" required>
                                     <option value="">Selecione...</option>
@@ -103,10 +182,28 @@
                                 </select>
                             </div>
                             <div class="col-md-6">
-                                <label for="editar_eq_fotos" class="form-label">Novas fotos</label>
-                                <input type="file" class="form-control" id="editar_eq_fotos" name="fotos" accept="image/jpeg,image/png,image/webp,image/gif" multiple>
-                                <div class="form-text">JPEG, PNG, WebP ou GIF. Múltiplas seleções.</div>
+                                <label class="form-label">Novas fotos</label>
+                                <input type="file" class="d-none" id="editar_eq_fotos" name="fotos" accept="image/jpeg,image/png,image/webp,image/gif" multiple>
+                                <input type="file" class="d-none" id="editar_eq_camera" accept="image/jpeg,image/png" capture="environment">
+                                <div class="editar-eq-foto-actions">
+                                    <button type="button" class="btn btn-outline-secondary" id="btnEditarEqGaleria">
+                                        <i class="fas fa-images me-1"></i> Galeria
+                                    </button>
+                                    <button type="button" class="btn btn-outline-primary" id="btnEditarEqCamera">
+                                        <i class="fas fa-camera me-1"></i> Tirar Foto
+                                    </button>
+                                </div>
+                                <div class="form-text mt-1">JPEG, PNG, WebP ou GIF. Múltiplas seleções.</div>
                             </div>
+                        </div>
+                        <div class="mb-3" id="editar_eq_preview_wrap" style="display:none;">
+                            <label class="form-label d-flex justify-content-between align-items-center">
+                                <span>Fotos selecionadas</span>
+                                <button type="button" class="btn btn-sm btn-outline-danger" id="btnEditarEqLimparNovas">
+                                    <i class="fas fa-trash me-1"></i> Limpar
+                                </button>
+                            </label>
+                            <div id="editar_eq_preview_grid" class="editar-eq-preview-grid"></div>
                         </div>
                         <div class="mb-3">
                             <label class="form-label">Fotos atuais</label>
@@ -121,13 +218,16 @@
                     </div>
                 </div>
             </form>
-            <div class="modal-footer flex-shrink-0 border-top">
+            <div class="modal-footer flex-shrink-0 border-top gap-2">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-                <button type="submit" class="btn btn-primary" id="btnSalvarEditarEquipamento" form="formEditarEquipamento">Atualizar</button>
+                <button type="submit" class="btn btn-primary" id="btnSalvarEditarEquipamento" form="formEditarEquipamento">
+                    <i class="fas fa-check me-1"></i> Atualizar
+                </button>
             </div>
         </div>
     </div>
 </div>
+
 <script>
 (function () {
     document.addEventListener('DOMContentLoaded', function () {
@@ -140,14 +240,109 @@
         var modal = bootstrap.Modal.getOrCreateInstance(modalEl);
         var tplEditar = "{{ url_for('equipamento.editar', id=999001) }}";
 
+        var inputFotos = document.getElementById('editar_eq_fotos');
+        var inputCamera = document.getElementById('editar_eq_camera');
+        var btnGaleria = document.getElementById('btnEditarEqGaleria');
+        var btnCamera = document.getElementById('btnEditarEqCamera');
+        var btnLimpar = document.getElementById('btnEditarEqLimparNovas');
+        var previewWrap = document.getElementById('editar_eq_preview_wrap');
+        var previewGrid = document.getElementById('editar_eq_preview_grid');
+
+        var fotosAcumuladas = new DataTransfer();
+
         function urlEditar(id) {
             return tplEditar.split('999001').join(String(id));
         }
 
+        function atualizarPreview() {
+            if (!previewGrid || !previewWrap) return;
+            previewGrid.innerHTML = '';
+            var files = fotosAcumuladas.files;
+            if (!files.length) {
+                previewWrap.style.display = 'none';
+                return;
+            }
+            previewWrap.style.display = 'block';
+            Array.from(files).forEach(function (file, idx) {
+                var item = document.createElement('div');
+                item.className = 'editar-eq-preview-item';
+                var img = document.createElement('img');
+                img.src = URL.createObjectURL(file);
+                img.alt = file.name;
+                img.onload = function () { URL.revokeObjectURL(this.src); };
+                var badge = document.createElement('span');
+                badge.className = 'badge bg-danger badge-remove';
+                badge.innerHTML = '<i class="fas fa-times"></i>';
+                badge.title = 'Remover';
+                badge.dataset.idx = idx;
+                badge.addEventListener('click', function () {
+                    removerFotoNova(parseInt(this.dataset.idx, 10));
+                });
+                item.appendChild(img);
+                item.appendChild(badge);
+                previewGrid.appendChild(item);
+            });
+        }
+
+        function removerFotoNova(idx) {
+            var novo = new DataTransfer();
+            var files = fotosAcumuladas.files;
+            for (var i = 0; i < files.length; i++) {
+                if (i !== idx) novo.items.add(files[i]);
+            }
+            fotosAcumuladas = novo;
+            inputFotos.files = fotosAcumuladas.files;
+            atualizarPreview();
+        }
+
+        function limparFotosNovas() {
+            fotosAcumuladas = new DataTransfer();
+            inputFotos.files = fotosAcumuladas.files;
+            atualizarPreview();
+        }
+
+        if (btnGaleria) {
+            btnGaleria.addEventListener('click', function () {
+                inputFotos.click();
+            });
+        }
+
+        if (btnCamera) {
+            btnCamera.addEventListener('click', function () {
+                inputCamera.click();
+            });
+        }
+
+        if (inputFotos) {
+            inputFotos.addEventListener('change', function () {
+                var files = this.files;
+                for (var i = 0; i < files.length; i++) {
+                    fotosAcumuladas.items.add(files[i]);
+                }
+                this.files = fotosAcumuladas.files;
+                atualizarPreview();
+            });
+        }
+
+        if (inputCamera) {
+            inputCamera.addEventListener('change', function () {
+                var files = this.files;
+                for (var i = 0; i < files.length; i++) {
+                    fotosAcumuladas.items.add(files[i]);
+                }
+                inputFotos.files = fotosAcumuladas.files;
+                atualizarPreview();
+                this.value = '';
+            });
+        }
+
+        if (btnLimpar) {
+            btnLimpar.addEventListener('click', limparFotosNovas);
+        }
+
         function renderFotosAtuais(fotos) {
             var fc = document.getElementById('editar_eq_fotos_container');
-            var fi = document.getElementById('editar_eq_fotos');
-            if (fi) fi.value = '';
+            limparFotosNovas();
             if (!fc) return;
             fc.innerHTML = '';
             if (!fotos || !fotos.length) {
@@ -157,15 +352,15 @@
             }
             fc.classList.remove('text-muted');
             fotos.forEach(function (f) {
-                var row = document.createElement('div');
-                row.className = 'd-flex flex-wrap align-items-center gap-2 mb-2 pb-2 border-bottom';
-                row.innerHTML =
-                    '<img src="' + f.preview_url + '" alt="" class="rounded border" style="height:56px;width:56px;object-fit:cover">' +
-                    '<span class="small flex-grow-1 text-truncate" style="min-width:120px" title="' + (f.filename || '') + '">' + (f.filename || '') + '</span>' +
-                    '<div class="form-check mb-0">' +
-                    '<input class="form-check-input" type="checkbox" name="remover_foto" value="' + f.id + '" id="rm_foto_' + f.id + '">' +
-                    '<label class="form-check-label small" for="rm_foto_' + f.id + '">Remover</label></div>';
-                fc.appendChild(row);
+                var card = document.createElement('div');
+                card.className = 'editar-eq-foto-atual-card mb-2';
+                card.innerHTML =
+                    '<img src="' + f.preview_url + '" alt="' + (f.filename || '') + '">' +
+                    '<span class="small flex-grow-1 text-truncate" title="' + (f.filename || '') + '">' + (f.filename || '') + '</span>' +
+                    '<div class="form-check form-switch mb-0">' +
+                    '<input class="form-check-input" type="checkbox" role="switch" name="remover_foto" value="' + f.id + '" id="rm_foto_' + f.id + '">' +
+                    '<label class="form-check-label small text-danger" for="rm_foto_' + f.id + '">Remover</label></div>';
+                fc.appendChild(card);
             });
         }
 
@@ -294,7 +489,7 @@
                 .finally(function () {
                     if (btnSalvar) {
                         btnSalvar.disabled = false;
-                        btnSalvar.innerHTML = 'Atualizar';
+                        btnSalvar.innerHTML = '<i class="fas fa-check me-1"></i> Atualizar';
                     }
                 });
         });
@@ -302,6 +497,7 @@
         modalEl.addEventListener('hidden.bs.modal', function () {
             if (fields) fields.style.display = 'none';
             if (loading) loading.style.display = 'block';
+            limparFotosNovas();
             var $mat = window.jQuery && window.jQuery('#editar_eq_material_select');
             if ($mat && $mat.length && $mat.data('select2')) {
                 $mat.empty().append(new Option('', '', false, false)).val(null).trigger('change');
