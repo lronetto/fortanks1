@@ -294,7 +294,7 @@ def efetivo_importar():
             except OSError:
                 pass
     next_url = (request.form.get('next') or '').strip()
-    if next_url:
+    if next_url and next_url.startswith('/') and not next_url.startswith('//'):
         return redirect(next_url)
     return redirect(url_for('plr.avaliacoes_index'))
 

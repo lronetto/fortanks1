@@ -1,0 +1,51 @@
+======================================================================
+  RELATÓRIO DE VULNERABILIDADES - FORTANKS
+======================================================================
+  URL Alvo: https://sfortanks.com:8043
+  Início:   2026-04-09 15:07:46
+  Fim:      2026-04-09 15:07:46
+  Total:    5 vulnerabilidades encontradas
+
+  RESUMO POR SEVERIDADE:
+    [!!!] CRITICA: 0
+    [!! ] ALTA: 3
+    [!  ] MEDIA: 2
+    [.  ] BAIXA: 0
+    [   ] INFO: 0
+
+----------------------------------------------------------------------
+
+  [ALTA] #1: DEBUG habilitado na configuração base
+  Categoria:     Configuração
+  Localização:   config/config.py:11
+  Descrição:     DEBUG=True na classe Config base. Se ProductionConfig não sobrescrever, mensagens de erro detalhadas com stacktrace serão expostas em produção.
+  Recomendação:  Definir DEBUG=False na Config base. Usar DEBUG=True apenas em DevelopmentConfig.
+  ------------------------------------------------------------------
+
+  [MEDIA] #2: SESSION_COOKIE_SECURE desativado na configuração base
+  Categoria:     Sessão
+  Localização:   config/config.py:36
+  Descrição:     Cookies de sessão podem ser transmitidos via HTTP não criptografado.
+  Recomendação:  Como o sistema usa HTTPS, garantir que SESSION_COOKIE_SECURE=True em produção.
+  ------------------------------------------------------------------
+
+  [MEDIA] #3: Rotas isentas de proteção CSRF
+  Categoria:     CSRF
+  Localização:   app.py:133-144
+  Descrição:     Existem rotas marcadas como csrf.exempt (/concretagens/api/tanques/pecas, /concretagens/api/concretagem). Ataques CSRF podem modificar dados nessas rotas.
+  Recomendação:  Reavaliar se a isenção é necessária. Usar tokens CSRF em chamadas AJAX via header.
+  ------------------------------------------------------------------
+
+  [ALTA] #4: Sistema de permissões granulares desativado
+  Categoria:     Autorização
+  Localização:   app.py:257-260
+  Descrição:     O verificar_permissao() no before_request está desativado (if False:). Qualquer usuário autenticado pode acessar qualquer funcionalidade.
+  Recomendação:  Ativar e configurar o sistema de permissões granulares.
+  ------------------------------------------------------------------
+
+  [ALTA] #5: Ausência de rate limiting
+  Categoria:     Autenticação
+  Localização:   app.py / config/config.py
+  Descrição:     Não há rate limiting implementado. Ataques de força bruta no login, enumeração de usuários e DoS ficam facilitados.
+  Recomendação:  Implementar Flask-Limiter. Exemplo: limiter.limit('5/minute') na rota de login.
+  ------------------------------------------------------------------

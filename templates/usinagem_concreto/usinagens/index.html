@@ -223,7 +223,7 @@
 {% block scripts %}
 <script>
     // Inicializar variáveis JavaScript a partir do JSON passado pelo backend
-    var tracosData = JSON.parse('{{ tracos_json|safe }}');
+    var tracosData = {{ tracos_json|tojson }};
     var table;
 
     var filtroDataInicial = "{{ filtro_data_inicial|default('') }}";

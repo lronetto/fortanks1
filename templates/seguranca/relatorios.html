@@ -207,7 +207,7 @@
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     // Dados para gráficos
-    const dadosMeses = JSON.parse('{{ dados_meses|safe }}');
+    const dadosMeses = {{ dados_meses|tojson }};
 
     document.addEventListener('DOMContentLoaded', function() {
         // Gráfico de Entregas e Devoluções por Mês

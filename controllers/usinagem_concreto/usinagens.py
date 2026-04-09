@@ -19,7 +19,6 @@ from models.estoque import EstoqueMovimentacoes
 from datetime import datetime
 from decimal import Decimal
 import json
-from markupsafe import Markup
 import pandas as pd
 import io
 from . import usinagem_concreto
@@ -603,7 +602,7 @@ def listar_usinagens():
         'usinagem_concreto/usinagens/index.html', 
         now=datetime.now().strftime('%Y-%m-%dT%H:%M'),
         tracos=tracos, 
-        tracos_json=Markup(json.dumps(tracos_data)),
+        tracos_json=tracos_data,
         filtro_data_inicial=data_inicial_str if data_inicial else '',
         filtro_data_final=data_final_str if data_final else '',
         filtro_produzido=filtro_produzido

@@ -269,7 +269,7 @@
         var table;
         var todosContratos = [];
         var todosTanques = [];
-        var filtrosIniciais = {{ filtros_iniciais_json|safe }};
+        var filtrosIniciais = {{ filtros_iniciais_json|tojson }};
         
         // Função para carregar dados de filtros
         function carregarDadosFiltros() {

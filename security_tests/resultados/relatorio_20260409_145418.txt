@@ -1,0 +1,198 @@
+======================================================================
+  RELATÓRIO DE VULNERABILIDADES - FORTANKS
+======================================================================
+  URL Alvo: https://sfortanks.com:8043
+  Início:   2026-04-09 14:54:18
+  Fim:      2026-04-09 14:54:18
+  Total:    26 vulnerabilidades encontradas
+
+  RESUMO POR SEVERIDADE:
+    [!!!] CRITICA: 3
+    [!! ] ALTA: 9
+    [!  ] MEDIA: 11
+    [.  ] BAIXA: 3
+    [   ] INFO: 0
+
+----------------------------------------------------------------------
+
+  [CRITICA] #1: SECRET_KEY com valor padrão hardcoded
+  Categoria:     Configuração
+  Localização:   config/config.py:10
+  Descrição:     A SECRET_KEY possui um fallback hardcoded 'chave-secreta-padrao-deve-ser-alterada'. Se a variável de ambiente não estiver definida, qualquer atacante pode forjar cookies de sessão.
+  Recomendação:  Remover o fallback e exigir que SECRET_KEY seja definida via variável de ambiente. Gerar uma chave com: python -c "import secrets; print(secrets.token_hex(32))"
+  ------------------------------------------------------------------
+
+  [ALTA] #2: DEBUG habilitado na configuração base
+  Categoria:     Configuração
+  Localização:   config/config.py:11
+  Descrição:     DEBUG=True na classe Config base. Se ProductionConfig não sobrescrever, mensagens de erro detalhadas com stacktrace serão expostas em produção.
+  Recomendação:  Definir DEBUG=False na Config base. Usar DEBUG=True apenas em DevelopmentConfig.
+  ------------------------------------------------------------------
+
+  [MEDIA] #3: SESSION_COOKIE_SECURE desativado na configuração base
+  Categoria:     Sessão
+  Localização:   config/config.py:36
+  Descrição:     Cookies de sessão podem ser transmitidos via HTTP não criptografado.
+  Recomendação:  Como o sistema usa HTTPS, garantir que SESSION_COOKIE_SECURE=True em produção.
+  ------------------------------------------------------------------
+
+  [MEDIA] #4: SESSION_COOKIE_SAMESITE não configurado
+  Categoria:     Sessão
+  Localização:   config/config.py
+  Descrição:     Sem SameSite nos cookies, o navegador pode enviar cookies em requisições cross-site.
+  Recomendação:  Adicionar SESSION_COOKIE_SAMESITE = 'Lax' na configuração.
+  ------------------------------------------------------------------
+
+  [BAIXA] #5: Limite de upload muito alto (150MB)
+  Categoria:     Configuração
+  Localização:   config/config.py:29
+  Descrição:     O limite de 150MB para uploads pode facilitar ataques de DoS por esgotamento de recursos.
+  Recomendação:  Avaliar se 150MB é realmente necessário. Reduzir para o mínimo necessário.
+  ------------------------------------------------------------------
+
+  [BAIXA] #6: Tamanho mínimo de senha pode ser insuficiente
+  Categoria:     Autenticação
+  Localização:   config/config.py:35
+  Descrição:     Senhas de 8 caracteres sem exigência de complexidade são vulneráveis a ataques de dicionário.
+  Recomendação:  Aumentar para 12+ caracteres e exigir complexidade (maiúsculas, números, especiais).
+  ------------------------------------------------------------------
+
+  [CRITICA] #7: Possível SQL Injection via string interpolation
+  Categoria:     SQL Injection
+  Localização:   controllers\admin\main.py:41
+  Descrição:     Uso de f-string ou formatação % dentro de text(), permitindo injeção SQL: count_query = text(f"SELECT COUNT(*) as total FROM `{tabela}`")
+  Recomendação:  Usar parâmetros nomeados: text('SELECT ... WHERE id = :id'), {{'id': valor}}
+  ------------------------------------------------------------------
+
+  [ALTA] #8: Open Redirect na rota de login
+  Categoria:     Open Redirect
+  Localização:   controllers/auth_controller.py:54-56
+  Descrição:     O parâmetro 'next' no login é usado em redirect() sem validação. Um atacante pode redirecionar: /login?next=https://evil.com
+  Recomendação:  Validar que a URL é relativa e pertence ao mesmo domínio usando url_has_allowed_host_and_scheme() do Werkzeug.
+  ------------------------------------------------------------------
+
+  [MEDIA] #9: Uso do filtro |safe no template (potencial XSS)
+  Categoria:     XSS
+  Localização:   templates\pecas\index.html:272
+  Descrição:     O filtro |safe desabilita o auto-escape do Jinja2: var filtrosIniciais = {{ filtros_iniciais_json|safe }};
+  Recomendação:  Verificar se os dados passados para |safe são sanitizados no backend. Usar bleach.clean() se necessário.
+  ------------------------------------------------------------------
+
+  [MEDIA] #10: Uso do filtro |safe no template (potencial XSS)
+  Categoria:     XSS
+  Localização:   templates\seguranca\relatorios.html:210
+  Descrição:     O filtro |safe desabilita o auto-escape do Jinja2: const dadosMeses = JSON.parse('{{ dados_meses|safe }}');
+  Recomendação:  Verificar se os dados passados para |safe são sanitizados no backend. Usar bleach.clean() se necessário.
+  ------------------------------------------------------------------
+
+  [MEDIA] #11: Uso do filtro |safe no template (potencial XSS)
+  Categoria:     XSS
+  Localização:   templates\usinagem_concreto\usinagens\index.html:226
+  Descrição:     O filtro |safe desabilita o auto-escape do Jinja2: var tracosData = JSON.parse('{{ tracos_json|safe }}');
+  Recomendação:  Verificar se os dados passados para |safe são sanitizados no backend. Usar bleach.clean() se necessário.
+  ------------------------------------------------------------------
+
+  [MEDIA] #12: Uso de Markup() no controller (potencial XSS)
+  Categoria:     XSS
+  Localização:   controllers\reembolso_controller.py:1355
+  Descrição:     Markup() marca string como segura, bypassando auto-escape.
+  Recomendação:  Sanitizar o conteúdo antes de wrappear com Markup().
+  ------------------------------------------------------------------
+
+  [MEDIA] #13: Uso de Markup() no controller (potencial XSS)
+  Categoria:     XSS
+  Localização:   controllers\reembolso_controller.py:1373
+  Descrição:     Markup() marca string como segura, bypassando auto-escape.
+  Recomendação:  Sanitizar o conteúdo antes de wrappear com Markup().
+  ------------------------------------------------------------------
+
+  [MEDIA] #14: Uso de Markup() no controller (potencial XSS)
+  Categoria:     XSS
+  Localização:   controllers\usinagem_concreto\usinagens.py:606
+  Descrição:     Markup() marca string como segura, bypassando auto-escape.
+  Recomendação:  Sanitizar o conteúdo antes de wrappear com Markup().
+  ------------------------------------------------------------------
+
+  [CRITICA] #15: Senha do usuário impressa em logs/console
+  Categoria:     Vazamento de Informação
+  Localização:   controllers/auth_controller.py:37
+  Descrição:     A rota de login imprime email e senha em texto claro via print(). Isso expõe credenciais nos logs do servidor.
+  Recomendação:  Remover imediatamente o print() que expõe credenciais.
+  ------------------------------------------------------------------
+
+  [ALTA] #16: URI do banco de dados impressa no console
+  Categoria:     Vazamento de Informação
+  Localização:   app.py:402
+  Descrição:     A string de conexão do banco (com credenciais) é impressa na inicialização.
+  Recomendação:  Remover o print(os.getenv('DATABASE_URI')).
+  ------------------------------------------------------------------
+
+  [ALTA] #17: Credenciais de banco hardcoded no código-fonte
+  Categoria:     Vazamento de Informação
+  Localização:   config/config.py:17
+  Descrição:     String de conexão com IP interno e padrão de senha no código: mysql+pymysql://remote:%s@192.168.8.10:3306/sfortanks...
+  Recomendação:  Usar exclusivamente variáveis de ambiente para credenciais.
+  ------------------------------------------------------------------
+
+  [ALTA] #18: CORS configurado para aceitar qualquer origem
+  Categoria:     CORS
+  Localização:   app.py:125
+  Descrição:     CORS(app) sem restrição de origens permite que qualquer site faça requisições ao sistema, podendo vazar dados se combinado com credenciais.
+  Recomendação:  Restringir origens: CORS(app, origins=['https://sfortanks.com:8043'])
+  ------------------------------------------------------------------
+
+  [MEDIA] #19: Rotas isentas de proteção CSRF
+  Categoria:     CSRF
+  Localização:   app.py:133-144
+  Descrição:     Existem rotas marcadas como csrf.exempt (/concretagens/api/tanques/pecas, /concretagens/api/concretagem). Ataques CSRF podem modificar dados nessas rotas.
+  Recomendação:  Reavaliar se a isenção é necessária. Usar tokens CSRF em chamadas AJAX via header.
+  ------------------------------------------------------------------
+
+  [ALTA] #20: Upload sem validação de tipo de arquivo
+  Categoria:     Upload
+  Localização:   controllers/upload_controller.py
+  Descrição:     O controller de upload não valida extensões de arquivo permitidas. Arquivos maliciosos (.py, .php, .exe) podem ser enviados.
+  Recomendação:  Implementar whitelist de extensões permitidas e validar MIME type real.
+  ------------------------------------------------------------------
+
+  [MEDIA] #21: Upload sem sanitização do nome do arquivo
+  Categoria:     Upload
+  Localização:   controllers/upload_controller.py
+  Descrição:     Não há uso de secure_filename() do Werkzeug no controller de upload.
+  Recomendação:  Usar secure_filename() para sanitizar nomes de arquivos enviados.
+  ------------------------------------------------------------------
+
+  [ALTA] #22: Sistema de permissões granulares desativado
+  Categoria:     Autorização
+  Localização:   app.py:257-260
+  Descrição:     O verificar_permissao() no before_request está desativado (if False:). Qualquer usuário autenticado pode acessar qualquer funcionalidade.
+  Recomendação:  Ativar e configurar o sistema de permissões granulares.
+  ------------------------------------------------------------------
+
+  [MEDIA] #23: SSLify comentado/desativado
+  Categoria:     Configuração
+  Localização:   app.py:89
+  Descrição:     A forçar HTTPS via SSLify está comentada. Requisições HTTP podem ser aceitas sem redirecionamento.
+  Recomendação:  Habilitar SSLify em produção ou garantir redirecionamento HTTPS no proxy reverso.
+  ------------------------------------------------------------------
+
+  [ALTA] #24: Ausência de rate limiting
+  Categoria:     Autenticação
+  Localização:   app.py / config/config.py
+  Descrição:     Não há rate limiting implementado. Ataques de força bruta no login, enumeração de usuários e DoS ficam facilitados.
+  Recomendação:  Implementar Flask-Limiter. Exemplo: limiter.limit('5/minute') na rota de login.
+  ------------------------------------------------------------------
+
+  [ALTA] #25: Sem bloqueio de conta após tentativas falhas
+  Categoria:     Autenticação
+  Localização:   controllers/auth_controller.py
+  Descrição:     A rota de login não bloqueia após tentativas falhas consecutivas.
+  Recomendação:  Implementar bloqueio temporário após 5 tentativas falhas (ex: 15 minutos).
+  ------------------------------------------------------------------
+
+  [BAIXA] #26: REMEMBER_COOKIE_HTTPONLY não configurado
+  Categoria:     Sessão
+  Localização:   config/config.py
+  Descrição:     Se 'remember me' for usado, o cookie pode ser acessível via JavaScript.
+  Recomendação:  Adicionar REMEMBER_COOKIE_HTTPONLY = True.
+  ------------------------------------------------------------------

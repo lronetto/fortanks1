@@ -86,7 +86,22 @@ if not os.path.exists(log_dir):
 app = Flask(__name__, template_folder='templates', static_folder='static')
 
 
-#sslify = SSLify(app)
+if not app.config.get('DEBUG'):
+    sslify = SSLify(app)
+
+
+@app.after_request
+def adicionar_headers_seguranca(response):
+    response.headers['X-Content-Type-Options'] = 'nosniff'
+    response.headers['X-Frame-Options'] = 'SAMEORIGIN'
+    response.headers['X-XSS-Protection'] = '1; mode=block'
+    response.headers['Referrer-Policy'] = 'strict-origin-when-cross-origin'
+    response.headers['Permissions-Policy'] = 'geolocation=(), microphone=(), camera=()'
+    if not app.config.get('DEBUG'):
+        response.headers['Strict-Transport-Security'] = 'max-age=31536000; includeSubDomains'
+    return response
+
+
 # Configurar o logger da aplicação
 if False:
     # Configurar o handler para arquivo
@@ -122,8 +137,16 @@ logger.info("Iniciando aplicação Flask...")
 logger.info("Criando instância da aplicação Flask...")
 
 app.config.from_object(Config)
-CORS(app)  # Habilitar CORS para todas as rotas
+CORS(app, origins=[
+    'https://sfortanks.com:8043',
+    'http://localhost:5000',
+    'http://127.0.0.1:5000',
+])
 mail = Mail(app)
+
+from extensions import limiter
+limiter.init_app(app)
+logger.info("Rate Limiter inicializado...")
 
 # Inicializar proteção CSRF
 csrf = CSRFProtect(app)
@@ -148,6 +171,15 @@ def csrf_exempt_rule():
 def handle_csrf_error(e):
     logger.error(f"Erro CSRF: {str(e)}")
     return jsonify({"error": "CSRF token inválido ou ausente", "message": str(e)}), 400
+
+# Manipulador de erro para Rate Limit (429)
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    logger.warning(f"Rate limit excedido: {request.remote_addr} -> {request.path}")
+    if request.headers.get('X-Requested-With') == 'XMLHttpRequest':
+        return jsonify({"error": "Muitas requisições. Tente novamente em alguns minutos."}), 429
+    flash('Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.', 'danger')
+    return render_template('auth/login.html'), 429
 
 # Inicializar os componentes
 logger.info("Inicializando SQLAlchemy...")
@@ -399,7 +431,6 @@ def handle_exception(e):
 # Inicializa o banco de dados quando a aplicação é iniciada
 with app.app_context():
     logger.info("Inicializando banco de dados...")
-    print(os.getenv('DATABASE_URI'))
     try:
         init_db()
         logger.info("Banco de dados inicializado com sucesso!")

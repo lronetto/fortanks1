@@ -1,8 +1,17 @@
 from io import BytesIO
-from flask import Blueprint, render_template, request, send_file
+from flask import Blueprint, render_template, request, send_file, current_app, abort
+from werkzeug.utils import secure_filename
 from models.upload import Upload
 
 upload_bp = Blueprint('uploads', __name__)
+
+
+def extensao_permitida(filename):
+    if '.' not in filename:
+        return False
+    ext = filename.rsplit('.', 1)[1].lower()
+    return ext in current_app.config.get('ALLOWED_EXTENSIONS', set())
+
 
 @upload_bp.route('/', defaults={'upload_id': None}, methods=['GET'])
 def index():
@@ -19,8 +28,11 @@ def index():
         query = query.filter(Upload.tipo == tipo)
     uploads = query.order_by(Upload.uploaded_at.desc()).all()
 
-    return render_template('uploads_list.html', uploads=uploads) 
+    return render_template('uploads_list.html', uploads=uploads)
+
+
 @upload_bp.route('/download/<int:upload_id>', methods=['GET'])
 def download_upload(upload_id):
     upload = Upload.query.get_or_404(upload_id)
-    return send_file(BytesIO(upload.blob), as_attachment=True, download_name=upload.filename)   
+    nome_seguro = secure_filename(upload.filename) or 'download'
+    return send_file(BytesIO(upload.blob), as_attachment=True, download_name=nome_seguro)

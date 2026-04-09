@@ -1,0 +1,93 @@
+======================================================================
+  RELATÓRIO DE VULNERABILIDADES - FORTANKS
+======================================================================
+  URL Alvo: https://sfortanks.com:8043
+  Início:   2026-04-09 15:05:41
+  Fim:      2026-04-09 15:05:42
+  Total:    11 vulnerabilidades encontradas
+
+  RESUMO POR SEVERIDADE:
+    [!!!] CRITICA: 0
+    [!! ] ALTA: 3
+    [!  ] MEDIA: 8
+    [.  ] BAIXA: 0
+    [   ] INFO: 0
+
+----------------------------------------------------------------------
+
+  [ALTA] #1: DEBUG habilitado na configuração base
+  Categoria:     Configuração
+  Localização:   config/config.py:11
+  Descrição:     DEBUG=True na classe Config base. Se ProductionConfig não sobrescrever, mensagens de erro detalhadas com stacktrace serão expostas em produção.
+  Recomendação:  Definir DEBUG=False na Config base. Usar DEBUG=True apenas em DevelopmentConfig.
+  ------------------------------------------------------------------
+
+  [MEDIA] #2: SESSION_COOKIE_SECURE desativado na configuração base
+  Categoria:     Sessão
+  Localização:   config/config.py:36
+  Descrição:     Cookies de sessão podem ser transmitidos via HTTP não criptografado.
+  Recomendação:  Como o sistema usa HTTPS, garantir que SESSION_COOKIE_SECURE=True em produção.
+  ------------------------------------------------------------------
+
+  [MEDIA] #3: Uso do filtro |safe no template (potencial XSS)
+  Categoria:     XSS
+  Localização:   templates\pecas\index.html:272
+  Descrição:     O filtro |safe desabilita o auto-escape do Jinja2: var filtrosIniciais = {{ filtros_iniciais_json|safe }};
+  Recomendação:  Verificar se os dados passados para |safe são sanitizados no backend. Usar bleach.clean() se necessário.
+  ------------------------------------------------------------------
+
+  [MEDIA] #4: Uso do filtro |safe no template (potencial XSS)
+  Categoria:     XSS
+  Localização:   templates\seguranca\relatorios.html:210
+  Descrição:     O filtro |safe desabilita o auto-escape do Jinja2: const dadosMeses = JSON.parse('{{ dados_meses|safe }}');
+  Recomendação:  Verificar se os dados passados para |safe são sanitizados no backend. Usar bleach.clean() se necessário.
+  ------------------------------------------------------------------
+
+  [MEDIA] #5: Uso do filtro |safe no template (potencial XSS)
+  Categoria:     XSS
+  Localização:   templates\usinagem_concreto\usinagens\index.html:226
+  Descrição:     O filtro |safe desabilita o auto-escape do Jinja2: var tracosData = JSON.parse('{{ tracos_json|safe }}');
+  Recomendação:  Verificar se os dados passados para |safe são sanitizados no backend. Usar bleach.clean() se necessário.
+  ------------------------------------------------------------------
+
+  [MEDIA] #6: Uso de Markup() no controller (potencial XSS)
+  Categoria:     XSS
+  Localização:   controllers\reembolso_controller.py:1355
+  Descrição:     Markup() marca string como segura, bypassando auto-escape.
+  Recomendação:  Sanitizar o conteúdo antes de wrappear com Markup().
+  ------------------------------------------------------------------
+
+  [MEDIA] #7: Uso de Markup() no controller (potencial XSS)
+  Categoria:     XSS
+  Localização:   controllers\reembolso_controller.py:1373
+  Descrição:     Markup() marca string como segura, bypassando auto-escape.
+  Recomendação:  Sanitizar o conteúdo antes de wrappear com Markup().
+  ------------------------------------------------------------------
+
+  [MEDIA] #8: Uso de Markup() no controller (potencial XSS)
+  Categoria:     XSS
+  Localização:   controllers\usinagem_concreto\usinagens.py:606
+  Descrição:     Markup() marca string como segura, bypassando auto-escape.
+  Recomendação:  Sanitizar o conteúdo antes de wrappear com Markup().
+  ------------------------------------------------------------------
+
+  [MEDIA] #9: Rotas isentas de proteção CSRF
+  Categoria:     CSRF
+  Localização:   app.py:133-144
+  Descrição:     Existem rotas marcadas como csrf.exempt (/concretagens/api/tanques/pecas, /concretagens/api/concretagem). Ataques CSRF podem modificar dados nessas rotas.
+  Recomendação:  Reavaliar se a isenção é necessária. Usar tokens CSRF em chamadas AJAX via header.
+  ------------------------------------------------------------------
+
+  [ALTA] #10: Sistema de permissões granulares desativado
+  Categoria:     Autorização
+  Localização:   app.py:257-260
+  Descrição:     O verificar_permissao() no before_request está desativado (if False:). Qualquer usuário autenticado pode acessar qualquer funcionalidade.
+  Recomendação:  Ativar e configurar o sistema de permissões granulares.
+  ------------------------------------------------------------------
+
+  [ALTA] #11: Ausência de rate limiting
+  Categoria:     Autenticação
+  Localização:   app.py / config/config.py
+  Descrição:     Não há rate limiting implementado. Ataques de força bruta no login, enumeração de usuários e DoS ficam facilitados.
+  Recomendação:  Implementar Flask-Limiter. Exemplo: limiter.limit('5/minute') na rota de login.
+  ------------------------------------------------------------------

@@ -1,0 +1,248 @@
+{
+  "url_alvo": "https://sfortanks.com:8043",
+  "inicio": "2026-04-09 14:54:18",
+  "fim": "2026-04-09 14:54:18",
+  "total": 26,
+  "resumo": {
+    "CRITICA": 3,
+    "ALTA": 9,
+    "MEDIA": 11,
+    "BAIXA": 3
+  },
+  "vulnerabilidades": [
+    {
+      "id": 1,
+      "titulo": "SECRET_KEY com valor padrão hardcoded",
+      "severidade": "CRITICA",
+      "categoria": "Configuração",
+      "localizacao": "config/config.py:10",
+      "descricao": "A SECRET_KEY possui um fallback hardcoded 'chave-secreta-padrao-deve-ser-alterada'. Se a variável de ambiente não estiver definida, qualquer atacante pode forjar cookies de sessão.",
+      "recomendacao": "Remover o fallback e exigir que SECRET_KEY seja definida via variável de ambiente. Gerar uma chave com: python -c \"import secrets; print(secrets.token_hex(32))\""
+    },
+    {
+      "id": 2,
+      "titulo": "DEBUG habilitado na configuração base",
+      "severidade": "ALTA",
+      "categoria": "Configuração",
+      "localizacao": "config/config.py:11",
+      "descricao": "DEBUG=True na classe Config base. Se ProductionConfig não sobrescrever, mensagens de erro detalhadas com stacktrace serão expostas em produção.",
+      "recomendacao": "Definir DEBUG=False na Config base. Usar DEBUG=True apenas em DevelopmentConfig."
+    },
+    {
+      "id": 3,
+      "titulo": "SESSION_COOKIE_SECURE desativado na configuração base",
+      "severidade": "MEDIA",
+      "categoria": "Sessão",
+      "localizacao": "config/config.py:36",
+      "descricao": "Cookies de sessão podem ser transmitidos via HTTP não criptografado.",
+      "recomendacao": "Como o sistema usa HTTPS, garantir que SESSION_COOKIE_SECURE=True em produção."
+    },
+    {
+      "id": 4,
+      "titulo": "SESSION_COOKIE_SAMESITE não configurado",
+      "severidade": "MEDIA",
+      "categoria": "Sessão",
+      "localizacao": "config/config.py",
+      "descricao": "Sem SameSite nos cookies, o navegador pode enviar cookies em requisições cross-site.",
+      "recomendacao": "Adicionar SESSION_COOKIE_SAMESITE = 'Lax' na configuração."
+    },
+    {
+      "id": 5,
+      "titulo": "Limite de upload muito alto (150MB)",
+      "severidade": "BAIXA",
+      "categoria": "Configuração",
+      "localizacao": "config/config.py:29",
+      "descricao": "O limite de 150MB para uploads pode facilitar ataques de DoS por esgotamento de recursos.",
+      "recomendacao": "Avaliar se 150MB é realmente necessário. Reduzir para o mínimo necessário."
+    },
+    {
+      "id": 6,
+      "titulo": "Tamanho mínimo de senha pode ser insuficiente",
+      "severidade": "BAIXA",
+      "categoria": "Autenticação",
+      "localizacao": "config/config.py:35",
+      "descricao": "Senhas de 8 caracteres sem exigência de complexidade são vulneráveis a ataques de dicionário.",
+      "recomendacao": "Aumentar para 12+ caracteres e exigir complexidade (maiúsculas, números, especiais)."
+    },
+    {
+      "id": 7,
+      "titulo": "Possível SQL Injection via string interpolation",
+      "severidade": "CRITICA",
+      "categoria": "SQL Injection",
+      "localizacao": "controllers\\admin\\main.py:41",
+      "descricao": "Uso de f-string ou formatação % dentro de text(), permitindo injeção SQL: count_query = text(f\"SELECT COUNT(*) as total FROM `{tabela}`\")",
+      "recomendacao": "Usar parâmetros nomeados: text('SELECT ... WHERE id = :id'), {{'id': valor}}"
+    },
+    {
+      "id": 8,
+      "titulo": "Open Redirect na rota de login",
+      "severidade": "ALTA",
+      "categoria": "Open Redirect",
+      "localizacao": "controllers/auth_controller.py:54-56",
+      "descricao": "O parâmetro 'next' no login é usado em redirect() sem validação. Um atacante pode redirecionar: /login?next=https://evil.com",
+      "recomendacao": "Validar que a URL é relativa e pertence ao mesmo domínio usando url_has_allowed_host_and_scheme() do Werkzeug."
+    },
+    {
+      "id": 9,
+      "titulo": "Uso do filtro |safe no template (potencial XSS)",
+      "severidade": "MEDIA",
+      "categoria": "XSS",
+      "localizacao": "templates\\pecas\\index.html:272",
+      "descricao": "O filtro |safe desabilita o auto-escape do Jinja2: var filtrosIniciais = {{ filtros_iniciais_json|safe }};",
+      "recomendacao": "Verificar se os dados passados para |safe são sanitizados no backend. Usar bleach.clean() se necessário."
+    },
+    {
+      "id": 10,
+      "titulo": "Uso do filtro |safe no template (potencial XSS)",
+      "severidade": "MEDIA",
+      "categoria": "XSS",
+      "localizacao": "templates\\seguranca\\relatorios.html:210",
+      "descricao": "O filtro |safe desabilita o auto-escape do Jinja2: const dadosMeses = JSON.parse('{{ dados_meses|safe }}');",
+      "recomendacao": "Verificar se os dados passados para |safe são sanitizados no backend. Usar bleach.clean() se necessário."
+    },
+    {
+      "id": 11,
+      "titulo": "Uso do filtro |safe no template (potencial XSS)",
+      "severidade": "MEDIA",
+      "categoria": "XSS",
+      "localizacao": "templates\\usinagem_concreto\\usinagens\\index.html:226",
+      "descricao": "O filtro |safe desabilita o auto-escape do Jinja2: var tracosData = JSON.parse('{{ tracos_json|safe }}');",
+      "recomendacao": "Verificar se os dados passados para |safe são sanitizados no backend. Usar bleach.clean() se necessário."
+    },
+    {
+      "id": 12,
+      "titulo": "Uso de Markup() no controller (potencial XSS)",
+      "severidade": "MEDIA",
+      "categoria": "XSS",
+      "localizacao": "controllers\\reembolso_controller.py:1355",
+      "descricao": "Markup() marca string como segura, bypassando auto-escape.",
+      "recomendacao": "Sanitizar o conteúdo antes de wrappear com Markup()."
+    },
+    {
+      "id": 13,
+      "titulo": "Uso de Markup() no controller (potencial XSS)",
+      "severidade": "MEDIA",
+      "categoria": "XSS",
+      "localizacao": "controllers\\reembolso_controller.py:1373",
+      "descricao": "Markup() marca string como segura, bypassando auto-escape.",
+      "recomendacao": "Sanitizar o conteúdo antes de wrappear com Markup()."
+    },
+    {
+      "id": 14,
+      "titulo": "Uso de Markup() no controller (potencial XSS)",
+      "severidade": "MEDIA",
+      "categoria": "XSS",
+      "localizacao": "controllers\\usinagem_concreto\\usinagens.py:606",
+      "descricao": "Markup() marca string como segura, bypassando auto-escape.",
+      "recomendacao": "Sanitizar o conteúdo antes de wrappear com Markup()."
+    },
+    {
+      "id": 15,
+      "titulo": "Senha do usuário impressa em logs/console",
+      "severidade": "CRITICA",
+      "categoria": "Vazamento de Informação",
+      "localizacao": "controllers/auth_controller.py:37",
+      "descricao": "A rota de login imprime email e senha em texto claro via print(). Isso expõe credenciais nos logs do servidor.",
+      "recomendacao": "Remover imediatamente o print() que expõe credenciais."
+    },
+    {
+      "id": 16,
+      "titulo": "URI do banco de dados impressa no console",
+      "severidade": "ALTA",
+      "categoria": "Vazamento de Informação",
+      "localizacao": "app.py:402",
+      "descricao": "A string de conexão do banco (com credenciais) é impressa na inicialização.",
+      "recomendacao": "Remover o print(os.getenv('DATABASE_URI'))."
+    },
+    {
+      "id": 17,
+      "titulo": "Credenciais de banco hardcoded no código-fonte",
+      "severidade": "ALTA",
+      "categoria": "Vazamento de Informação",
+      "localizacao": "config/config.py:17",
+      "descricao": "String de conexão com IP interno e padrão de senha no código: mysql+pymysql://remote:%s@192.168.8.10:3306/sfortanks...",
+      "recomendacao": "Usar exclusivamente variáveis de ambiente para credenciais."
+    },
+    {
+      "id": 18,
+      "titulo": "CORS configurado para aceitar qualquer origem",
+      "severidade": "ALTA",
+      "categoria": "CORS",
+      "localizacao": "app.py:125",
+      "descricao": "CORS(app) sem restrição de origens permite que qualquer site faça requisições ao sistema, podendo vazar dados se combinado com credenciais.",
+      "recomendacao": "Restringir origens: CORS(app, origins=['https://sfortanks.com:8043'])"
+    },
+    {
+      "id": 19,
+      "titulo": "Rotas isentas de proteção CSRF",
+      "severidade": "MEDIA",
+      "categoria": "CSRF",
+      "localizacao": "app.py:133-144",
+      "descricao": "Existem rotas marcadas como csrf.exempt (/concretagens/api/tanques/pecas, /concretagens/api/concretagem). Ataques CSRF podem modificar dados nessas rotas.",
+      "recomendacao": "Reavaliar se a isenção é necessária. Usar tokens CSRF em chamadas AJAX via header."
+    },
+    {
+      "id": 20,
+      "titulo": "Upload sem validação de tipo de arquivo",
+      "severidade": "ALTA",
+      "categoria": "Upload",
+      "localizacao": "controllers/upload_controller.py",
+      "descricao": "O controller de upload não valida extensões de arquivo permitidas. Arquivos maliciosos (.py, .php, .exe) podem ser enviados.",
+      "recomendacao": "Implementar whitelist de extensões permitidas e validar MIME type real."
+    },
+    {
+      "id": 21,
+      "titulo": "Upload sem sanitização do nome do arquivo",
+      "severidade": "MEDIA",
+      "categoria": "Upload",
+      "localizacao": "controllers/upload_controller.py",
+      "descricao": "Não há uso de secure_filename() do Werkzeug no controller de upload.",
+      "recomendacao": "Usar secure_filename() para sanitizar nomes de arquivos enviados."
+    },
+    {
+      "id": 22,
+      "titulo": "Sistema de permissões granulares desativado",
+      "severidade": "ALTA",
+      "categoria": "Autorização",
+      "localizacao": "app.py:257-260",
+      "descricao": "O verificar_permissao() no before_request está desativado (if False:). Qualquer usuário autenticado pode acessar qualquer funcionalidade.",
+      "recomendacao": "Ativar e configurar o sistema de permissões granulares."
+    },
+    {
+      "id": 23,
+      "titulo": "SSLify comentado/desativado",
+      "severidade": "MEDIA",
+      "categoria": "Configuração",
+      "localizacao": "app.py:89",
+      "descricao": "A forçar HTTPS via SSLify está comentada. Requisições HTTP podem ser aceitas sem redirecionamento.",
+      "recomendacao": "Habilitar SSLify em produção ou garantir redirecionamento HTTPS no proxy reverso."
+    },
+    {
+      "id": 24,
+      "titulo": "Ausência de rate limiting",
+      "severidade": "ALTA",
+      "categoria": "Autenticação",
+      "localizacao": "app.py / config/config.py",
+      "descricao": "Não há rate limiting implementado. Ataques de força bruta no login, enumeração de usuários e DoS ficam facilitados.",
+      "recomendacao": "Implementar Flask-Limiter. Exemplo: limiter.limit('5/minute') na rota de login."
+    },
+    {
+      "id": 25,
+      "titulo": "Sem bloqueio de conta após tentativas falhas",
+      "severidade": "ALTA",
+      "categoria": "Autenticação",
+      "localizacao": "controllers/auth_controller.py",
+      "descricao": "A rota de login não bloqueia após tentativas falhas consecutivas.",
+      "recomendacao": "Implementar bloqueio temporário após 5 tentativas falhas (ex: 15 minutos)."
+    },
+    {
+      "id": 26,
+      "titulo": "REMEMBER_COOKIE_HTTPONLY não configurado",
+      "severidade": "BAIXA",
+      "categoria": "Sessão",
+      "localizacao": "config/config.py",
+      "descricao": "Se 'remember me' for usado, o cookie pode ser acessível via JavaScript.",
+      "recomendacao": "Adicionar REMEMBER_COOKIE_HTTPONLY = True."
+    }
+  ]
+}

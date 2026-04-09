@@ -1352,13 +1352,12 @@ def notas_json(reembolso):
                 'valor': Decimal(doc.valor),
                 'centro_custo_id': doc.centro_custo_id
             })
-    return Markup(json.dumps(notas))
+    return json.dumps(notas)
 
 def avulsos_json(reembolso):
     avulsos = []
     for doc in reembolso.documentos:
         if doc.tipo == 'avulso':
-            # Buscar anexos usando modelo Upload
             uploads = Upload.query.filter_by(pai_id=doc.id, pai='ReembolsosDocumentos', tipo=4).all()
             avulsos.append({
                 'id': doc.id,
@@ -1370,7 +1369,7 @@ def avulsos_json(reembolso):
                     for upload in uploads
                 ]
             })
-    return Markup(json.dumps(avulsos))
+    return json.dumps(avulsos)
 
 # Modificar endpoint para fornecedores de documentos avulsos e emitentes de notas fiscais
 @reembolso_bp.route('/fornecedores_avulsos')

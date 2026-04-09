@@ -305,6 +305,7 @@ def equipamentos_datatables():
         term = f'%{search_value}%'
         clauses = [
             Equipamento.nome.ilike(term),
+            Equipamento.tipo.ilike(term),
             Equipamento.modelo.ilike(term),
             Equipamento.nota_fiscal.ilike(term),
             Equipamento.status.ilike(term),
@@ -318,14 +319,14 @@ def equipamentos_datatables():
 
     order_col_index = request.form.get('order[0][column]', '0')
     order_dir = request.form.get('order[0][dir]', 'asc')
-    # Coluna 0 = miniatura (sem ordenação útil); 3 = patrimônio (JSON) — usa nome como desempate
     col_map = {
         '0': Equipamento.nome,
         '1': Equipamento.nome,
-        '2': Equipamento.modelo,
-        '3': Equipamento.nome,
-        '4': Equipamento.nota_fiscal,
-        '5': Equipamento.status,
+        '2': Equipamento.tipo,
+        '3': Equipamento.modelo,
+        '4': Equipamento.nome,
+        '5': Equipamento.nota_fiscal,
+        '6': Equipamento.status,
     }
     order_col = col_map.get(str(order_col_index), Equipamento.nome)
     if order_dir == 'desc':
@@ -368,6 +369,7 @@ def equipamentos_datatables():
             'material_imagem_url': material_imagem_url,
             'material_nome': material_nome,
             'nome': eq.nome or '',
+            'tipo': eq.tipo or '',
             'modelo': eq.modelo or '',
             'patrimonio': ex.get('patrimonio') or '',
             'nota_fiscal': (eq.nota_fiscal or '').strip(),

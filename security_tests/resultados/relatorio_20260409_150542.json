@@ -1,0 +1,111 @@
+{
+  "url_alvo": "https://sfortanks.com:8043",
+  "inicio": "2026-04-09 15:05:41",
+  "fim": "2026-04-09 15:05:42",
+  "total": 11,
+  "resumo": {
+    "ALTA": 3,
+    "MEDIA": 8
+  },
+  "vulnerabilidades": [
+    {
+      "id": 1,
+      "titulo": "DEBUG habilitado na configuração base",
+      "severidade": "ALTA",
+      "categoria": "Configuração",
+      "localizacao": "config/config.py:11",
+      "descricao": "DEBUG=True na classe Config base. Se ProductionConfig não sobrescrever, mensagens de erro detalhadas com stacktrace serão expostas em produção.",
+      "recomendacao": "Definir DEBUG=False na Config base. Usar DEBUG=True apenas em DevelopmentConfig."
+    },
+    {
+      "id": 2,
+      "titulo": "SESSION_COOKIE_SECURE desativado na configuração base",
+      "severidade": "MEDIA",
+      "categoria": "Sessão",
+      "localizacao": "config/config.py:36",
+      "descricao": "Cookies de sessão podem ser transmitidos via HTTP não criptografado.",
+      "recomendacao": "Como o sistema usa HTTPS, garantir que SESSION_COOKIE_SECURE=True em produção."
+    },
+    {
+      "id": 3,
+      "titulo": "Uso do filtro |safe no template (potencial XSS)",
+      "severidade": "MEDIA",
+      "categoria": "XSS",
+      "localizacao": "templates\\pecas\\index.html:272",
+      "descricao": "O filtro |safe desabilita o auto-escape do Jinja2: var filtrosIniciais = {{ filtros_iniciais_json|safe }};",
+      "recomendacao": "Verificar se os dados passados para |safe são sanitizados no backend. Usar bleach.clean() se necessário."
+    },
+    {
+      "id": 4,
+      "titulo": "Uso do filtro |safe no template (potencial XSS)",
+      "severidade": "MEDIA",
+      "categoria": "XSS",
+      "localizacao": "templates\\seguranca\\relatorios.html:210",
+      "descricao": "O filtro |safe desabilita o auto-escape do Jinja2: const dadosMeses = JSON.parse('{{ dados_meses|safe }}');",
+      "recomendacao": "Verificar se os dados passados para |safe são sanitizados no backend. Usar bleach.clean() se necessário."
+    },
+    {
+      "id": 5,
+      "titulo": "Uso do filtro |safe no template (potencial XSS)",
+      "severidade": "MEDIA",
+      "categoria": "XSS",
+      "localizacao": "templates\\usinagem_concreto\\usinagens\\index.html:226",
+      "descricao": "O filtro |safe desabilita o auto-escape do Jinja2: var tracosData = JSON.parse('{{ tracos_json|safe }}');",
+      "recomendacao": "Verificar se os dados passados para |safe são sanitizados no backend. Usar bleach.clean() se necessário."
+    },
+    {
+      "id": 6,
+      "titulo": "Uso de Markup() no controller (potencial XSS)",
+      "severidade": "MEDIA",
+      "categoria": "XSS",
+      "localizacao": "controllers\\reembolso_controller.py:1355",
+      "descricao": "Markup() marca string como segura, bypassando auto-escape.",
+      "recomendacao": "Sanitizar o conteúdo antes de wrappear com Markup()."
+    },
+    {
+      "id": 7,
+      "titulo": "Uso de Markup() no controller (potencial XSS)",
+      "severidade": "MEDIA",
+      "categoria": "XSS",
+      "localizacao": "controllers\\reembolso_controller.py:1373",
+      "descricao": "Markup() marca string como segura, bypassando auto-escape.",
+      "recomendacao": "Sanitizar o conteúdo antes de wrappear com Markup()."
+    },
+    {
+      "id": 8,
+      "titulo": "Uso de Markup() no controller (potencial XSS)",
+      "severidade": "MEDIA",
+      "categoria": "XSS",
+      "localizacao": "controllers\\usinagem_concreto\\usinagens.py:606",
+      "descricao": "Markup() marca string como segura, bypassando auto-escape.",
+      "recomendacao": "Sanitizar o conteúdo antes de wrappear com Markup()."
+    },
+    {
+      "id": 9,
+      "titulo": "Rotas isentas de proteção CSRF",
+      "severidade": "MEDIA",
+      "categoria": "CSRF",
+      "localizacao": "app.py:133-144",
+      "descricao": "Existem rotas marcadas como csrf.exempt (/concretagens/api/tanques/pecas, /concretagens/api/concretagem). Ataques CSRF podem modificar dados nessas rotas.",
+      "recomendacao": "Reavaliar se a isenção é necessária. Usar tokens CSRF em chamadas AJAX via header."
+    },
+    {
+      "id": 10,
+      "titulo": "Sistema de permissões granulares desativado",
+      "severidade": "ALTA",
+      "categoria": "Autorização",
+      "localizacao": "app.py:257-260",
+      "descricao": "O verificar_permissao() no before_request está desativado (if False:). Qualquer usuário autenticado pode acessar qualquer funcionalidade.",
+      "recomendacao": "Ativar e configurar o sistema de permissões granulares."
+    },
+    {
+      "id": 11,
+      "titulo": "Ausência de rate limiting",
+      "severidade": "ALTA",
+      "categoria": "Autenticação",
+      "localizacao": "app.py / config/config.py",
+      "descricao": "Não há rate limiting implementado. Ataques de força bruta no login, enumeração de usuários e DoS ficam facilitados.",
+      "recomendacao": "Implementar Flask-Limiter. Exemplo: limiter.limit('5/minute') na rota de login."
+    }
+  ]
+}

@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatório de Vulnerabilidades - Fortanks</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a2e; color: #eee; padding: 20px; }
+        .container { max-width: 1100px; margin: 0 auto; }
+        h1 { text-align: center; margin-bottom: 10px; color: #e94560; font-size: 1.8rem; }
+        .meta { text-align: center; color: #888; margin-bottom: 30px; font-size: 0.9rem; }
+        .summary { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 30px; }
+        .summary-card { padding: 15px 25px; border-radius: 10px; text-align: center; min-width: 120px; }
+        .summary-card .count { font-size: 2rem; font-weight: bold; }
+        .summary-card .label { font-size: 0.8rem; text-transform: uppercase; }
+        .vuln-card { background: #16213e; border-radius: 10px; padding: 20px; margin-bottom: 15px;
+                      border-left: 5px solid; }
+        .vuln-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .vuln-title { font-size: 1.1rem; font-weight: 600; }
+        .badge { padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: bold; color: #fff; }
+        .vuln-meta { font-size: 0.85rem; color: #888; margin-bottom: 8px; }
+        .vuln-desc { line-height: 1.6; margin-bottom: 10px; }
+        .vuln-rec { background: #0f3460; padding: 12px; border-radius: 8px; font-size: 0.9rem; }
+        .vuln-rec strong { color: #e94560; }
+        .filter-bar { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 20px; }
+        .filter-btn { padding: 6px 16px; border-radius: 20px; border: 2px solid; cursor: pointer;
+                       background: transparent; color: #eee; font-size: 0.85rem; transition: 0.2s; }
+        .filter-btn:hover, .filter-btn.active { background: #e94560; border-color: #e94560; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Relatório de Vulnerabilidades</h1>
+    <p class="meta">
+        Alvo: https://sfortanks.com:8043 | Início: 2026-04-09 14:59:43 | Fim: 2026-04-09 14:59:58 |
+        Total: 12 vulnerabilidades
+    </p>
+    <div class="summary">
+        <div class="summary-card" style="background: #dc354522; border: 1px solid #dc3545;">
+            <div class="count" style="color: #dc3545;">0</div>
+            <div class="label">CRITICA</div>
+        </div>
+        <div class="summary-card" style="background: #fd7e1422; border: 1px solid #fd7e14;">
+            <div class="count" style="color: #fd7e14;">3</div>
+            <div class="label">ALTA</div>
+        </div>
+        <div class="summary-card" style="background: #ffc10722; border: 1px solid #ffc107;">
+            <div class="count" style="color: #ffc107;">4</div>
+            <div class="label">MEDIA</div>
+        </div>
+        <div class="summary-card" style="background: #0d6efd22; border: 1px solid #0d6efd;">
+            <div class="count" style="color: #0d6efd;">5</div>
+            <div class="label">BAIXA</div>
+        </div>
+        <div class="summary-card" style="background: #6c757d22; border: 1px solid #6c757d;">
+            <div class="count" style="color: #6c757d;">0</div>
+            <div class="label">INFO</div>
+        </div>
+    </div>
+    <div class="filter-bar">
+        <button class="filter-btn active" onclick="filtrar('all')">Todos</button>
+        <button class="filter-btn" onclick="filtrar('CRITICA')" style="border-color: #dc3545;">CRITICA</button>
+        <button class="filter-btn" onclick="filtrar('ALTA')" style="border-color: #fd7e14;">ALTA</button>
+        <button class="filter-btn" onclick="filtrar('MEDIA')" style="border-color: #ffc107;">MEDIA</button>
+        <button class="filter-btn" onclick="filtrar('BAIXA')" style="border-color: #0d6efd;">BAIXA</button>
+        <button class="filter-btn" onclick="filtrar('INFO')" style="border-color: #6c757d;">INFO</button>
+    </div>
+    <div id="vulns">
+        <div class="vuln-card" data-sev="MEDIA" style="border-left-color: #ffc107;">
+            <div class="vuln-header">
+                <span class="vuln-title">#1 Header de segurança ausente: X-Content-Type-Options</span>
+                <span class="badge" style="background: #ffc107;">MEDIA</span>
+            </div>
+            <div class="vuln-meta">Headers HTTP | GET /login → Response Headers</div>
+            <div class="vuln-desc">O header X-Content-Type-Options não está presente na resposta. Valor esperado: nosniff</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Adicionar o header X-Content-Type-Options via middleware Flask ou proxy reverso (Nginx).</div>
+        </div>
+        <div class="vuln-card" data-sev="MEDIA" style="border-left-color: #ffc107;">
+            <div class="vuln-header">
+                <span class="vuln-title">#2 Header de segurança ausente: X-Frame-Options</span>
+                <span class="badge" style="background: #ffc107;">MEDIA</span>
+            </div>
+            <div class="vuln-meta">Headers HTTP | GET /login → Response Headers</div>
+            <div class="vuln-desc">O header X-Frame-Options não está presente na resposta. Valor esperado: DENY ou SAMEORIGIN</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Adicionar o header X-Frame-Options via middleware Flask ou proxy reverso (Nginx).</div>
+        </div>
+        <div class="vuln-card" data-sev="BAIXA" style="border-left-color: #0d6efd;">
+            <div class="vuln-header">
+                <span class="vuln-title">#3 Header de segurança ausente: X-XSS-Protection</span>
+                <span class="badge" style="background: #0d6efd;">BAIXA</span>
+            </div>
+            <div class="vuln-meta">Headers HTTP | GET /login → Response Headers</div>
+            <div class="vuln-desc">O header X-XSS-Protection não está presente na resposta. Valor esperado: 1; mode=block</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Adicionar o header X-XSS-Protection via middleware Flask ou proxy reverso (Nginx).</div>
+        </div>
+        <div class="vuln-card" data-sev="ALTA" style="border-left-color: #fd7e14;">
+            <div class="vuln-header">
+                <span class="vuln-title">#4 Header de segurança ausente: Strict-Transport-Security</span>
+                <span class="badge" style="background: #fd7e14;">ALTA</span>
+            </div>
+            <div class="vuln-meta">Headers HTTP | GET /login → Response Headers</div>
+            <div class="vuln-desc">O header Strict-Transport-Security não está presente na resposta. Valor esperado: max-age=...</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Adicionar o header Strict-Transport-Security via middleware Flask ou proxy reverso (Nginx).</div>
+        </div>
+        <div class="vuln-card" data-sev="MEDIA" style="border-left-color: #ffc107;">
+            <div class="vuln-header">
+                <span class="vuln-title">#5 Header de segurança ausente: Content-Security-Policy</span>
+                <span class="badge" style="background: #ffc107;">MEDIA</span>
+            </div>
+            <div class="vuln-meta">Headers HTTP | GET /login → Response Headers</div>
+            <div class="vuln-desc">O header Content-Security-Policy não está presente na resposta. Valor esperado: default-src...</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Adicionar o header Content-Security-Policy via middleware Flask ou proxy reverso (Nginx).</div>
+        </div>
+        <div class="vuln-card" data-sev="BAIXA" style="border-left-color: #0d6efd;">
+            <div class="vuln-header">
+                <span class="vuln-title">#6 Header de segurança ausente: Referrer-Policy</span>
+                <span class="badge" style="background: #0d6efd;">BAIXA</span>
+            </div>
+            <div class="vuln-meta">Headers HTTP | GET /login → Response Headers</div>
+            <div class="vuln-desc">O header Referrer-Policy não está presente na resposta. Valor esperado: strict-origin-when-cross-origin</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Adicionar o header Referrer-Policy via middleware Flask ou proxy reverso (Nginx).</div>
+        </div>
+        <div class="vuln-card" data-sev="BAIXA" style="border-left-color: #0d6efd;">
+            <div class="vuln-header">
+                <span class="vuln-title">#7 Header de segurança ausente: Permissions-Policy</span>
+                <span class="badge" style="background: #0d6efd;">BAIXA</span>
+            </div>
+            <div class="vuln-meta">Headers HTTP | GET /login → Response Headers</div>
+            <div class="vuln-desc">O header Permissions-Policy não está presente na resposta. Valor esperado: geolocation=()...</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Adicionar o header Permissions-Policy via middleware Flask ou proxy reverso (Nginx).</div>
+        </div>
+        <div class="vuln-card" data-sev="BAIXA" style="border-left-color: #0d6efd;">
+            <div class="vuln-header">
+                <span class="vuln-title">#8 Header Server expõe tecnologia: 'nginx/1.24.0 (Ubuntu)'</span>
+                <span class="badge" style="background: #0d6efd;">BAIXA</span>
+            </div>
+            <div class="vuln-meta">Headers HTTP | Response Headers</div>
+            <div class="vuln-desc">O header Server revela informações sobre o software do servidor.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Remover ou ofuscar o header Server no proxy reverso.</div>
+        </div>
+        <div class="vuln-card" data-sev="BAIXA" style="border-left-color: #0d6efd;">
+            <div class="vuln-header">
+                <span class="vuln-title">#9 Método HTTP OPTIONS aceito na raiz</span>
+                <span class="badge" style="background: #0d6efd;">BAIXA</span>
+            </div>
+            <div class="vuln-meta">Métodos HTTP</div>
+            <div class="vuln-desc">OPTIONS / retornou HTTP 200</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Desabilitar métodos HTTP desnecessários.</div>
+        </div>
+        <div class="vuln-card" data-sev="ALTA" style="border-left-color: #fd7e14;">
+            <div class="vuln-header">
+                <span class="vuln-title">#10 CORS aceita origem maliciosa: https://evil.com</span>
+                <span class="badge" style="background: #fd7e14;">ALTA</span>
+            </div>
+            <div class="vuln-meta">CORS | Origin: https://evil.com</div>
+            <div class="vuln-desc">Access-Control-Allow-Origin: https://evil.com, Access-Control-Allow-Credentials: </div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Restringir CORS para aceitar apenas origens confiáveis.</div>
+        </div>
+        <div class="vuln-card" data-sev="ALTA" style="border-left-color: #fd7e14;">
+            <div class="vuln-header">
+                <span class="vuln-title">#11 Login sem proteção contra brute force</span>
+                <span class="badge" style="background: #fd7e14;">ALTA</span>
+            </div>
+            <div class="vuln-meta">Autenticação | POST /login</div>
+            <div class="vuln-desc">10 tentativas de login falhas consecutivas não geraram bloqueio (HTTP 429).</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Implementar rate limiting (Flask-Limiter) e/ou bloqueio temporário de conta.</div>
+        </div>
+        <div class="vuln-card" data-sev="MEDIA" style="border-left-color: #ffc107;">
+            <div class="vuln-header">
+                <span class="vuln-title">#12 Vulnerável a Clickjacking</span>
+                <span class="badge" style="background: #ffc107;">MEDIA</span>
+            </div>
+            <div class="vuln-meta">Clickjacking | Response Headers</div>
+            <div class="vuln-desc">Sem X-Frame-Options ou CSP frame-ancestors, o site pode ser embutido em iframe malicioso.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Adicionar X-Frame-Options: DENY e/ou CSP com frame-ancestors 'self'.</div>
+        </div>
+    </div>
+</div>
+<script>
+function filtrar(sev) {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    document.querySelectorAll('.vuln-card').forEach(c => {
+        c.style.display = (sev === 'all' || c.dataset.sev === sev) ? 'block' : 'none';
+    });
+}
+</script>
+</body>
+</html>

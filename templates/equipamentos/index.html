@@ -3,6 +3,26 @@
 {% block title %}Equipamentos - Sistema de Gestão{% endblock %}
 {% block mobile_title %}Equipamentos{% endblock %}
 
+{% block extra_css %}
+<style>
+    #equipamentosTable .eq-acoes-dropdown .dropdown-toggle::after { display: none; }
+    #equipamentosTable .eq-acoes-dropdown .dropdown-menu { min-width: 180px; }
+    #equipamentosTable .eq-acoes-dropdown .dropdown-item { padding: .5rem .75rem; }
+    #equipamentosTable .eq-acoes-dropdown .dropdown-item i { width: 1.25em; text-align: center; }
+    @media (max-width: 767.98px) {
+        #equipamentosTable_wrapper .dataTables_length,
+        #equipamentosTable_wrapper .dataTables_filter { text-align: center !important; }
+        #equipamentosTable_wrapper .dataTables_filter input { width: 100%; max-width: 100%; }
+        #equipamentosTable td, #equipamentosTable th { padding: .4rem .5rem; font-size: .875rem; }
+        #equipamentosTable .eq-acoes-dropdown .btn { min-height: 38px; min-width: 38px; }
+    }
+    table.dataTable.dtr-inline.collapsed > tbody > tr > td.dtr-control::before,
+    table.dataTable.dtr-inline.collapsed > tbody > tr > th.dtr-control::before {
+        top: 50%; transform: translateY(-50%);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <div class="d-sm-flex align-items-center justify-content-between mb-4">
@@ -29,23 +49,22 @@
         <div class="card-header py-3">
             <h6 class="m-0 font-weight-bold">Lista de Equipamentos</h6>
         </div>
-        <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-bordered table-hover w-100" id="equipamentosTable" cellspacing="0">
-                    <thead>
-                        <tr>
-                            <th class="text-center" title="Imagem do material vinculado">Img</th>
-                            <th>Nome</th>
-                            <th>Modelo</th>
-                            <th>Patrimônio</th>
-                            <th>Nota fiscal</th>
-                            <th>Status</th>
-                            <th class="text-center">Ações</th>
-                        </tr>
-                    </thead>
-                    <tbody></tbody>
-                </table>
-            </div>
+        <div class="card-body p-md-3 p-2">
+            <table class="table table-bordered table-hover w-100" id="equipamentosTable" cellspacing="0">
+                <thead>
+                    <tr>
+                        <th class="text-center" title="Imagem do material vinculado">Img</th>
+                        <th>Nome</th>
+                        <th>Tipo</th>
+                        <th>Modelo</th>
+                        <th>Patrimônio</th>
+                        <th>Nota Fiscal</th>
+                        <th>Status</th>
+                        <th class="text-center">Ações</th>
+                    </tr>
+                </thead>
+                <tbody></tbody>
+            </table>
         </div>
     </div>
 
@@ -74,6 +93,7 @@ document.addEventListener('DOMContentLoaded', function () {
     var tplDuplicar = "{{ url_for('equipamento.duplicar_equipamento', id=999001) }}";
     var csrf = "{{ csrf_token() }}";
     var podeGerenciar = {{ current_user.is_gerente_ou_superior | tojson }};
+
     function escAttr(s) {
         return String(s == null ? '' : s)
             .replace(/&/g, '&amp;')
@@ -81,22 +101,57 @@ document.addEventListener('DOMContentLoaded', function () {
             .replace(/'/g, '&#39;')
             .replace(/</g, '&lt;');
     }
+
     function renderStatus(status) {
         var map = {
-            'Ativo': '<span class="badge bg-success">Ativo</span>',
-            'Em Manutenção': '<span class="badge bg-warning text-dark">Em Manutenção</span>',
-            'Aguardando Reparo': '<span class="badge bg-warning text-dark">Aguardando Reparo</span>',
-            'Emprestado': '<span class="badge bg-info text-dark">Emprestado</span>',
-            'Inativo': '<span class="badge bg-danger">Inativo</span>',
-            'Pendente': '<span class="badge bg-secondary">Pendente</span>'
+            'Ativo': 'success',
+            'Em Manutenção': 'warning',
+            'Aguardando Reparo': 'warning',
+            'Emprestado': 'info',
+            'Inativo': 'danger',
+            'Pendente': 'secondary'
         };
-        if (map[status]) {
-            return map[status];
+        if (!status) return '<span class="badge bg-secondary">—</span>';
+        var cor = map[status] || 'secondary';
+        var cls = (cor === 'warning' || cor === 'info') ? ' text-dark' : '';
+        return '<span class="badge bg-' + cor + cls + '">' + escAttr(status) + '</span>';
+    }
+
+    function renderTipo(tipo) {
+        var icons = {
+            'Veiculos': 'fa-car',
+            'Maquinas': 'fa-cog',
+            'Ferramentas': 'fa-screwdriver-wrench'
+        };
+        if (!tipo) return '<span class="text-muted">—</span>';
+        var ic = icons[tipo] || 'fa-cube';
+        return '<i class="fas ' + ic + ' me-1 text-muted"></i>' + escAttr(tipo);
+    }
+
+    function renderAcoes(row) {
+        var id = row.id;
+        var items = '';
+        items += '<li><button type="button" class="dropdown-item btn-visualizar-equipamento" data-id="' + id + '">' +
+            '<i class="fas fa-eye text-info"></i> Visualizar</button></li>';
+        items += '<li><button type="button" class="dropdown-item btn-manutencoes-equipamento" data-id="' + id + '">' +
+            '<i class="fas fa-tools text-warning"></i> Manutenções</button></li>';
+        items += '<li><button type="button" class="dropdown-item btn-nova-manutencao-equipamento" data-id="' + id + '">' +
+            '<i class="fas fa-wrench text-secondary"></i> Nova Manutenção</button></li>';
+        items += '<li><button type="button" class="dropdown-item btn-novo-checklist-equipamento" data-id="' + id + '">' +
+            '<i class="fas fa-clipboard-check text-success"></i> Novo Checklist</button></li>';
+        if (podeGerenciar) {
+            items += '<li><hr class="dropdown-divider"></li>';
+            items += '<li><button type="button" class="dropdown-item btn-duplicar-equipamento" data-id="' + id + '">' +
+                '<i class="fas fa-copy text-secondary"></i> Duplicar</button></li>';
+            items += '<li><button type="button" class="dropdown-item btn-editar-equipamento" data-id="' + id + '">' +
+                '<i class="fas fa-edit text-primary"></i> Editar</button></li>';
+            items += '<li><button type="button" class="dropdown-item btn-excluir-equipamento" data-id="' + id + '">' +
+                '<i class="fas fa-trash text-danger"></i> Excluir</button></li>';
         }
-        if (!status) {
-            return '<span class="badge bg-secondary">—</span>';
-        }
-        return '<span class="badge bg-secondary">' + $('<div>').text(status).html() + '</span>';
+        return '<div class="eq-acoes-dropdown dropdown">' +
+            '<button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Ações">' +
+            '<i class="fas fa-ellipsis-v"></i></button>' +
+            '<ul class="dropdown-menu dropdown-menu-end">' + items + '</ul></div>';
     }
 
     var dtEquipamentos = null;
@@ -104,14 +159,17 @@ document.addEventListener('DOMContentLoaded', function () {
         dtEquipamentos = $('#equipamentosTable').DataTable({
             processing: true,
             serverSide: true,
-            responsive: true,
+            responsive: {
+                details: {
+                    type: 'column',
+                    target: 'tr'
+                }
+            },
             ajax: {
                 url: urlDatatables,
                 type: 'POST',
                 headers: { 'X-CSRFToken': csrf },
-                data: function (d) {
-                    d.csrf_token = csrf;
-                }
+                data: function (d) { d.csrf_token = csrf; }
             },
             order: [[1, 'asc']],
             pageLength: 25,
@@ -122,77 +180,78 @@ document.addEventListener('DOMContentLoaded', function () {
                     orderable: false,
                     searchable: false,
                     className: 'text-center align-middle',
+                    responsivePriority: 5,
                     render: function (data, type, row) {
-                        if (type !== 'display') {
-                            return data || '';
-                        }
-                        if (!data) {
-                            return '<span class="text-muted small">—</span>';
-                        }
+                        if (type !== 'display') return data || '';
+                        if (!data) return '<span class="text-muted small">—</span>';
                         var nome = row.material_nome || '';
                         return '<img src="' + escAttr(data) + '" alt="" role="button" tabindex="0" title="Clique para ampliar" ' +
                             'class="img-thumbnail rounded materiais-thumb-img materiais-thumb-ampliar" ' +
                             'data-full-src="' + escAttr(data) + '" data-nome-material="' + escAttr(nome) + '" ' +
-                            'style="width:48px;height:48px;object-fit:cover;cursor:zoom-in;">';
+                            'style="width:44px;height:44px;object-fit:cover;cursor:zoom-in;">';
                     }
                 },
-                { data: 'nome' },
-                { data: 'modelo', defaultContent: '' },
+                {
+                    data: 'nome',
+                    responsivePriority: 1,
+                    className: 'align-middle'
+                },
+                {
+                    data: 'tipo',
+                    defaultContent: '',
+                    responsivePriority: 6,
+                    className: 'align-middle text-nowrap',
+                    render: function (data) { return renderTipo(data); }
+                },
+                {
+                    data: 'modelo',
+                    defaultContent: '',
+                    responsivePriority: 7,
+                    className: 'align-middle'
+                },
                 {
                     data: 'patrimonio',
                     defaultContent: '',
-                    className: 'text-nowrap',
+                    className: 'text-nowrap align-middle',
                     orderable: false,
+                    responsivePriority: 8,
                     render: function (data) {
-                        return data ? $('<div>').text(data).html() : '<span class="text-muted">—</span>';
+                        return data ? escAttr(data) : '<span class="text-muted">—</span>';
                     }
                 },
                 {
                     data: 'nota_fiscal',
                     defaultContent: '',
-                    className: 'text-nowrap',
+                    className: 'text-nowrap align-middle',
+                    responsivePriority: 9,
                     render: function (data) {
-                        return data ? $('<div>').text(data).html() : '<span class="text-muted">—</span>';
+                        return data ? escAttr(data) : '<span class="text-muted">—</span>';
                     }
                 },
                 {
                     data: 'status',
-                    className: 'text-nowrap',
-                    render: function (data) {
-                        return renderStatus(data);
-                    }
+                    className: 'text-nowrap align-middle',
+                    responsivePriority: 2,
+                    render: function (data) { return renderStatus(data); }
                 },
                 {
                     data: null,
                     orderable: false,
                     searchable: false,
-                    className: 'text-center text-nowrap',
-                    render: function (data, type, row) {
-                        var id = row.id;
-                        var html = '';
-                        html += '<button type="button" class="btn btn-sm btn-info btn-visualizar-equipamento" data-id="' + id + '" title="Visualizar"><i class="fas fa-eye"></i></button> ';
-                        html += '<button type="button" class="btn btn-sm btn-warning btn-manutencoes-equipamento" data-id="' + id + '" title="Manutenções"><i class="fas fa-tools"></i></button> ';
-                        html += '<button type="button" class="btn btn-sm btn-secondary btn-nova-manutencao-equipamento" data-id="' + id + '" title="Nova manutenção"><i class="fas fa-wrench"></i></button> ';
-                        html += '<button type="button" class="btn btn-sm btn-success btn-novo-checklist-equipamento" data-id="' + id + '" title="Novo Checklist"><i class="fas fa-clipboard-check"></i></button>';
-                        if (podeGerenciar) {
-                            html += ' <button type="button" class="btn btn-sm btn-outline-secondary btn-duplicar-equipamento" data-id="' + id + '" title="Duplicar"><i class="fas fa-copy"></i></button>';
-                            html += ' <button type="button" class="btn btn-sm btn-primary btn-editar-equipamento" data-id="' + id + '" title="Editar"><i class="fas fa-edit"></i></button>';
-                            html += ' <button type="button" class="btn btn-sm btn-danger btn-excluir-equipamento" data-id="' + id + '" title="Excluir"><i class="fas fa-trash"></i></button>';
-                        }
-                        return html;
-                    }
+                    className: 'text-center align-middle',
+                    responsivePriority: 1,
+                    render: function (data, type, row) { return renderAcoes(row); }
                 }
             ],
-            dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip'
+            dom: '<"row align-items-center"<"col-sm-12 col-md-auto me-auto"l><"col-sm-12 col-md-auto"f>>rtip'
         });
 
         window.reloadEquipamentosDatatable = function () {
-            if (dtEquipamentos) {
-                dtEquipamentos.ajax.reload(null, false);
-            }
+            if (dtEquipamentos) dtEquipamentos.ajax.reload(null, false);
         };
     }
-        window.onPreencherChecklistSucesso = function () {
+
+    window.onPreencherChecklistSucesso = function () {
         if (typeof window.reloadEquipamentosDatatable === 'function') {
             window.reloadEquipamentosDatatable();
         } else {
@@ -217,10 +276,10 @@ document.addEventListener('DOMContentLoaded', function () {
             .then(function (data) {
                 var alertsDiv = document.querySelector('.alert-container');
                 if (alertsDiv) {
-                    var alert = document.createElement('div');
-                    alert.className = 'alert alert-' + (data.success ? 'success' : 'danger') + ' alert-dismissible fade show';
-                    alert.innerHTML = (data.message || '') + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
-                    alertsDiv.appendChild(alert);
+                    var alrt = document.createElement('div');
+                    alrt.className = 'alert alert-' + (data.success ? 'success' : 'danger') + ' alert-dismissible fade show';
+                    alrt.innerHTML = (data.message || '') + '<button type="button" class="btn-close" data-bs-dismiss="alert"></button>';
+                    alertsDiv.appendChild(alrt);
                 }
                 if (data.success && typeof window.reloadEquipamentosDatatable === 'function') {
                     window.reloadEquipamentosDatatable();

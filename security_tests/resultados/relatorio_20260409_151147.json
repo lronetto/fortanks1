@@ -1,0 +1,48 @@
+{
+  "url_alvo": "https://sfortanks.com:8043",
+  "inicio": "2026-04-09 15:11:47",
+  "fim": "2026-04-09 15:11:47",
+  "total": 4,
+  "resumo": {
+    "ALTA": 2,
+    "MEDIA": 2
+  },
+  "vulnerabilidades": [
+    {
+      "id": 1,
+      "titulo": "DEBUG habilitado na configuração base",
+      "severidade": "ALTA",
+      "categoria": "Configuração",
+      "localizacao": "config/config.py:11",
+      "descricao": "DEBUG=True na classe Config base. Se ProductionConfig não sobrescrever, mensagens de erro detalhadas com stacktrace serão expostas em produção.",
+      "recomendacao": "Definir DEBUG=False na Config base. Usar DEBUG=True apenas em DevelopmentConfig."
+    },
+    {
+      "id": 2,
+      "titulo": "SESSION_COOKIE_SECURE desativado na configuração base",
+      "severidade": "MEDIA",
+      "categoria": "Sessão",
+      "localizacao": "config/config.py:36",
+      "descricao": "Cookies de sessão podem ser transmitidos via HTTP não criptografado.",
+      "recomendacao": "Como o sistema usa HTTPS, garantir que SESSION_COOKIE_SECURE=True em produção."
+    },
+    {
+      "id": 3,
+      "titulo": "Rotas isentas de proteção CSRF",
+      "severidade": "MEDIA",
+      "categoria": "CSRF",
+      "localizacao": "app.py:133-144",
+      "descricao": "Existem rotas marcadas como csrf.exempt (/concretagens/api/tanques/pecas, /concretagens/api/concretagem). Ataques CSRF podem modificar dados nessas rotas.",
+      "recomendacao": "Reavaliar se a isenção é necessária. Usar tokens CSRF em chamadas AJAX via header."
+    },
+    {
+      "id": 4,
+      "titulo": "Sistema de permissões granulares desativado",
+      "severidade": "ALTA",
+      "categoria": "Autorização",
+      "localizacao": "app.py:257-260",
+      "descricao": "O verificar_permissao() no before_request está desativado (if False:). Qualquer usuário autenticado pode acessar qualquer funcionalidade.",
+      "recomendacao": "Ativar e configurar o sistema de permissões granulares."
+    }
+  ]
+}

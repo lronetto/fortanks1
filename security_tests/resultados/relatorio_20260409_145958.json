@@ -1,0 +1,121 @@
+{
+  "url_alvo": "https://sfortanks.com:8043",
+  "inicio": "2026-04-09 14:59:43",
+  "fim": "2026-04-09 14:59:58",
+  "total": 12,
+  "resumo": {
+    "MEDIA": 4,
+    "BAIXA": 5,
+    "ALTA": 3
+  },
+  "vulnerabilidades": [
+    {
+      "id": 1,
+      "titulo": "Header de segurança ausente: X-Content-Type-Options",
+      "severidade": "MEDIA",
+      "categoria": "Headers HTTP",
+      "localizacao": "GET /login → Response Headers",
+      "descricao": "O header X-Content-Type-Options não está presente na resposta. Valor esperado: nosniff",
+      "recomendacao": "Adicionar o header X-Content-Type-Options via middleware Flask ou proxy reverso (Nginx)."
+    },
+    {
+      "id": 2,
+      "titulo": "Header de segurança ausente: X-Frame-Options",
+      "severidade": "MEDIA",
+      "categoria": "Headers HTTP",
+      "localizacao": "GET /login → Response Headers",
+      "descricao": "O header X-Frame-Options não está presente na resposta. Valor esperado: DENY ou SAMEORIGIN",
+      "recomendacao": "Adicionar o header X-Frame-Options via middleware Flask ou proxy reverso (Nginx)."
+    },
+    {
+      "id": 3,
+      "titulo": "Header de segurança ausente: X-XSS-Protection",
+      "severidade": "BAIXA",
+      "categoria": "Headers HTTP",
+      "localizacao": "GET /login → Response Headers",
+      "descricao": "O header X-XSS-Protection não está presente na resposta. Valor esperado: 1; mode=block",
+      "recomendacao": "Adicionar o header X-XSS-Protection via middleware Flask ou proxy reverso (Nginx)."
+    },
+    {
+      "id": 4,
+      "titulo": "Header de segurança ausente: Strict-Transport-Security",
+      "severidade": "ALTA",
+      "categoria": "Headers HTTP",
+      "localizacao": "GET /login → Response Headers",
+      "descricao": "O header Strict-Transport-Security não está presente na resposta. Valor esperado: max-age=...",
+      "recomendacao": "Adicionar o header Strict-Transport-Security via middleware Flask ou proxy reverso (Nginx)."
+    },
+    {
+      "id": 5,
+      "titulo": "Header de segurança ausente: Content-Security-Policy",
+      "severidade": "MEDIA",
+      "categoria": "Headers HTTP",
+      "localizacao": "GET /login → Response Headers",
+      "descricao": "O header Content-Security-Policy não está presente na resposta. Valor esperado: default-src...",
+      "recomendacao": "Adicionar o header Content-Security-Policy via middleware Flask ou proxy reverso (Nginx)."
+    },
+    {
+      "id": 6,
+      "titulo": "Header de segurança ausente: Referrer-Policy",
+      "severidade": "BAIXA",
+      "categoria": "Headers HTTP",
+      "localizacao": "GET /login → Response Headers",
+      "descricao": "O header Referrer-Policy não está presente na resposta. Valor esperado: strict-origin-when-cross-origin",
+      "recomendacao": "Adicionar o header Referrer-Policy via middleware Flask ou proxy reverso (Nginx)."
+    },
+    {
+      "id": 7,
+      "titulo": "Header de segurança ausente: Permissions-Policy",
+      "severidade": "BAIXA",
+      "categoria": "Headers HTTP",
+      "localizacao": "GET /login → Response Headers",
+      "descricao": "O header Permissions-Policy não está presente na resposta. Valor esperado: geolocation=()...",
+      "recomendacao": "Adicionar o header Permissions-Policy via middleware Flask ou proxy reverso (Nginx)."
+    },
+    {
+      "id": 8,
+      "titulo": "Header Server expõe tecnologia: 'nginx/1.24.0 (Ubuntu)'",
+      "severidade": "BAIXA",
+      "categoria": "Headers HTTP",
+      "localizacao": "Response Headers",
+      "descricao": "O header Server revela informações sobre o software do servidor.",
+      "recomendacao": "Remover ou ofuscar o header Server no proxy reverso."
+    },
+    {
+      "id": 9,
+      "titulo": "Método HTTP OPTIONS aceito na raiz",
+      "severidade": "BAIXA",
+      "categoria": "Métodos HTTP",
+      "localizacao": "",
+      "descricao": "OPTIONS / retornou HTTP 200",
+      "recomendacao": "Desabilitar métodos HTTP desnecessários."
+    },
+    {
+      "id": 10,
+      "titulo": "CORS aceita origem maliciosa: https://evil.com",
+      "severidade": "ALTA",
+      "categoria": "CORS",
+      "localizacao": "Origin: https://evil.com",
+      "descricao": "Access-Control-Allow-Origin: https://evil.com, Access-Control-Allow-Credentials: ",
+      "recomendacao": "Restringir CORS para aceitar apenas origens confiáveis."
+    },
+    {
+      "id": 11,
+      "titulo": "Login sem proteção contra brute force",
+      "severidade": "ALTA",
+      "categoria": "Autenticação",
+      "localizacao": "POST /login",
+      "descricao": "10 tentativas de login falhas consecutivas não geraram bloqueio (HTTP 429).",
+      "recomendacao": "Implementar rate limiting (Flask-Limiter) e/ou bloqueio temporário de conta."
+    },
+    {
+      "id": 12,
+      "titulo": "Vulnerável a Clickjacking",
+      "severidade": "MEDIA",
+      "categoria": "Clickjacking",
+      "localizacao": "Response Headers",
+      "descricao": "Sem X-Frame-Options ou CSP frame-ancestors, o site pode ser embutido em iframe malicioso.",
+      "recomendacao": "Adicionar X-Frame-Options: DENY e/ou CSP com frame-ancestors 'self'."
+    }
+  ]
+}

@@ -1,0 +1,99 @@
+======================================================================
+  RELATÓRIO DE VULNERABILIDADES - FORTANKS
+======================================================================
+  URL Alvo: https://sfortanks.com:8043
+  Início:   2026-04-09 14:59:43
+  Fim:      2026-04-09 14:59:58
+  Total:    12 vulnerabilidades encontradas
+
+  RESUMO POR SEVERIDADE:
+    [!!!] CRITICA: 0
+    [!! ] ALTA: 3
+    [!  ] MEDIA: 4
+    [.  ] BAIXA: 5
+    [   ] INFO: 0
+
+----------------------------------------------------------------------
+
+  [MEDIA] #1: Header de segurança ausente: X-Content-Type-Options
+  Categoria:     Headers HTTP
+  Localização:   GET /login → Response Headers
+  Descrição:     O header X-Content-Type-Options não está presente na resposta. Valor esperado: nosniff
+  Recomendação:  Adicionar o header X-Content-Type-Options via middleware Flask ou proxy reverso (Nginx).
+  ------------------------------------------------------------------
+
+  [MEDIA] #2: Header de segurança ausente: X-Frame-Options
+  Categoria:     Headers HTTP
+  Localização:   GET /login → Response Headers
+  Descrição:     O header X-Frame-Options não está presente na resposta. Valor esperado: DENY ou SAMEORIGIN
+  Recomendação:  Adicionar o header X-Frame-Options via middleware Flask ou proxy reverso (Nginx).
+  ------------------------------------------------------------------
+
+  [BAIXA] #3: Header de segurança ausente: X-XSS-Protection
+  Categoria:     Headers HTTP
+  Localização:   GET /login → Response Headers
+  Descrição:     O header X-XSS-Protection não está presente na resposta. Valor esperado: 1; mode=block
+  Recomendação:  Adicionar o header X-XSS-Protection via middleware Flask ou proxy reverso (Nginx).
+  ------------------------------------------------------------------
+
+  [ALTA] #4: Header de segurança ausente: Strict-Transport-Security
+  Categoria:     Headers HTTP
+  Localização:   GET /login → Response Headers
+  Descrição:     O header Strict-Transport-Security não está presente na resposta. Valor esperado: max-age=...
+  Recomendação:  Adicionar o header Strict-Transport-Security via middleware Flask ou proxy reverso (Nginx).
+  ------------------------------------------------------------------
+
+  [MEDIA] #5: Header de segurança ausente: Content-Security-Policy
+  Categoria:     Headers HTTP
+  Localização:   GET /login → Response Headers
+  Descrição:     O header Content-Security-Policy não está presente na resposta. Valor esperado: default-src...
+  Recomendação:  Adicionar o header Content-Security-Policy via middleware Flask ou proxy reverso (Nginx).
+  ------------------------------------------------------------------
+
+  [BAIXA] #6: Header de segurança ausente: Referrer-Policy
+  Categoria:     Headers HTTP
+  Localização:   GET /login → Response Headers
+  Descrição:     O header Referrer-Policy não está presente na resposta. Valor esperado: strict-origin-when-cross-origin
+  Recomendação:  Adicionar o header Referrer-Policy via middleware Flask ou proxy reverso (Nginx).
+  ------------------------------------------------------------------
+
+  [BAIXA] #7: Header de segurança ausente: Permissions-Policy
+  Categoria:     Headers HTTP
+  Localização:   GET /login → Response Headers
+  Descrição:     O header Permissions-Policy não está presente na resposta. Valor esperado: geolocation=()...
+  Recomendação:  Adicionar o header Permissions-Policy via middleware Flask ou proxy reverso (Nginx).
+  ------------------------------------------------------------------
+
+  [BAIXA] #8: Header Server expõe tecnologia: 'nginx/1.24.0 (Ubuntu)'
+  Categoria:     Headers HTTP
+  Localização:   Response Headers
+  Descrição:     O header Server revela informações sobre o software do servidor.
+  Recomendação:  Remover ou ofuscar o header Server no proxy reverso.
+  ------------------------------------------------------------------
+
+  [BAIXA] #9: Método HTTP OPTIONS aceito na raiz
+  Categoria:     Métodos HTTP
+  Descrição:     OPTIONS / retornou HTTP 200
+  Recomendação:  Desabilitar métodos HTTP desnecessários.
+  ------------------------------------------------------------------
+
+  [ALTA] #10: CORS aceita origem maliciosa: https://evil.com
+  Categoria:     CORS
+  Localização:   Origin: https://evil.com
+  Descrição:     Access-Control-Allow-Origin: https://evil.com, Access-Control-Allow-Credentials: 
+  Recomendação:  Restringir CORS para aceitar apenas origens confiáveis.
+  ------------------------------------------------------------------
+
+  [ALTA] #11: Login sem proteção contra brute force
+  Categoria:     Autenticação
+  Localização:   POST /login
+  Descrição:     10 tentativas de login falhas consecutivas não geraram bloqueio (HTTP 429).
+  Recomendação:  Implementar rate limiting (Flask-Limiter) e/ou bloqueio temporário de conta.
+  ------------------------------------------------------------------
+
+  [MEDIA] #12: Vulnerável a Clickjacking
+  Categoria:     Clickjacking
+  Localização:   Response Headers
+  Descrição:     Sem X-Frame-Options ou CSP frame-ancestors, o site pode ser embutido em iframe malicioso.
+  Recomendação:  Adicionar X-Frame-Options: DENY e/ou CSP com frame-ancestors 'self'.
+  ------------------------------------------------------------------

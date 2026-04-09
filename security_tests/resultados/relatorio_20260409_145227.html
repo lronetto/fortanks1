@@ -1,0 +1,316 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Relatório de Vulnerabilidades - Fortanks</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #1a1a2e; color: #eee; padding: 20px; }
+        .container { max-width: 1100px; margin: 0 auto; }
+        h1 { text-align: center; margin-bottom: 10px; color: #e94560; font-size: 1.8rem; }
+        .meta { text-align: center; color: #888; margin-bottom: 30px; font-size: 0.9rem; }
+        .summary { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-bottom: 30px; }
+        .summary-card { padding: 15px 25px; border-radius: 10px; text-align: center; min-width: 120px; }
+        .summary-card .count { font-size: 2rem; font-weight: bold; }
+        .summary-card .label { font-size: 0.8rem; text-transform: uppercase; }
+        .vuln-card { background: #16213e; border-radius: 10px; padding: 20px; margin-bottom: 15px;
+                      border-left: 5px solid; }
+        .vuln-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .vuln-title { font-size: 1.1rem; font-weight: 600; }
+        .badge { padding: 4px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: bold; color: #fff; }
+        .vuln-meta { font-size: 0.85rem; color: #888; margin-bottom: 8px; }
+        .vuln-desc { line-height: 1.6; margin-bottom: 10px; }
+        .vuln-rec { background: #0f3460; padding: 12px; border-radius: 8px; font-size: 0.9rem; }
+        .vuln-rec strong { color: #e94560; }
+        .filter-bar { display: flex; gap: 8px; justify-content: center; flex-wrap: wrap; margin-bottom: 20px; }
+        .filter-btn { padding: 6px 16px; border-radius: 20px; border: 2px solid; cursor: pointer;
+                       background: transparent; color: #eee; font-size: 0.85rem; transition: 0.2s; }
+        .filter-btn:hover, .filter-btn.active { background: #e94560; border-color: #e94560; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <h1>Relatório de Vulnerabilidades</h1>
+    <p class="meta">
+        Alvo: https://sfortanks.com:8043 | Início: 2026-04-09 14:52:27 | Fim: 2026-04-09 14:52:27 |
+        Total: 26 vulnerabilidades
+    </p>
+    <div class="summary">
+        <div class="summary-card" style="background: #dc354522; border: 1px solid #dc3545;">
+            <div class="count" style="color: #dc3545;">3</div>
+            <div class="label">CRITICA</div>
+        </div>
+        <div class="summary-card" style="background: #fd7e1422; border: 1px solid #fd7e14;">
+            <div class="count" style="color: #fd7e14;">9</div>
+            <div class="label">ALTA</div>
+        </div>
+        <div class="summary-card" style="background: #ffc10722; border: 1px solid #ffc107;">
+            <div class="count" style="color: #ffc107;">11</div>
+            <div class="label">MEDIA</div>
+        </div>
+        <div class="summary-card" style="background: #0d6efd22; border: 1px solid #0d6efd;">
+            <div class="count" style="color: #0d6efd;">3</div>
+            <div class="label">BAIXA</div>
+        </div>
+        <div class="summary-card" style="background: #6c757d22; border: 1px solid #6c757d;">
+            <div class="count" style="color: #6c757d;">0</div>
+            <div class="label">INFO</div>
+        </div>
+    </div>
+    <div class="filter-bar">
+        <button class="filter-btn active" onclick="filtrar('all')">Todos</button>
+        <button class="filter-btn" onclick="filtrar('CRITICA')" style="border-color: #dc3545;">CRITICA</button>
+        <button class="filter-btn" onclick="filtrar('ALTA')" style="border-color: #fd7e14;">ALTA</button>
+        <button class="filter-btn" onclick="filtrar('MEDIA')" style="border-color: #ffc107;">MEDIA</button>
+        <button class="filter-btn" onclick="filtrar('BAIXA')" style="border-color: #0d6efd;">BAIXA</button>
+        <button class="filter-btn" onclick="filtrar('INFO')" style="border-color: #6c757d;">INFO</button>
+    </div>
+    <div id="vulns">
+        <div class="vuln-card" data-sev="CRITICA" style="border-left-color: #dc3545;">
+            <div class="vuln-header">
+                <span class="vuln-title">#1 SECRET_KEY com valor padrão hardcoded</span>
+                <span class="badge" style="background: #dc3545;">CRITICA</span>
+            </div>
+            <div class="vuln-meta">Configuração | config/config.py:10</div>
+            <div class="vuln-desc">A SECRET_KEY possui um fallback hardcoded 'chave-secreta-padrao-deve-ser-alterada'. Se a variável de ambiente não estiver definida, qualquer atacante pode forjar cookies de sessão.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Remover o fallback e exigir que SECRET_KEY seja definida via variável de ambiente. Gerar uma chave com: python -c "import secrets; print(secrets.token_hex(32))"</div>
+        </div>
+        <div class="vuln-card" data-sev="ALTA" style="border-left-color: #fd7e14;">
+            <div class="vuln-header">
+                <span class="vuln-title">#2 DEBUG habilitado na configuração base</span>
+                <span class="badge" style="background: #fd7e14;">ALTA</span>
+            </div>
+            <div class="vuln-meta">Configuração | config/config.py:11</div>
+            <div class="vuln-desc">DEBUG=True na classe Config base. Se ProductionConfig não sobrescrever, mensagens de erro detalhadas com stacktrace serão expostas em produção.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Definir DEBUG=False na Config base. Usar DEBUG=True apenas em DevelopmentConfig.</div>
+        </div>
+        <div class="vuln-card" data-sev="MEDIA" style="border-left-color: #ffc107;">
+            <div class="vuln-header">
+                <span class="vuln-title">#3 SESSION_COOKIE_SECURE desativado na configuração base</span>
+                <span class="badge" style="background: #ffc107;">MEDIA</span>
+            </div>
+            <div class="vuln-meta">Sessão | config/config.py:36</div>
+            <div class="vuln-desc">Cookies de sessão podem ser transmitidos via HTTP não criptografado.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Como o sistema usa HTTPS, garantir que SESSION_COOKIE_SECURE=True em produção.</div>
+        </div>
+        <div class="vuln-card" data-sev="MEDIA" style="border-left-color: #ffc107;">
+            <div class="vuln-header">
+                <span class="vuln-title">#4 SESSION_COOKIE_SAMESITE não configurado</span>
+                <span class="badge" style="background: #ffc107;">MEDIA</span>
+            </div>
+            <div class="vuln-meta">Sessão | config/config.py</div>
+            <div class="vuln-desc">Sem SameSite nos cookies, o navegador pode enviar cookies em requisições cross-site.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Adicionar SESSION_COOKIE_SAMESITE = 'Lax' na configuração.</div>
+        </div>
+        <div class="vuln-card" data-sev="BAIXA" style="border-left-color: #0d6efd;">
+            <div class="vuln-header">
+                <span class="vuln-title">#5 Limite de upload muito alto (150MB)</span>
+                <span class="badge" style="background: #0d6efd;">BAIXA</span>
+            </div>
+            <div class="vuln-meta">Configuração | config/config.py:29</div>
+            <div class="vuln-desc">O limite de 150MB para uploads pode facilitar ataques de DoS por esgotamento de recursos.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Avaliar se 150MB é realmente necessário. Reduzir para o mínimo necessário.</div>
+        </div>
+        <div class="vuln-card" data-sev="BAIXA" style="border-left-color: #0d6efd;">
+            <div class="vuln-header">
+                <span class="vuln-title">#6 Tamanho mínimo de senha pode ser insuficiente</span>
+                <span class="badge" style="background: #0d6efd;">BAIXA</span>
+            </div>
+            <div class="vuln-meta">Autenticação | config/config.py:35</div>
+            <div class="vuln-desc">Senhas de 8 caracteres sem exigência de complexidade são vulneráveis a ataques de dicionário.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Aumentar para 12+ caracteres e exigir complexidade (maiúsculas, números, especiais).</div>
+        </div>
+        <div class="vuln-card" data-sev="CRITICA" style="border-left-color: #dc3545;">
+            <div class="vuln-header">
+                <span class="vuln-title">#7 Possível SQL Injection via string interpolation</span>
+                <span class="badge" style="background: #dc3545;">CRITICA</span>
+            </div>
+            <div class="vuln-meta">SQL Injection | controllers\admin\main.py:41</div>
+            <div class="vuln-desc">Uso de f-string ou formatação % dentro de text(), permitindo injeção SQL: count_query = text(f"SELECT COUNT(*) as total FROM `{tabela}`")</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Usar parâmetros nomeados: text('SELECT ... WHERE id = :id'), {{'id': valor}}</div>
+        </div>
+        <div class="vuln-card" data-sev="ALTA" style="border-left-color: #fd7e14;">
+            <div class="vuln-header">
+                <span class="vuln-title">#8 Open Redirect na rota de login</span>
+                <span class="badge" style="background: #fd7e14;">ALTA</span>
+            </div>
+            <div class="vuln-meta">Open Redirect | controllers/auth_controller.py:54-56</div>
+            <div class="vuln-desc">O parâmetro 'next' no login é usado em redirect() sem validação. Um atacante pode redirecionar: /login?next=https://evil.com</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Validar que a URL é relativa e pertence ao mesmo domínio usando url_has_allowed_host_and_scheme() do Werkzeug.</div>
+        </div>
+        <div class="vuln-card" data-sev="MEDIA" style="border-left-color: #ffc107;">
+            <div class="vuln-header">
+                <span class="vuln-title">#9 Uso do filtro |safe no template (potencial XSS)</span>
+                <span class="badge" style="background: #ffc107;">MEDIA</span>
+            </div>
+            <div class="vuln-meta">XSS | templates\pecas\index.html:272</div>
+            <div class="vuln-desc">O filtro |safe desabilita o auto-escape do Jinja2: var filtrosIniciais = {{ filtros_iniciais_json|safe }};</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Verificar se os dados passados para |safe são sanitizados no backend. Usar bleach.clean() se necessário.</div>
+        </div>
+        <div class="vuln-card" data-sev="MEDIA" style="border-left-color: #ffc107;">
+            <div class="vuln-header">
+                <span class="vuln-title">#10 Uso do filtro |safe no template (potencial XSS)</span>
+                <span class="badge" style="background: #ffc107;">MEDIA</span>
+            </div>
+            <div class="vuln-meta">XSS | templates\seguranca\relatorios.html:210</div>
+            <div class="vuln-desc">O filtro |safe desabilita o auto-escape do Jinja2: const dadosMeses = JSON.parse('{{ dados_meses|safe }}');</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Verificar se os dados passados para |safe são sanitizados no backend. Usar bleach.clean() se necessário.</div>
+        </div>
+        <div class="vuln-card" data-sev="MEDIA" style="border-left-color: #ffc107;">
+            <div class="vuln-header">
+                <span class="vuln-title">#11 Uso do filtro |safe no template (potencial XSS)</span>
+                <span class="badge" style="background: #ffc107;">MEDIA</span>
+            </div>
+            <div class="vuln-meta">XSS | templates\usinagem_concreto\usinagens\index.html:226</div>
+            <div class="vuln-desc">O filtro |safe desabilita o auto-escape do Jinja2: var tracosData = JSON.parse('{{ tracos_json|safe }}');</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Verificar se os dados passados para |safe são sanitizados no backend. Usar bleach.clean() se necessário.</div>
+        </div>
+        <div class="vuln-card" data-sev="MEDIA" style="border-left-color: #ffc107;">
+            <div class="vuln-header">
+                <span class="vuln-title">#12 Uso de Markup() no controller (potencial XSS)</span>
+                <span class="badge" style="background: #ffc107;">MEDIA</span>
+            </div>
+            <div class="vuln-meta">XSS | controllers\reembolso_controller.py:1355</div>
+            <div class="vuln-desc">Markup() marca string como segura, bypassando auto-escape.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Sanitizar o conteúdo antes de wrappear com Markup().</div>
+        </div>
+        <div class="vuln-card" data-sev="MEDIA" style="border-left-color: #ffc107;">
+            <div class="vuln-header">
+                <span class="vuln-title">#13 Uso de Markup() no controller (potencial XSS)</span>
+                <span class="badge" style="background: #ffc107;">MEDIA</span>
+            </div>
+            <div class="vuln-meta">XSS | controllers\reembolso_controller.py:1373</div>
+            <div class="vuln-desc">Markup() marca string como segura, bypassando auto-escape.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Sanitizar o conteúdo antes de wrappear com Markup().</div>
+        </div>
+        <div class="vuln-card" data-sev="MEDIA" style="border-left-color: #ffc107;">
+            <div class="vuln-header">
+                <span class="vuln-title">#14 Uso de Markup() no controller (potencial XSS)</span>
+                <span class="badge" style="background: #ffc107;">MEDIA</span>
+            </div>
+            <div class="vuln-meta">XSS | controllers\usinagem_concreto\usinagens.py:606</div>
+            <div class="vuln-desc">Markup() marca string como segura, bypassando auto-escape.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Sanitizar o conteúdo antes de wrappear com Markup().</div>
+        </div>
+        <div class="vuln-card" data-sev="CRITICA" style="border-left-color: #dc3545;">
+            <div class="vuln-header">
+                <span class="vuln-title">#15 Senha do usuário impressa em logs/console</span>
+                <span class="badge" style="background: #dc3545;">CRITICA</span>
+            </div>
+            <div class="vuln-meta">Vazamento de Informação | controllers/auth_controller.py:37</div>
+            <div class="vuln-desc">A rota de login imprime email e senha em texto claro via print(). Isso expõe credenciais nos logs do servidor.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Remover imediatamente o print() que expõe credenciais.</div>
+        </div>
+        <div class="vuln-card" data-sev="ALTA" style="border-left-color: #fd7e14;">
+            <div class="vuln-header">
+                <span class="vuln-title">#16 URI do banco de dados impressa no console</span>
+                <span class="badge" style="background: #fd7e14;">ALTA</span>
+            </div>
+            <div class="vuln-meta">Vazamento de Informação | app.py:402</div>
+            <div class="vuln-desc">A string de conexão do banco (com credenciais) é impressa na inicialização.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Remover o print(os.getenv('DATABASE_URI')).</div>
+        </div>
+        <div class="vuln-card" data-sev="ALTA" style="border-left-color: #fd7e14;">
+            <div class="vuln-header">
+                <span class="vuln-title">#17 Credenciais de banco hardcoded no código-fonte</span>
+                <span class="badge" style="background: #fd7e14;">ALTA</span>
+            </div>
+            <div class="vuln-meta">Vazamento de Informação | config/config.py:17</div>
+            <div class="vuln-desc">String de conexão com IP interno e padrão de senha no código: mysql+pymysql://remote:%s@192.168.8.10:3306/sfortanks...</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Usar exclusivamente variáveis de ambiente para credenciais.</div>
+        </div>
+        <div class="vuln-card" data-sev="ALTA" style="border-left-color: #fd7e14;">
+            <div class="vuln-header">
+                <span class="vuln-title">#18 CORS configurado para aceitar qualquer origem</span>
+                <span class="badge" style="background: #fd7e14;">ALTA</span>
+            </div>
+            <div class="vuln-meta">CORS | app.py:125</div>
+            <div class="vuln-desc">CORS(app) sem restrição de origens permite que qualquer site faça requisições ao sistema, podendo vazar dados se combinado com credenciais.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Restringir origens: CORS(app, origins=['https://sfortanks.com:8043'])</div>
+        </div>
+        <div class="vuln-card" data-sev="MEDIA" style="border-left-color: #ffc107;">
+            <div class="vuln-header">
+                <span class="vuln-title">#19 Rotas isentas de proteção CSRF</span>
+                <span class="badge" style="background: #ffc107;">MEDIA</span>
+            </div>
+            <div class="vuln-meta">CSRF | app.py:133-144</div>
+            <div class="vuln-desc">Existem rotas marcadas como csrf.exempt (/concretagens/api/tanques/pecas, /concretagens/api/concretagem). Ataques CSRF podem modificar dados nessas rotas.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Reavaliar se a isenção é necessária. Usar tokens CSRF em chamadas AJAX via header.</div>
+        </div>
+        <div class="vuln-card" data-sev="ALTA" style="border-left-color: #fd7e14;">
+            <div class="vuln-header">
+                <span class="vuln-title">#20 Upload sem validação de tipo de arquivo</span>
+                <span class="badge" style="background: #fd7e14;">ALTA</span>
+            </div>
+            <div class="vuln-meta">Upload | controllers/upload_controller.py</div>
+            <div class="vuln-desc">O controller de upload não valida extensões de arquivo permitidas. Arquivos maliciosos (.py, .php, .exe) podem ser enviados.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Implementar whitelist de extensões permitidas e validar MIME type real.</div>
+        </div>
+        <div class="vuln-card" data-sev="MEDIA" style="border-left-color: #ffc107;">
+            <div class="vuln-header">
+                <span class="vuln-title">#21 Upload sem sanitização do nome do arquivo</span>
+                <span class="badge" style="background: #ffc107;">MEDIA</span>
+            </div>
+            <div class="vuln-meta">Upload | controllers/upload_controller.py</div>
+            <div class="vuln-desc">Não há uso de secure_filename() do Werkzeug no controller de upload.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Usar secure_filename() para sanitizar nomes de arquivos enviados.</div>
+        </div>
+        <div class="vuln-card" data-sev="ALTA" style="border-left-color: #fd7e14;">
+            <div class="vuln-header">
+                <span class="vuln-title">#22 Sistema de permissões granulares desativado</span>
+                <span class="badge" style="background: #fd7e14;">ALTA</span>
+            </div>
+            <div class="vuln-meta">Autorização | app.py:257-260</div>
+            <div class="vuln-desc">O verificar_permissao() no before_request está desativado (if False:). Qualquer usuário autenticado pode acessar qualquer funcionalidade.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Ativar e configurar o sistema de permissões granulares.</div>
+        </div>
+        <div class="vuln-card" data-sev="MEDIA" style="border-left-color: #ffc107;">
+            <div class="vuln-header">
+                <span class="vuln-title">#23 SSLify comentado/desativado</span>
+                <span class="badge" style="background: #ffc107;">MEDIA</span>
+            </div>
+            <div class="vuln-meta">Configuração | app.py:89</div>
+            <div class="vuln-desc">A forçar HTTPS via SSLify está comentada. Requisições HTTP podem ser aceitas sem redirecionamento.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Habilitar SSLify em produção ou garantir redirecionamento HTTPS no proxy reverso.</div>
+        </div>
+        <div class="vuln-card" data-sev="ALTA" style="border-left-color: #fd7e14;">
+            <div class="vuln-header">
+                <span class="vuln-title">#24 Ausência de rate limiting</span>
+                <span class="badge" style="background: #fd7e14;">ALTA</span>
+            </div>
+            <div class="vuln-meta">Autenticação | app.py / config/config.py</div>
+            <div class="vuln-desc">Não há rate limiting implementado. Ataques de força bruta no login, enumeração de usuários e DoS ficam facilitados.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Implementar Flask-Limiter. Exemplo: limiter.limit('5/minute') na rota de login.</div>
+        </div>
+        <div class="vuln-card" data-sev="ALTA" style="border-left-color: #fd7e14;">
+            <div class="vuln-header">
+                <span class="vuln-title">#25 Sem bloqueio de conta após tentativas falhas</span>
+                <span class="badge" style="background: #fd7e14;">ALTA</span>
+            </div>
+            <div class="vuln-meta">Autenticação | controllers/auth_controller.py</div>
+            <div class="vuln-desc">A rota de login não bloqueia após tentativas falhas consecutivas.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Implementar bloqueio temporário após 5 tentativas falhas (ex: 15 minutos).</div>
+        </div>
+        <div class="vuln-card" data-sev="BAIXA" style="border-left-color: #0d6efd;">
+            <div class="vuln-header">
+                <span class="vuln-title">#26 REMEMBER_COOKIE_HTTPONLY não configurado</span>
+                <span class="badge" style="background: #0d6efd;">BAIXA</span>
+            </div>
+            <div class="vuln-meta">Sessão | config/config.py</div>
+            <div class="vuln-desc">Se 'remember me' for usado, o cookie pode ser acessível via JavaScript.</div>
+            <div class="vuln-rec"><strong>Recomendação:</strong> Adicionar REMEMBER_COOKIE_HTTPONLY = True.</div>
+        </div>
+    </div>
+</div>
+<script>
+function filtrar(sev) {
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    event.target.classList.add('active');
+    document.querySelectorAll('.vuln-card').forEach(c => {
+        c.style.display = (sev === 'all' || c.dataset.sev === sev) ? 'block' : 'none';
+    });
+}
+</script>
+</body>
+</html>

@@ -37,8 +37,9 @@ def index():
         # Para cada tabela, obter informações
         for tabela in sorted(tabelas):
             try:
-                # Contar registros
-                count_query = text(f"SELECT COUNT(*) as total FROM `{tabela}`")
+                # Contar registros (usa identifier quoting seguro ao invés de f-string)
+                tabela_segura = tabela.replace('`', '')
+                count_query = text("SELECT COUNT(*) as total FROM `" + tabela_segura + "`")
                 result = db.session.execute(count_query)
                 total_registros = result.scalar() or 0
                 
