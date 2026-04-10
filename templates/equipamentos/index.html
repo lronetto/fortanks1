@@ -4,6 +4,7 @@
 {% block mobile_title %}Equipamentos{% endblock %}
 
 {% block extra_css %}
+<link rel="stylesheet" href="https://cdn.datatables.net/rowgroup/1.4.1/css/rowGroup.bootstrap5.min.css">
 <style>
     #equipamentosTable .eq-acoes-dropdown .dropdown-toggle::after { display: none; }
     #equipamentosTable .eq-acoes-dropdown .dropdown-menu { min-width: 180px; }
@@ -19,6 +20,18 @@
     table.dataTable.dtr-inline.collapsed > tbody > tr > td.dtr-control::before,
     table.dataTable.dtr-inline.collapsed > tbody > tr > th.dtr-control::before {
         top: 50%; transform: translateY(-50%);
+    }
+    #equipamentosTable tr.dtrg-group td {
+        background-color: #e9ecef;
+        font-weight: 600;
+        font-size: .9rem;
+    }
+    .eq-group-bar {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: .25rem .75rem;
+        padding: .5rem 0;
     }
 </style>
 {% endblock %}
@@ -50,6 +63,25 @@
             <h6 class="m-0 font-weight-bold">Lista de Equipamentos</h6>
         </div>
         <div class="card-body p-md-3 p-2">
+            <div class="eq-group-bar mb-2">
+                <span class="text-muted fw-semibold"><i class="fas fa-layer-group me-1"></i>Agrupar por:</span>
+                <div class="form-check form-check-inline mb-0">
+                    <input class="form-check-input eq-group-check" type="checkbox" id="groupNome" value="nome" data-col="1">
+                    <label class="form-check-label" for="groupNome">Nome</label>
+                </div>
+                <div class="form-check form-check-inline mb-0">
+                    <input class="form-check-input eq-group-check" type="checkbox" id="groupTipo" value="tipo" data-col="2">
+                    <label class="form-check-label" for="groupTipo">Tipo</label>
+                </div>
+                <div class="form-check form-check-inline mb-0">
+                    <input class="form-check-input eq-group-check" type="checkbox" id="groupModelo" value="modelo" data-col="3">
+                    <label class="form-check-label" for="groupModelo">Modelo</label>
+                </div>
+                <div class="form-check form-check-inline mb-0">
+                    <input class="form-check-input eq-group-check" type="checkbox" id="groupNF" value="nota_fiscal" data-col="5">
+                    <label class="form-check-label" for="groupNF">Nota Fiscal</label>
+                </div>
+            </div>
             <table class="table table-bordered table-hover w-100" id="equipamentosTable" cellspacing="0">
                 <thead>
                     <tr>
@@ -84,6 +116,7 @@
 {% endblock %}
 
 {% block extra_js %}
+<script src="https://cdn.datatables.net/rowgroup/1.4.1/js/dataTables.rowGroup.min.js"></script>
 <script src="{{ url_for('static', filename='js/equipamento_busca_material_nome.js') }}"></script>
 <script src="{{ url_for('static', filename='js/equipamento_nota_fiscal_select2.js') }}"></script>
 <script src="{{ url_for('static', filename='js/equipamento_material_select2.js') }}"></script>
@@ -243,12 +276,44 @@ document.addEventListener('DOMContentLoaded', function () {
                     render: function (data, type, row) { return renderAcoes(row); }
                 }
             ],
-            dom: '<"row align-items-center"<"col-sm-12 col-md-auto me-auto"l><"col-sm-12 col-md-auto"f>>rtip'
+            dom: '<"row align-items-center"<"col-sm-12 col-md-auto me-auto"l><"col-sm-12 col-md-auto"f>>rtip',
+            rowGroup: {
+                enable: false,
+                dataSrc: 'tipo',
+                startRender: function (rows, group) {
+                    return group + ' <span class="badge bg-secondary fw-normal ms-1">' + rows.count() + '</span>';
+                }
+            }
         });
 
         window.reloadEquipamentosDatatable = function () {
             if (dtEquipamentos) dtEquipamentos.ajax.reload(null, false);
         };
+
+        $('.eq-group-check').on('change', function () {
+            var fields = [];
+            var colOrders = [];
+            $('.eq-group-check:checked').each(function () {
+                fields.push($(this).val());
+                colOrders.push([parseInt($(this).attr('data-col')), 'asc']);
+            });
+
+            if (fields.length === 0) {
+                dtEquipamentos.rowGroup().disable();
+                dtEquipamentos.order([[1, 'asc']]).draw();
+            } else {
+                dtEquipamentos.rowGroup().dataSrc(function (row) {
+                    var parts = [];
+                    for (var i = 0; i < fields.length; i++) {
+                        parts.push(row[fields[i]] || '—');
+                    }
+                    return parts.join(' / ');
+                });
+                dtEquipamentos.rowGroup().enable();
+                colOrders.push([1, 'asc']);
+                dtEquipamentos.order(colOrders).draw();
+            }
+        });
     }
 
     window.onPreencherChecklistSucesso = function () {

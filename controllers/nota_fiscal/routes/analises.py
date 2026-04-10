@@ -19,21 +19,31 @@ logger = logging.getLogger(__name__)
 @nota_fiscal_bp.route("/analise")
 @login_required
 def analise():
-    """
-    Tela de análise (já existe template). Mantém rota usada pelo botão "Análise".
-    A query detalhada foi mantida no legado; aqui usamos paginação simples por enquanto.
-    """
-    page = request.args.get("page", 1, type=int)
-    per_page = 25
-    agrupar_por = request.args.get("agrupar_por", "item_nf")  # 'item_nf' ou 'material'
-
+    """Tela de análise de notas fiscais. Dados carregados via DataTables AJAX."""
     fornecedor = (request.args.get("fornecedor", "") or "").strip()
     data_inicio = (request.args.get("data_inicio", "") or "").strip()
     data_fim = (request.args.get("data_fim", "") or "").strip()
     termo_item = (request.args.get("termo_item", "") or "").strip()
     filtro_material = (request.args.get("filtro_material", "") or "").strip()
+    agrupar_por = request.args.get("agrupar_por", "item_nf")
 
-    # Query agregada (campos esperados pelo template)
+    fornecedores_lista = db.session.query(NotaFiscal.nome_emitente).distinct().order_by(NotaFiscal.nome_emitente).all()
+    fornecedores = [f[0] for f in fornecedores_lista if f[0]]
+
+    return render_template(
+        "notas_fiscais/analise.html",
+        fornecedores=fornecedores,
+        filtro_fornecedor=fornecedor,
+        filtro_data_inicio=data_inicio,
+        filtro_data_fim=data_fim,
+        filtro_termo_item=termo_item,
+        filtro_material=filtro_material,
+        agrupar_por=agrupar_por,
+    )
+
+
+def _build_analise_query(agrupar_por, fornecedor, data_inicio, data_fim, termo_item, filtro_material):
+    """Monta a query agregada e aplica filtros comuns."""
     if agrupar_por == "material":
         query = (
             db.session.query(
@@ -66,33 +76,29 @@ def analise():
             .filter(NotaFiscal.status_processamento != "cancelada")
         )
 
-    # Aplicar filtros (comum)
     if fornecedor:
         query = query.filter(NotaFiscal.nome_emitente == fornecedor)
-
     if data_inicio:
         try:
-            dt_inicio = datetime.strptime(data_inicio, "%Y-%m-%d").date()
-            query = query.filter(NotaFiscal.data_emissao >= dt_inicio)
+            query = query.filter(NotaFiscal.data_emissao >= datetime.strptime(data_inicio, "%Y-%m-%d").date())
         except ValueError:
-            flash("Formato de data inválido para Data Início", "warning")
-
+            pass
     if data_fim:
         try:
-            dt_fim = datetime.strptime(data_fim, "%Y-%m-%d").date()
-            query = query.filter(NotaFiscal.data_emissao <= dt_fim)
+            query = query.filter(NotaFiscal.data_emissao <= datetime.strptime(data_fim, "%Y-%m-%d").date())
         except ValueError:
-            flash("Formato de data inválido para Data Fim", "warning")
-
+            pass
     if termo_item:
         termo_like = f"%{termo_item}%"
         query = query.filter(or_(NotaFiscalItem.codigo.ilike(termo_like), NotaFiscalItem.descricao.ilike(termo_like)))
-
     if filtro_material:
-        material_like = f"%{filtro_material}%"
-        query = query.filter(Materiais.nome.ilike(material_like))
+        query = query.filter(Materiais.nome.ilike(f"%{filtro_material}%"))
 
-    # Total geral (soma dos itens filtrados)
+    return query
+
+
+def _calc_total_geral(agrupar_por, fornecedor, data_inicio, data_fim, termo_item, filtro_material):
+    """Calcula o valor total geral dos itens filtrados."""
     total_base = (
         db.session.query(func.sum(NotaFiscalItem.valor_total))
         .join(NotaFiscal, NotaFiscal.id == NotaFiscalItem.nf_id)
@@ -119,33 +125,134 @@ def analise():
     if filtro_material:
         total_base = total_base.filter(Materiais.nome.ilike(f"%{filtro_material}%"))
 
-    total_geral_scalar = total_base.scalar()
-    total_geral = total_geral_scalar if total_geral_scalar is not None else Decimal(0)
+    scalar = total_base.scalar()
+    return float(scalar) if scalar is not None else 0.0
 
-    # Agrupamento/ordenação
+
+@nota_fiscal_bp.route("/analise/ajax")
+@login_required
+def analise_ajax():
+    """Endpoint AJAX para DataTables server-side na tela de análise."""
+    from flask import jsonify
+
+    draw = request.args.get("draw", 1, type=int)
+    start = request.args.get("start", 0, type=int)
+    length = request.args.get("length", 25, type=int)
+    search_value = (request.args.get("search[value]", "") or "").strip()
+
+    agrupar_por = request.args.get("agrupar_por", "item_nf")
+    fornecedor = (request.args.get("fornecedor", "") or "").strip()
+    data_inicio = (request.args.get("data_inicio", "") or "").strip()
+    data_fim = (request.args.get("data_fim", "") or "").strip()
+    termo_item = (request.args.get("termo_item", "") or "").strip()
+    filtro_material = (request.args.get("filtro_material", "") or "").strip()
+
+    query = _build_analise_query(agrupar_por, fornecedor, data_inicio, data_fim, termo_item, filtro_material)
+
     if agrupar_por == "material":
-        query = query.group_by(Materiais.id, Materiais.nome, Materiais.unidade_id).order_by(func.sum(NotaFiscalItem.valor_total).desc())
+        query = query.group_by(Materiais.id, Materiais.nome, Materiais.unidade_id)
     else:
-        query = query.group_by(NotaFiscalItem.codigo, NotaFiscalItem.descricao).order_by(func.sum(NotaFiscalItem.valor_total).desc())
+        query = query.group_by(NotaFiscalItem.codigo, NotaFiscalItem.descricao)
 
-    pagination = query.paginate(page=page, per_page=per_page, error_out=False)
+    records_total_query = query.subquery()
+    records_total = db.session.query(func.count()).select_from(records_total_query).scalar() or 0
 
-    fornecedores_lista = db.session.query(NotaFiscal.nome_emitente).distinct().order_by(NotaFiscal.nome_emitente).all()
-    fornecedores = [f[0] for f in fornecedores_lista if f[0]]
+    records_filtered = records_total
 
-    return render_template(
-        "notas_fiscais/analise.html",
-        pagination=pagination,
-        resultados=pagination.items,
-        fornecedores=fornecedores,
-        total_geral=total_geral,
-        filtro_fornecedor=fornecedor,
-        filtro_data_inicio=data_inicio,
-        filtro_data_fim=data_fim,
-        filtro_termo_item=termo_item,
-        filtro_material=filtro_material,
-        agrupar_por=agrupar_por,
-    )
+    if search_value:
+        search_like = f"%{search_value}%"
+        if agrupar_por == "material":
+            query = query.having(
+                or_(
+                    Materiais.nome.ilike(search_like),
+                    func.group_concat(distinct(NotaFiscal.nome_emitente)).ilike(search_like),
+                )
+            )
+        else:
+            query = query.having(
+                or_(
+                    NotaFiscalItem.codigo.ilike(search_like),
+                    NotaFiscalItem.descricao.ilike(search_like),
+                    func.group_concat(distinct(Materiais.nome)).ilike(search_like),
+                    func.group_concat(distinct(NotaFiscal.nome_emitente)).ilike(search_like),
+                )
+            )
+        filtered_sub = query.subquery()
+        records_filtered = db.session.query(func.count()).select_from(filtered_sub).scalar() or 0
+
+    order_col_idx = request.args.get("order[0][column]", type=int)
+    order_dir = request.args.get("order[0][dir]", "desc")
+
+    if agrupar_por == "material":
+        col_map = {
+            0: Materiais.nome,
+            1: Unidades.nome,
+            2: func.sum(NotaFiscalItem.quantidade),
+            3: func.sum(NotaFiscalItem.valor_total),
+            4: func.group_concat(distinct(NotaFiscal.nome_emitente)),
+        }
+    else:
+        col_map = {
+            0: NotaFiscalItem.codigo,
+            1: NotaFiscalItem.descricao,
+            2: func.group_concat(distinct(Materiais.nome)),
+            3: func.sum(NotaFiscalItem.quantidade),
+            4: func.group_concat(distinct(Unidades.nome)),
+            5: func.sum(NotaFiscalItem.valor_total),
+            6: func.group_concat(distinct(NotaFiscal.nome_emitente)),
+        }
+
+    order_column = col_map.get(order_col_idx, func.sum(NotaFiscalItem.valor_total))
+    if order_dir == "asc":
+        query = query.order_by(order_column.asc())
+    else:
+        query = query.order_by(order_column.desc())
+
+    items = query.offset(start).limit(length).all()
+
+    total_geral = _calc_total_geral(agrupar_por, fornecedor, data_inicio, data_fim, termo_item, filtro_material)
+
+    data = []
+    if agrupar_por == "material":
+        for item in items:
+            fornecedores_str = (item.fornecedores or "").replace(",", ", ") if item.fornecedores else "N/D"
+            data.append([
+                {
+                    "nome": item.material_nome or "N/D",
+                    "id": item.material_id,
+                    "tipo": "material",
+                },
+                item.material_unidade or "N/D",
+                f"{float(item.quantidade_total or 0):.2f}",
+                f"{float(item.valor_total_agregado or 0):.2f}",
+                fornecedores_str,
+            ])
+    else:
+        for item in items:
+            fornecedores_str = (item.fornecedores or "").replace(",", ", ") if item.fornecedores else "N/D"
+            materiais_str = (item.materiais_vinculados or "").replace(",", ", ") if item.materiais_vinculados else "-"
+            unidades_str = (item.unidades or "").replace(",", ", ") if item.unidades else "N/D"
+            data.append([
+                item.codigo or "N/D",
+                {
+                    "descricao": item.descricao or "N/D",
+                    "codigo": item.codigo or "",
+                    "tipo": "item_nf",
+                },
+                materiais_str,
+                f"{float(item.quantidade_total or 0):.2f}",
+                unidades_str,
+                f"{float(item.valor_total_agregado or 0):.2f}",
+                fornecedores_str,
+            ])
+
+    return jsonify({
+        "draw": draw,
+        "recordsTotal": records_total,
+        "recordsFiltered": records_filtered,
+        "data": data,
+        "total_geral": f"{total_geral:.2f}",
+    })
 
 
 @nota_fiscal_bp.route("/analise-transferencias")

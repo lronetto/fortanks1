@@ -36,6 +36,7 @@
                         <label for="tipo" class="form-label">Tipo *</label>
                         <select class="form-select" id="tipo" name="tipo" required>
                             <option value="">Selecione...</option>
+                            <option value="Equipamento">Equipamento</option>
                             <option value="Veiculos">Veículos</option>
                             <option value="Maquinas">Máquinas</option>
                             <option value="Ferramentas">Ferramentas</option>
@@ -81,7 +82,7 @@
                     </div>
                     <div class="col-md-6">
                         <label for="nota_fiscal_id" class="form-label">Nota fiscal</label>
-                        <select class="form-select equipamento-select-nota-fiscal" id="nota_fiscal_id" name="nota_fiscal_id" data-busca-url="{{ url_for('equipamento.busca_notas_fiscais_equipamento') }}">
+                        <select class="form-select equipamento-select-nota-fiscal" id="nota_fiscal_id" name="nota_fiscal_id" data-busca-url="{{ url_for('equipamento.busca_notas_fiscais_equipamento') }}" data-data-aquisicao-target="data_aquisicao">
                             <option value=""></option>
                         </select>
                         <div class="form-text">Número gravado no equipamento; ID da nota em dados adicionais.</div>

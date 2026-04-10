@@ -48,13 +48,28 @@
                         var list = data && data.results ? data.results : [];
                         return {
                             results: jQuery.map(list, function (x) {
-                                return { id: x.id, text: x.text };
+                                return {
+                                    id: x.id,
+                                    text: x.text,
+                                    data_emissao: x.data_emissao || '',
+                                };
                             }),
                         };
                     },
                     cache: true,
                 },
             });
+
+            var dataAcqTarget = $el.attr('data-data-aquisicao-target');
+            if (dataAcqTarget) {
+                $el.on('select2:select', function (e) {
+                    var dt = e.params && e.params.data && e.params.data.data_emissao;
+                    if (dt) {
+                        var campo = document.getElementById(dataAcqTarget);
+                        if (campo) campo.value = dt;
+                    }
+                });
+            }
         });
     }
 

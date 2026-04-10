@@ -457,10 +457,14 @@ def busca_notas_fiscais_equipamento():
         emi = (nf.nome_emitente or '')[:45]
         if len(nf.nome_emitente or '') > 45:
             emi += '…'
+        dt_emissao = ''
+        if nf.data_emissao:
+            dt_emissao = nf.data_emissao.strftime('%Y-%m-%d')
         results.append({
             'id': nf.id,
             'text': f'{nf.numero_nf} — {emi}',
             'numero_nf': nf.numero_nf or '',
+            'data_emissao': dt_emissao,
         })
     return jsonify({'results': results})
 
