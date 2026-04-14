@@ -1,0 +1,7 @@
+from controllers.admin.cadastros.cargo_controller import cargo_bp
+from controllers.admin.cadastros.centro_custo_controller import centro_custo_bp
+from controllers.admin.cadastros.conversao_unidade_controller import conversao_unidade_bp
+from controllers.admin.cadastros.departamento_controller import departamento_bp
+from controllers.admin.cadastros.plano_conta_controller import plano_conta_bp
+from controllers.admin.cadastros.unidade_controller import unidade_bp
+

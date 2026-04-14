@@ -107,11 +107,12 @@
     </div>
 
     <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 fw-bold text-primary">EPIs Cadastrados</h6>
+        <div class="card-header py-3 d-flex align-items-center justify-content-between">
+            <h6 class="m-0 fw-bold">EPIs Cadastrados</h6>
+            <div class="ft-col-toggle-placeholder"></div>
         </div>
         <div class="card-body">
-            <div class="table-responsive">
+            <div class="ft-datatable-wrapper">
                 <table class="table table-bordered table-hover w-100" id="epis-table" cellspacing="0">
                     <thead>
                         <tr>
@@ -137,7 +138,7 @@
 </div>
 {% endblock %}
 
-{% block scripts %}
+{% block extra_js %}
 <script>
 document.addEventListener('DOMContentLoaded', function () {
     var urlDatatables = "{{ url_for('seguranca.epis_datatables') }}";
@@ -180,11 +181,9 @@ document.addEventListener('DOMContentLoaded', function () {
             .catch(function () { /* silencioso */ });
     };
 
+    var TITULOS_EPI = ['ID', 'Material', 'Código CA', 'Estoque', 'Validade', 'Status', 'Ações'];
     if (typeof $.fn.DataTable !== 'undefined') {
-        dtEpis = $('#epis-table').DataTable({
-            processing: true,
-            serverSide: true,
-            responsive: true,
+        dtEpis = $('#epis-table').DataTable(FT.dtOpcoes({
             ajax: {
                 url: urlDatatables,
                 type: 'POST',
@@ -194,8 +193,6 @@ document.addEventListener('DOMContentLoaded', function () {
                 }
             },
             order: [[0, 'desc']],
-            pageLength: 25,
-            language: { url: '{{ url_for("static", filename="js/datatables-pt-BR-1.13.json") }}' },
             columns: [
                 { data: 'id', className: 'text-nowrap' },
                 { data: 'material_nome' },
@@ -230,16 +227,17 @@ document.addEventListener('DOMContentLoaded', function () {
                     searchable: false,
                     className: 'text-center text-nowrap',
                     render: function (data, type, row) {
-                        return (
-                            '<button type="button" class="btn btn-sm btn-primary btn-ajustar-estoque-epi" data-epi-id="' + row.id + '" title="Ajustar estoque"><i class="fas fa-boxes-stacked"></i></button> ' +
-                            '<button type="button" class="btn btn-sm btn-info btn-editar-epi" data-id="' + row.id + '" title="Editar"><i class="fas fa-edit"></i></button> ' +
-                            '<button type="button" class="btn btn-sm btn-danger btn-excluir-epi" data-epi-id="' + row.id + '" title="Excluir"><i class="fas fa-trash"></i></button>'
-                        );
+                        return FT.renderAcoesDropdown([
+                            { label: 'Ajustar Estoque', icon: 'fa-boxes-stacked', iconCor: 'primary', classe: 'btn-ajustar-estoque-epi', attrs: 'data-epi-id="' + row.id + '"' },
+                            { label: 'Editar', icon: 'fa-edit', iconCor: 'info', classe: 'btn-editar-epi', attrs: 'data-id="' + row.id + '"' },
+                            { divider: true },
+                            { label: 'Excluir', icon: 'fa-trash', iconCor: 'danger', classe: 'btn-excluir-epi', attrs: 'data-epi-id="' + row.id + '"' }
+                        ]);
                     }
                 }
             ],
-            dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip'
-        });
+        }));
+        FT.dtColunas.inicializar(dtEpis, 'epis-table', TITULOS_EPI);
 
         window.reloadEpisDatatable = function () {
             if (dtEpis) dtEpis.ajax.reload(null, false);

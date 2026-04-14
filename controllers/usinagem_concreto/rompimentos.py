@@ -150,7 +150,7 @@ def listar_rompimentos():
     """Lista todos os rompimentos de corpo de prova cadastrados"""
     usinagens = ConcretoUsinagens.query.order_by(ConcretoUsinagens.data_usinagem.desc()).all()
     
-    return render_template('usinagem_concreto/rompimentos/index.html',
+    return render_template('operacional/usinagem_concreto/rompimentos/index.html',
                           usinagens=usinagens)
 
 

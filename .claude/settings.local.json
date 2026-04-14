@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(find /c/Users/lrone/code/sfortanks/templates -maxdepth 2 -name \"index.html\" -exec wc -l {} \\\\;)",
+      "Bash(xargs ls:*)"
+    ]
+  }
+}

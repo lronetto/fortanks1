@@ -1,0 +1,151 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Tipos de Certificados - Sistema de Gestão - Pré-moldados{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3"><i class="fas fa-tags"></i> Tipos de Certificados</h1>
+        <div>
+            <a href="{{ url_for('certificado.index') }}" class="btn btn-secondary me-2">
+                <i class="fas fa-arrow-left"></i> Voltar para Certificados
+            </a>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovoTipoCertificado">
+                <i class="fas fa-plus"></i> Novo Tipo
+            </button>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex align-items-center justify-content-between">
+            <h6 class="m-0 fw-bold">Lista de Tipos de Certificados</h6>
+            <div class="ft-col-toggle-placeholder"></div>
+        </div>
+        <div class="card-body">
+            <div class="ft-datatable-wrapper">
+                <table class="table table-bordered table-hover" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Campos Específicos</th>
+                            <th>Data de Criação</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tipo in tipos %}
+                        <tr>
+                            <td>{{ tipo.id }}</td>
+                            <td>{{ tipo.nome }}</td>
+                            <td>
+                                {% set dados = tipo.get_dados_adicionais() %}
+                                {% if dados %}
+                                    <span class="badge bg-info">{{ dados|length }} campo(s) definido(s)</span>
+                                {% else %}
+                                    <span class="text-muted">Nenhum campo específico</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ tipo.criado_em.strftime('%d/%m/%Y %H:%M') if tipo.criado_em else 'N/A' }}</td>
+                            <td>
+                                {% if tipo.ativo %}
+                                <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                <span class="badge bg-danger">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="ft-acoes-dropdown dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Ações"><i class="fas fa-ellipsis-v"></i></button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li><button type="button" class="dropdown-item" onclick="visualizarTipoCertificado({{ tipo.id }})"><i class="fas fa-eye text-info"></i> Visualizar</button></li>
+                                        <li><button type="button" class="dropdown-item" onclick="editarTipoCertificado({{ tipo.id }})"><i class="fas fa-edit text-primary"></i> Editar</button></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <form id="form-excluir-{{ tipo.id }}" action="{{ url_for('tipo_certificado.excluir', id=tipo.id) }}" method="POST" class="d-inline form-excluir">
+                                                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                                <button type="submit" class="dropdown-item text-danger"><i class="fas fa-trash text-danger"></i> Excluir</button>
+                                            </form>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Incluir modais -->
+{% include 'tipos_cadastro_operacional/certificados/modais/novo_tipo_certificado.html' %}
+{% include 'tipos_cadastro_operacional/certificados/modais/editar_tipo_certificado.html' %}
+{% include 'tipos_cadastro_operacional/certificados/modais/visualizar_tipo_certificado.html' %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    var TITULOS_TC = ['ID', 'Nome', 'Campos Específicos', 'Data de Criação', 'Status', 'Ações'];
+    // Inicializar DataTable
+    $(document).ready(function () {
+        var dtTC = $('#dataTable').DataTable(FT.dtOpcoes({ serverSide: false, order: [[0, 'desc']] }));
+        FT.dtColunas.inicializar(dtTC, 'dataTable', TITULOS_TC);
+
+        // Confirmar exclusão
+        $('.form-excluir').on('submit', function (e) {
+            e.preventDefault();
+            const form = this;
+            const tipoName = $(this).closest('tr').find('td:nth-child(2)').text();
+
+            if (confirm(`Tem certeza que deseja excluir o tipo de certificado "${tipoName}"?`)) {
+                form.submit();
+            }
+        });
+    });
+
+    // Função para editar tipo de certificado
+    function editarTipoCertificado(id) {
+        fetch(`{{ url_for('tipo_certificado.editar', id=0) }}`.replace('0', id))
+            .then(response => response.json())
+            .then(data => {
+                const tipo = data.tipo;
+                document.getElementById('tipo_id_editar').value = tipo.id;
+                document.getElementById('nome_editar').value = tipo.nome;
+                document.getElementById('dados_adicionais_editar').value = JSON.stringify(tipo.dados_adicionais, null, 2);
+                
+                const modal = new bootstrap.Modal(document.getElementById('modalEditarTipoCertificado'));
+                modal.show();
+            })
+            .catch(error => {
+                console.error('Erro ao carregar tipo de certificado:', error);
+                alert('Erro ao carregar dados do tipo de certificado.');
+            });
+    }
+
+    // Função para visualizar tipo de certificado
+    function visualizarTipoCertificado(id) {
+        fetch(`{{ url_for('tipo_certificado.visualizar', id=0) }}`.replace('0', id))
+            .then(response => response.json())
+            .then(data => {
+                const tipo = data.tipo;
+                document.getElementById('nome_visualizar').textContent = tipo.nome;
+                document.getElementById('dados_adicionais_visualizar').textContent = JSON.stringify(tipo.dados_adicionais, null, 2);
+                document.getElementById('criado_em_visualizar').textContent = tipo.criado_em || 'N/A';
+                document.getElementById('atualizado_em_visualizar').textContent = tipo.atualizado_em || 'N/A';
+                document.getElementById('status_visualizar').textContent = tipo.ativo ? 'Ativo' : 'Inativo';
+                document.getElementById('status_visualizar').className = tipo.ativo ? 'badge bg-success' : 'badge bg-danger';
+                
+                const modal = new bootstrap.Modal(document.getElementById('modalVisualizarTipoCertificado'));
+                modal.show();
+            })
+            .catch(error => {
+                console.error('Erro ao carregar tipo de certificado:', error);
+                alert('Erro ao carregar dados do tipo de certificado.');
+            });
+    }
+</script>
+{% endblock %}

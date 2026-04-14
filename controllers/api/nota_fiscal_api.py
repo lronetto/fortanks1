@@ -196,28 +196,19 @@ def register(nota_fiscal_bp):
             btn_cancelar_icon = "fa-ban" if not nf_cancelada else "fa-undo"
             btn_cancelar_title = "Cancelar nota fiscal" if not nf_cancelada else "Reverter cancelamento da nota fiscal"
             
-            acoes_html = f'''
-                <div class="btn-group">
-                    <button type="button" class="btn btn-sm btn-primary visualizar-itens" data-id="{nota.NotaFiscal.id}" title="Visualizar Itens">
-                        <i class="fas fa-list"></i>
-                    </button>
-                    <button type="button" class="btn btn-sm btn-success importar-itens" data-id="{nota.NotaFiscal.id}" title="Importar para Estoque">
-                        <i class="fas fa-file-import"></i>
-                    </button>
-                    <button type="button" class="btn btn-sm btn-warning vincular-material" data-id="{nota.NotaFiscal.id}" title="Vincular Material">
-                        <i class="fas fa-link"></i>
-                    </button>
-                    <button type="button" class="btn btn-sm {btn_liberar_class} liberar-nota" data-id="{nota.NotaFiscal.id}" data-numero="{nota.NotaFiscal.numero_nf}" data-liberada="{liberada}" title="{btn_liberar_title}">
-                        <i class="fas {btn_liberar_icon}"></i>
-                    </button>
-                    <button type="button" class="btn btn-sm {btn_cancelar_class} cancelar-nota" data-id="{nota.NotaFiscal.id}" data-numero="{nota.NotaFiscal.numero_nf}" data-cancelada="{1 if nf_cancelada else 0}" title="{btn_cancelar_title}">
-                        <i class="fas {btn_cancelar_icon}"></i>
-                    </button>
-                    <button type="button" class="btn btn-sm btn-danger excluir-nota" data-id="{nota.NotaFiscal.id}" data-numero="{nota.NotaFiscal.numero_nf}" title="Excluir">
-                        <i class="fas fa-trash"></i>
-                    </button>
-                </div>
-            '''
+            acoes_html = (
+                f'<div class="ft-acoes-dropdown dropdown">'
+                f'<button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Ações"><i class="fas fa-ellipsis-v"></i></button>'
+                f'<ul class="dropdown-menu dropdown-menu-end">'
+                f'<li><button type="button" class="dropdown-item visualizar-itens" data-id="{nota.NotaFiscal.id}"><i class="fas fa-list text-primary"></i> Visualizar Itens</button></li>'
+                f'<li><button type="button" class="dropdown-item importar-itens" data-id="{nota.NotaFiscal.id}"><i class="fas fa-file-import text-success"></i> Importar para Estoque</button></li>'
+                f'<li><button type="button" class="dropdown-item vincular-material" data-id="{nota.NotaFiscal.id}"><i class="fas fa-link text-warning"></i> Vincular Material</button></li>'
+                f'<li><button type="button" class="dropdown-item liberar-nota" data-id="{nota.NotaFiscal.id}" data-numero="{nota.NotaFiscal.numero_nf}" data-liberada="{liberada}"><i class="fas {btn_liberar_icon} text-info"></i> {btn_liberar_title}</button></li>'
+                f'<li><button type="button" class="dropdown-item cancelar-nota" data-id="{nota.NotaFiscal.id}" data-numero="{nota.NotaFiscal.numero_nf}" data-cancelada="{1 if nf_cancelada else 0}"><i class="fas {btn_cancelar_icon} text-secondary"></i> {btn_cancelar_title}</button></li>'
+                f'<li><hr class="dropdown-divider"></li>'
+                f'<li><button type="button" class="dropdown-item text-danger excluir-nota" data-id="{nota.NotaFiscal.id}" data-numero="{nota.NotaFiscal.numero_nf}"><i class="fas fa-trash text-danger"></i> Excluir</button></li>'
+                f'</ul></div>'
+            )
 
             fornecedor_html = f'''
                 <a href="javascript:void(0);" class="visualizar-docs" data-id="{nota.NotaFiscal.id}" data-numero="{nota.NotaFiscal.numero_nf}" title="Visualizar Documentos">

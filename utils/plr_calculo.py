@@ -1,10 +1,9 @@
 """
 Cálculo de PLR: tempo de casa, salário base e multiplicador.
 Regra: salário base para PLR = salário do cargo no período × multiplicador;
-       se tempo de casa (meses) > 18 então multiplicador = 2, senão 1.
+       se tempo de casa (meses) > 18 então multiplicador = 1.2, senão 1.
 """
 from datetime import date
-from dateutil.relativedelta import relativedelta
 
 
 def tempo_de_casa_meses(data_admissao, data_fechamento):
@@ -19,15 +18,8 @@ def tempo_de_casa_meses(data_admissao, data_fechamento):
         return 0
     meses = (fim.year - data_admissao.year) * 12
     meses += (fim.month - data_admissao.month)
-    if data_admissao.day <=15: 
-        meses+=1   
-    return max(0, meses)
-    meses = (fim.year - data_admissao.year) * 12
-    meses = relativedelta(fim, data_admissao).months
-    if data_admissao.day <=15: 
-        meses+=1   
-   # meses = (fim.year - data_admissao.year) * 12 + (fim.month - data_admissao.month)
-    
+    if data_admissao.day <=15:
+        meses += 1
     return max(0, meses)
 
 

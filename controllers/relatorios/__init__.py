@@ -1,2 +1,4 @@
 # Controllers de Relatórios
+from controllers.relatorios.dados_analiticos_controller import dados_analiticos_bp
+from controllers.relatorios.relatorio_controller import relatorio_bp
 

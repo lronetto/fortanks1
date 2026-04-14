@@ -286,7 +286,10 @@
             </table>
         </div>
     </div>
-    <div class="table-responsive">
+    <div data-ft-colvis="tabelaRelatorioNotas" class="d-flex justify-content-end mb-1">
+        <div class="ft-col-toggle-placeholder"></div>
+    </div>
+    <div class="ft-datatable-wrapper">
         <table class="table table-bordered table-striped" id="tabelaRelatorioNotas" width="100%" cellspacing="0">
             <thead>
                 <tr>
@@ -392,7 +395,7 @@
 </div>
 {% endblock %}
 
-{% block scripts %}
+{% block extra_js %}
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <script>
 $(document).ready(function() {
@@ -419,13 +422,9 @@ $(document).ready(function() {
         return parseFloat(num) || 0;
     };
     
-    let tableRelatorioNotas = $('#tabelaRelatorioNotas').DataTable({
-        language: {
-            url: 'https://cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json'
-        },
-        pageLength: 25,
-        lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
-        order: [[0, 'desc']], // Ordenar por data de emissão descendente por padrão
+    var TITULOS_REL_NF = ['Data Emissão', 'Centro de Custo', 'Nº Nota Fiscal', 'Quantidade (Placas)', 'Valor (R$)', 'Data Prevista Vencimento', 'Pago em', 'Status', 'Ações'];
+    let tableRelatorioNotas = $('#tabelaRelatorioNotas').DataTable(FT.dtOpcoes({
+        order: [[0, 'desc']],
         columnDefs: [
             { 
                 targets: [0, 5], // Colunas de data
@@ -634,8 +633,10 @@ $(document).ready(function() {
             }
         ],
         responsive: true,
-        dom: 'lrtip' // l = length, r = processing, t = table, i = information, p = pagination
-    });
+        dom: 'lrtip'
+    }));
+    FT.dtColunas.inicializar(tableRelatorioNotas, 'tabelaRelatorioNotas', TITULOS_REL_NF);
+
     $('#centro_custo').select2({
         theme: 'bootstrap4',
         placeholder: 'Selecione um ou mais centros de custo',
@@ -655,7 +656,10 @@ $(document).ready(function() {
         
         // Material - Faturado
         $('#valor-material-faturado').text(formatarMoeda(dados.materialFaturado || 0));
-        $('#quantidade-material-faturado').text((dados.quantidadeMaterialFaturado || dados.totalPlacasMaterial || 0).toLocaleString('pt-BR'));
+        var quantidadeMaterialFaturado = (dados.quantidadeMaterialFaturado != null)
+            ? dados.quantidadeMaterialFaturado
+            : (dados.totalPlacasMaterial || 0);
+        $('#quantidade-material-faturado').text(quantidadeMaterialFaturado.toLocaleString('pt-BR'));
         $('#percentual-material-faturado').text((dados.percentualMaterialFaturado || 0).toFixed(1) + '%');
         
         // Material - Recebido

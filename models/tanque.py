@@ -101,7 +101,7 @@ class Tanques(db.Model):
     @staticmethod
     def sql_codigo_nf_igual_item_nf_colunas(codigo_item_col, item_nf_col):
         """
-        Uma NF pode ter vários itens (tanques/códigos distintos). Esta expressão
+        Uma NF pode ter vários itens (cadastros/tanques/códigos distintos). Esta expressão
         associa cada linha de item apenas ao tanque cujo item_nf coincide com o
         código do item, comparando como texto (evita coerção numérica no SGBD).
         """

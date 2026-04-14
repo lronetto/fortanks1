@@ -4,19 +4,19 @@
 
 {% block content %}
 <div class="container-fluid px-4 py-4">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h1 class="h3 mb-0 text-gray-800">Pedidos de Compra</h1>
+    <div class="ft-page-header">
+        <h1 class="h3 mb-0">Pedidos de Compra</h1>
         <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalPedidoCompra">
             <i class="fas fa-plus"></i> Novo Pedido
         </button>
     </div>
 
     <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Lista de Pedidos de Compra</h6>
+        <div class="card-header py-3 d-flex align-items-center justify-content-between">
+            <h6 class="m-0 fw-bold">Lista de Pedidos de Compra</h6>
+            <div class="ft-col-toggle-placeholder"></div>
         </div>
-        <div class="card-body">
-            <div class="table-responsive">
+        <div class="card-body p-md-3 p-2 ft-datatable-wrapper">
                 <table class="table table-bordered table-hover" id="tabelaPedidosCompra" width="100%" cellspacing="0">
                     <thead>
                         <tr>
@@ -32,7 +32,6 @@
                         {# preenchido via DataTables AJAX #}
                     </tbody>
                 </table>
-            </div>
         </div>
     </div>
 </div>
@@ -41,73 +40,50 @@
 
 {% endblock %}
 
-{% block scripts %}
+{% block extra_js %}
 <script>
-    document.addEventListener('DOMContentLoaded', function () {
-        if (typeof $.fn.DataTable !== 'undefined') {
-            $('#tabelaPedidosCompra').DataTable({
-                processing: true,
-                serverSide: true,
-                ajax: {
-                    url: "{{ url_for('pedido_compra.datatables') }}",
-                    type: "POST",
-                    headers: {
-                        'X-CSRFToken': "{{ csrf_token() }}"
-                    },
-                    data: function (d) {
-                        d.csrf_token = "{{ csrf_token() }}";
+document.addEventListener('DOMContentLoaded', function () {
+    if (typeof $.fn.DataTable !== 'undefined') {
+        var csrf = FT.csrf();
+        var TITULOS_PC = ['Número', 'Fornecedor', 'Centro de Custo', 'Data Liberação', 'Qtd Itens', 'Ações'];
+        var dt = $('#tabelaPedidosCompra').DataTable(FT.dtOpcoes({
+            ajax: {
+                url: "{{ url_for('pedido_compra.datatables') }}",
+                type: 'POST',
+                headers: { 'X-CSRFToken': csrf },
+                data: function (d) { d.csrf_token = csrf; }
+            },
+            columns: [
+                { data: 'numero', name: 'numero' },
+                { data: 'fornecedor_nome', name: 'fornecedor_nome' },
+                { data: 'centro_custo_nome', name: 'centro_custo_nome', defaultContent: '-' },
+                {
+                    data: 'data_liberacao', name: 'data_liberacao',
+                    render: function (data) {
+                        if (!data) return '-';
+                        return new Date(data).toLocaleDateString('pt-BR');
                     }
                 },
-                columns: [
-                    { data: 'numero', name: 'numero' },
-                    { data: 'fornecedor_nome', name: 'fornecedor_nome' },
-                    { data: 'centro_custo_nome', name: 'centro_custo_nome', defaultContent: '-', },
-                    {
-                        data: 'data_liberacao',
-                        name: 'data_liberacao',
-                        render: function (data) {
-                            if (!data) return '-';
-                            const d = new Date(data);
-                            return d.toLocaleDateString('pt-BR');
-                        }
-                    },
-                    {
-                        data: 'itens',
-                        name: 'itens',
-                        render: function (data) {
-                            return Array.isArray(data) ? data.length : 0;
-                        },
-                        className: 'text-center'
-                    },
-                    {
-                        data: null,
-                        orderable: false,
-                        searchable: false,
-                        className: 'text-center',
-                        render: function (data, type, row) {
-                            return `
-                                <button type="button" class="btn btn-sm btn-info btn-visualizar-pedido" 
-                                        data-id="${row.id}">
-                                    <i class="fas fa-eye"></i>
-                                </button>
-                                <button type="button" class="btn btn-sm btn-primary btn-editar-pedido" 
-                                        data-id="${row.id}">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <button type="button" class="btn btn-sm btn-danger btn-excluir-pedido" 
-                                        data-id="${row.id}" data-numero="${row.numero}">
-                                    <i class="fas fa-trash"></i>
-                                </button>
-                            `;
-                        }
+                {
+                    data: 'itens', name: 'itens', className: 'text-center',
+                    render: function (data) { return Array.isArray(data) ? data.length : 0; }
+                },
+                {
+                    data: null, orderable: false, searchable: false, className: 'text-center',
+                    render: function (data, type, row) {
+                        return FT.renderAcoesDropdown([
+                            { label: 'Visualizar', icon: 'fa-eye',   iconCor: 'info',    classe: 'btn-visualizar-pedido', attrs: 'data-id="' + row.id + '"' },
+                            { label: 'Editar',     icon: 'fa-edit',  iconCor: 'primary', classe: 'btn-editar-pedido',     attrs: 'data-id="' + row.id + '"' },
+                            { divider: true },
+                            { label: 'Excluir',    icon: 'fa-trash', iconCor: 'danger',  classe: 'btn-excluir-pedido',    attrs: 'data-id="' + row.id + '" data-numero="' + FT.escAttr(row.numero) + '"' },
+                        ]);
                     }
-                ],
-                language: {
-                    url: '//cdn.datatables.net/plug-ins/1.11.5/i18n/pt-BR.json'
                 }
-            });
-        }
-    });
+            ]
+        }));
+        FT.dtColunas.inicializar(dt, 'tabelaPedidosCompra', TITULOS_PC);
+    }
+});
 </script>
 {% endblock %}
 

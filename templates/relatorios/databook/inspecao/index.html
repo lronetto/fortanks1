@@ -69,12 +69,10 @@
 
     <!-- Tabela de Dados -->
     <div class="card">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <div>
-                <i class="fas fa-table me-1"></i>
-                Dados de Inspeção
-            </div>
-            <div>
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h6 class="m-0 fw-bold"><i class="fas fa-table me-1"></i> Dados de Inspeção</h6>
+            <div class="d-flex align-items-center gap-2">
+            <div class="ft-col-toggle-placeholder"></div>
                 <button type="button" id="btnExportarMassaExcel" class="btn btn-success btn-sm me-2">
                     <i class="fas fa-file-excel"></i> Exportar em Massa (Excel)
                 </button>
@@ -82,9 +80,10 @@
                     <i class="fas fa-file-pdf"></i> Exportar em Massa (PDF)
                 </button>
             </div>
+            </div>
         </div>
         <div class="card-body">
-            <div class="table-responsive">
+            <div class="ft-datatable-wrapper">
                 <table class="table table-bordered table-striped" id="dataTable" width="100%" cellspacing="0">
                     <thead>
                         <tr>
@@ -119,12 +118,11 @@
 </style>
 {% endblock %}
 
-{% block scripts %}
-
+{% block extra_js %}
 <script>
+    var TITULOS_DB_INS = ['', 'Data de Concretagem', 'Pista', 'Projeto', 'Tanque', 'Ações'];
     $(document).ready(function() {
-        let table = $('#dataTable').DataTable({
-            "processing": true,
+        let table = $('#dataTable').DataTable(FT.dtOpcoes({
             "serverSide": false,
             "ajax": {
                 "url": "{{ url_for('databook_inspecao.api_dados') }}",
@@ -170,13 +168,9 @@
                     }
                 }
             ],
-            "language": {
-                "url": "//cdn.datatables.net/plug-ins/1.10.25/i18n/Portuguese-Brasil.json"
-            },
-            "order": [[0, 'desc']],  // Ordenar por data de concretagem (mais recente primeiro)
-            "pageLength": 25,
-            "lengthMenu": [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]]
-        });
+            "order": [[0, 'desc']]
+        }));
+        FT.dtColunas.inicializar(table, 'dataTable', TITULOS_DB_INS);
 
         // Função para carregar grupos baseado no projeto
         function carregarGrupos() {

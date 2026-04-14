@@ -1,0 +1,193 @@
+{% extends "common/base.html" %}
+
+{% block title %}Grupos de Materiais{% endblock %}
+{% block mobile_title %}Grupos de Materiais{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="ft-page-header">
+        <h1 class="h3 mb-0">Grupos de Materiais</h1>
+        <div class="btn-group">
+            <a href="{{ url_for('estoque.index') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i>
+                <span class="d-none d-md-inline ms-1">Voltar ao Estoque</span>
+            </a>
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoGrupo">
+                <i class="fas fa-plus"></i>
+                <span class="d-none d-md-inline ms-1">Novo Grupo</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="alert-container">
+        {% include "common/alerts.html" %}
+    </div>
+
+    <!-- Filtros -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex align-items-center justify-content-between">
+            <h6 class="m-0 fw-bold">Filtros</h6>
+            <a href="{{ url_for('grupo_material.index') }}" class="btn btn-sm btn-outline-secondary" title="Limpar filtros">
+                <i class="fas fa-eraser"></i>
+            </a>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('grupo_material.index') }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="row g-2 align-items-end">
+                    <div class="col-md-4">
+                        <label for="search" class="form-label mb-1">Buscar</label>
+                        <input type="text" class="form-control form-control-sm" id="search" name="search"
+                               placeholder="Nome, código ou descrição..." value="{{ search }}">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="status" class="form-label mb-1">Status</label>
+                        <select class="form-select form-select-sm" id="status" name="status">
+                            <option value="">Todos</option>
+                            <option value="ativo"   {% if status == 'ativo'   %}selected{% endif %}>Ativo</option>
+                            <option value="inativo" {% if status == 'inativo' %}selected{% endif %}>Inativo</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button type="submit" class="btn btn-primary btn-sm w-100">
+                            <i class="fas fa-search"></i> Filtrar
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 fw-bold">Lista de Grupos</h6>
+        </div>
+        <div class="card-body p-md-3 p-2 ft-datatable-wrapper">
+            <table class="table table-bordered table-hover w-100" id="dataTable" cellspacing="0">
+                <thead>
+                    <tr>
+                        <th>Nome</th>
+                        <th>Código</th>
+                        <th>Descrição</th>
+                        <th class="text-center">Materiais</th>
+                        <th>Status</th>
+                        <th>Criado em</th>
+                        <th class="text-center">Ações</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for grupo in grupos.items %}
+                    <tr>
+                        <td>
+                            <div class="d-flex align-items-center">
+                                {% if grupo.icone %}
+                                    <i class="{{ grupo.icone }} me-2"{% if grupo.cor %} style="color:{{ grupo.cor }}"{% endif %}></i>
+                                {% endif %}
+                                <strong>{{ grupo.nome }}</strong>
+                            </div>
+                        </td>
+                        <td>{{ grupo.codigo or '—' }}</td>
+                        <td>{{ grupo.descricao or '—' }}</td>
+                        <td class="text-center">
+                            <span class="badge bg-info text-dark">{{ grupo.total_materiais }}</span>
+                        </td>
+                        <td>
+                            {% if grupo.ativo %}
+                                <span class="badge bg-success">Ativo</span>
+                            {% else %}
+                                <span class="badge bg-secondary">Inativo</span>
+                            {% endif %}
+                        </td>
+                        <td>{{ grupo.criado_em.strftime('%d/%m/%Y') }}</td>
+                        <td class="text-center">
+                            <div class="ft-acoes-dropdown dropdown">
+                                <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                                        data-bs-toggle="dropdown" aria-expanded="false" title="Ações">
+                                    <i class="fas fa-ellipsis-v"></i>
+                                </button>
+                                <ul class="dropdown-menu dropdown-menu-end">
+                                    <li>
+                                        <button type="button" class="dropdown-item btn-visualizar-grupo"
+                                                data-id="{{ grupo.id }}"
+                                                data-nome="{{ grupo.nome | e }}"
+                                                data-descricao="{{ grupo.descricao or '' | e }}"
+                                                data-cor="{{ grupo.cor or '' | e }}"
+                                                data-icone="{{ grupo.icone or '' | e }}"
+                                                data-ativo="{{ grupo.ativo }}"
+                                                data-total-materiais="{{ grupo.total_materiais }}"
+                                                data-criado-em="{{ grupo.criado_em.strftime('%d/%m/%Y %H:%M') }}"
+                                                data-criado-por="{{ grupo.criado_por.nome if grupo.criado_por else 'Sistema' }}"
+                                                data-bs-toggle="modal" data-bs-target="#modalVisualizarGrupo">
+                                            <i class="fas fa-eye text-info"></i> Visualizar
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <button type="button" class="dropdown-item btn-editar-grupo"
+                                                data-id="{{ grupo.id }}"
+                                                data-nome="{{ grupo.nome | e }}"
+                                                data-descricao="{{ grupo.descricao or '' | e }}"
+                                                data-cor="{{ grupo.cor or '' | e }}"
+                                                data-icone="{{ grupo.icone or '' | e }}"
+                                                data-ativo="{{ grupo.ativo }}"
+                                                data-bs-toggle="modal" data-bs-target="#modalEditarGrupo">
+                                            <i class="fas fa-edit text-primary"></i> Editar
+                                        </button>
+                                    </li>
+                                    <li>
+                                        <a class="dropdown-item"
+                                           href="{{ url_for('grupo_material.materiais', id=grupo.id) }}">
+                                            <i class="fas fa-boxes text-warning"></i> Materiais
+                                        </a>
+                                    </li>
+                                    <li><hr class="dropdown-divider"></li>
+                                    <li>
+                                        <button type="button" class="dropdown-item btn-excluir-grupo"
+                                                data-url="{{ url_for('grupo_material.excluir', id=grupo.id) }}"
+                                                data-nome="{{ grupo.nome | e }}"
+                                                data-total-materiais="{{ grupo.total_materiais }}">
+                                            <i class="fas fa-trash text-danger"></i> Excluir
+                                        </button>
+                                    </li>
+                                </ul>
+                            </div>
+                        </td>
+                    </tr>
+                    {% else %}
+                    <tr>
+                        <td colspan="7" class="text-center text-muted">Nenhum grupo encontrado</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+
+            <!-- Paginação -->
+            {% if grupos.pages > 1 %}
+            <div class="d-flex justify-content-between align-items-center mt-3 flex-wrap gap-2">
+                <small class="text-muted">
+                    Mostrando {{ grupos.items|length }} de {{ grupos.total }} grupos
+                </small>
+                <nav aria-label="Paginação">
+                    <ul class="pagination pagination-sm mb-0">
+                        {% for page in grupos.iter_pages() %}
+                            {% if page %}
+                                <li class="page-item {{ 'active' if page == grupos.page else '' }}">
+                                    <a class="page-link" href="{{ url_for('grupo_material.index', page=page, search=search, status=status) }}">{{ page }}</a>
+                                </li>
+                            {% else %}
+                                <li class="page-item disabled"><span class="page-link">…</span></li>
+                            {% endif %}
+                        {% endfor %}
+                    </ul>
+                </nav>
+            </div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+{% include 'materiais/grupos/modais/novo_grupo.html' %}
+{% include 'materiais/grupos/modais/editar_grupo.html' %}
+{% include 'materiais/grupos/modais/visualizar_grupo.html' %}
+{% include 'materiais/grupos/modais/confirmar_exclusao.html' %}
+{% endblock %}

@@ -23,8 +23,19 @@ except Exception:
 
 try:
     from controllers.api.material_api import register as register_material_api  # noqa: E402
-    # material_api.register espera um blueprint; aqui registramos as rotas sob /api/materiais/...
     register_material_api(api_bp)
+except Exception:
+    pass
+
+try:
+    from controllers.api.mobile.auth_api import register as register_auth_api  # noqa: E402
+    register_auth_api(api_bp)
+except Exception:
+    pass
+
+try:
+    from controllers.api.mobile.equipamento_api import register as register_equipamento_api  # noqa: E402
+    register_equipamento_api(api_bp)
 except Exception:
     pass
 

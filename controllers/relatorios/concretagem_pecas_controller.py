@@ -270,7 +270,7 @@ def index():
     total_concretagens = len(concretagens_unicas)
     
     return render_template(
-        'relatorios/concretagem_pecas/index.html',
+        'relatorios/concretagem_cadastros/pecas/index.html',
         dados_mes=dados_mes,
         dados_semana=dados_semana,
         labels_mes=labels_mes,
@@ -568,7 +568,7 @@ def exportar_pdf():
     total_metros_placas = sum(item.get('metros_placas', 0) for item in dados)
     
     html = render_template(
-        'relatorios/concretagem_pecas/pdf.html',
+        'relatorios/concretagem_cadastros/pecas/pdf.html',
         dados=dados,
         dados_mes=dados_mes,
         dados_semana=dados_semana,

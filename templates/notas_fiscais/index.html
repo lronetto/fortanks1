@@ -207,27 +207,13 @@
   
 
     <!-- Lista de Notas Fiscais -->
-    <div class="card shadow">
+    <div class="card shadow" data-ft-colvis="tabelaNotasFiscais">
         <div class="card-header py-3 d-flex align-items-center justify-content-between">
-            <h6 class="m-0 font-weight-bold text-primary">Notas Fiscais</h6>
-            <div class="d-flex align-items-center gap-2">
-                <div class="dropdown">
-                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" id="btnDropdownColunasNotasFiscais" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false">
-                        <i class="fas fa-columns"></i> Colunas
-                    </button>
-                    <div class="dropdown-menu dropdown-menu-end p-2" aria-labelledby="btnDropdownColunasNotasFiscais" style="min-width: 260px;" id="menuColunasNotasFiscais">
-                        <div class="small text-muted mb-2">Marque/desmarque para mostrar/ocultar colunas.</div>
-                        <div id="listaColunasNotasFiscais"></div>
-                        <div class="dropdown-divider"></div>
-                        <button type="button" class="btn btn-sm btn-outline-primary w-100" id="btnResetColunasNotasFiscais">
-                            Restaurar padrão
-                        </button>
-                    </div>
-                </div>
-            </div>
+            <h6 class="m-0 fw-bold">Notas Fiscais</h6>
+            <div class="ft-col-toggle-placeholder"></div>
         </div>
         <div class="card-body">
-            <div class="table-responsive">
+            <div class="ft-datatable-wrapper">
                 <table class="table table-bordered" id="tabelaNotasFiscais" style="width:100%">
                     <thead>
                         <tr>
@@ -241,7 +227,7 @@
                             <th>Fornecedor</th>
                             <th>Valor Total</th>
                             <th>Status</th>
-                            <th width="180">Ações</th>
+                            <th>Ações</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -303,12 +289,10 @@
 </style>
 {% endblock %}
 
-{% block scripts %}
+{% block extra_js %}
 <!-- SweetAlert2 para diálogos -->
 <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.3/dist/sweetalert2.all.min.js"></script>
 <!-- JavaScript específico das notas fiscais -->
-<!-- Script principal -->
-<script src="{{ url_for('static', filename='js/comum.js') }}"></script>
 <script>
 // Função auxiliar para mostrar alertas
 function mostrarAlerta(titulo, mensagem, tipo, callback) {
@@ -333,7 +317,6 @@ function mostrarAlerta(titulo, mensagem, tipo, callback) {
 
 document.addEventListener('DOMContentLoaded', function() {
     const LS_KEY_FILTROS = 'nf_notas_fiscais_filtros_hidden_v1';
-    const LS_KEY_COLVIS = 'nf_notas_fiscais_colvis_v1';
 
     function atualizarBotaoFiltrosNotasFiscais(estaOculto) {
         const $btn = $('#btnToggleFiltrosNotasFiscais');
@@ -903,33 +886,20 @@ document.addEventListener('DOMContentLoaded', function() {
             }
         });
     }
-    // Inicializar DataTables
-    let table = $('#tabelaNotasFiscais').DataTable({
-        processing: true,
-        serverSide: true,
+    var TITULOS_NF = ['', 'Número NF', 'Tipo', 'Data Emissão', 'Data Vencimento', 'Emitente', 'Destinatário', 'Fornecedor', 'Valor Total', 'Status', 'Ações'];
+    let table = $('#tabelaNotasFiscais').DataTable(FT.dtOpcoes({
         ajax: {
             url: '/notas-fiscais/api/notas-fiscais/datatables',
             type: 'GET',
             data: function(d) {
-                // Adicionar filtros do formulário
                 let formData = $('#filtrosNotasFiscais').serializeArray();
-                formData.forEach(function(item) {
-                    d[item.name] = item.value;
-                });
+                formData.forEach(function(item) { d[item.name] = item.value; });
             },
-            dataSrc: function(json) {
-                console.log('Dados recebidos:', json);
-                return json.data;
-            },
-            error: function(xhr, error, thrown) {
-                console.error('Erro AJAX:', error);
-                alert('Erro ao carregar dados da tabela. Verifique o console para mais detalhes.');
-            }
+            dataSrc: function(json) { return json.data; }
         },
-            
         columns: [
             { data: 0, name: 'select', orderable: false, searchable: false, className: 'text-center' },
-            { data: 1, name: 'numero_nf'},
+            { data: 1, name: 'numero_nf' },
             { data: 2, name: 'tipo' },
             { data: 3, name: 'data_emissao' },
             { data: 4, name: 'vencimento' },
@@ -940,113 +910,17 @@ document.addEventListener('DOMContentLoaded', function() {
             { data: 9, name: 'status', orderable: false },
             { data: 10, name: 'acoes', orderable: false, searchable: false }
         ],
-        order: [[3, 'desc']], // Ordenar por data de emissão descendente por padrão
+        order: [[3, 'desc']],
         pageLength: 50,
-        language: {
-            url: 'https://cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json'
-        },
         drawCallback: function() {
             reiniciarEventosBotoes();
             var $cb = $('#selectAllNotas');
             if ($cb.length) $cb.prop('checked', false);
         }
-    });
+    }));
+    FT.dtColunas.inicializar(table, 'tabelaNotasFiscais', TITULOS_NF);
 
-    function getColVisStateFromStorage() {
-        try {
-            const raw = localStorage.getItem(LS_KEY_COLVIS);
-            if (!raw) return null;
-            const obj = JSON.parse(raw);
-            if (!obj || typeof obj !== 'object') return null;
-            return obj;
-        } catch (e) {
-            return null;
-        }
-    }
-
-    function saveColVisStateToStorage(state) {
-        try { localStorage.setItem(LS_KEY_COLVIS, JSON.stringify(state)); } catch (e) {}
-    }
-
-    function buildColVisMenu() {
-        const $container = $('#listaColunasNotasFiscais');
-        if (!$container.length) return;
-        $container.empty();
-
-        const state = getColVisStateFromStorage() || {};
-
-        table.columns().every(function(idx) {
-            const header = $(this.header()).text().trim() || `Coluna ${idx + 1}`;
-            const isVisible = this.visible();
-
-            // Aplica estado persistido (se existir) antes de renderizar
-            if (Object.prototype.hasOwnProperty.call(state, idx)) {
-                const desired = !!state[idx];
-                if (desired !== isVisible) {
-                    this.visible(desired, false);
-                }
-            }
-        });
-        table.columns.adjust().draw(false);
-
-        // Renderiza lista após aplicar visibilidade
-        table.columns().every(function(idx) {
-            const header = $(this.header()).text().trim() || `Coluna ${idx + 1}`;
-            const visibleNow = this.visible();
-            const id = `nf-colvis-${idx}`;
-            const item = `
-                <div class="form-check">
-                    <input class="form-check-input nf-colvis-check" type="checkbox" id="${id}" data-col-idx="${idx}" ${visibleNow ? 'checked' : ''}>
-                    <label class="form-check-label" for="${id}">${header}</label>
-                </div>
-            `;
-            $container.append(item);
-        });
-    }
-
-    function persistCurrentColVis() {
-        const state = {};
-        table.columns().every(function(idx) {
-            state[idx] = this.visible();
-        });
-        saveColVisStateToStorage(state);
-    }
-
-    // Montar menu (e aplicar estado persistido) após DataTables pronto
-    // (o init.dt pode acontecer muito rápido; então fazemos os dois: imediato + no init)
-    buildColVisMenu();
-    $('#tabelaNotasFiscais').on('init.dt', function() {
-        buildColVisMenu();
-    });
-
-    // Toggle coluna
-    $(document).on('change', '.nf-colvis-check', function() {
-        const idx = parseInt($(this).data('col-idx'), 10);
-        if (Number.isNaN(idx)) return;
-        const desired = $(this).is(':checked');
-        table.column(idx).visible(desired);
-        table.columns.adjust();
-        persistCurrentColVis();
-    });
-
-    // Reset colunas
-    $('#btnResetColunasNotasFiscais').on('click', function() {
-        try { localStorage.removeItem(LS_KEY_COLVIS); } catch (e) {}
-        table.columns().every(function(idx) { this.visible(true); });
-        table.columns.adjust();
-        buildColVisMenu();
-    });
-
-    // Rebuild menu quando abrir o dropdown (reflete estado atual)
-    $('#btnDropdownColunasNotasFiscais').on('click', function() {
-        buildColVisMenu();
-    });
-
-    // Função para reiniciar eventos dos botões após redesenhar a tabela
-    function reiniciarEventosBotoes() {
-        // Eventos já são delegados, então não precisam ser reiniciados
-        // Mas podemos adicionar logs para debug se necessário
-    }
+    function reiniciarEventosBotoes() {}
 
     // ===== EVENTOS DOS BOTÕES DE AÇÃO (usando delegação para funcionar com DataTables) =====
     

@@ -45,6 +45,10 @@ class Config:
 
     PERMANENT_SESSION_LIFETIME = timedelta(hours=6)
 
+    JWT_SECRET_KEY = os.environ.get('JWT_SECRET_KEY') or _get_secret_key()
+    JWT_ACCESS_TOKEN_EXPIRES = timedelta(hours=1)
+    JWT_REFRESH_TOKEN_EXPIRES = timedelta(days=30)
+
     UPLOAD_FOLDER = os.path.join('static', 'uploads')
     MAX_CONTENT_LENGTH = 50 * 1024 * 1024  # 50MB
     ALLOWED_EXTENSIONS = {

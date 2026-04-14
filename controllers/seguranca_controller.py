@@ -1387,7 +1387,7 @@ def ficha_epi_modal(id):
     # Ordenar entregas, por exemplo, por data de entrega descendente
     entregas_ordenadas = sorted(colaborador.entregas_epi, key=lambda e: e.data_entrega, reverse=True)
     
-    return render_template('colaboradores/_ficha_epi_conteudo.html', 
+    return render_template('cadastros/colaboradores/_ficha_epi_conteudo.html', 
                            colaborador=colaborador,
                            entregas=entregas_ordenadas)
 
@@ -1406,7 +1406,7 @@ def ficha_epi_pdf(id):
     entregas_ordenadas = sorted(colaborador.entregas_epi, key=lambda e: e.data_entrega, reverse=True)
     
     # Renderizar o template HTML
-    html_content = render_template('colaboradores/_ficha_epi_conteudo.html', 
+    html_content = render_template('cadastros/colaboradores/_ficha_epi_conteudo.html', 
                                    colaborador=colaborador,
                                    entregas=entregas_ordenadas)
 
@@ -1455,7 +1455,7 @@ def fichas_epi_pdf_massa():
                 colaborador = Colaborador.query.options(joinedload(Colaborador.entregas_epi).joinedload(EntregaEPI.epi).joinedload(EPI.material)).get(col_id)
                 if colaborador:
                     entregas_ordenadas = sorted(colaborador.entregas_epi, key=lambda e: e.data_entrega, reverse=True)
-                    html_content = render_template('colaboradores/_ficha_epi_conteudo.html', 
+                    html_content = render_template('cadastros/colaboradores/_ficha_epi_conteudo.html', 
                                                    colaborador=colaborador,
                                                    entregas=entregas_ordenadas)
                     

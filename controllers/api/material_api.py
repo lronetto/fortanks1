@@ -12,8 +12,10 @@ from models.unidade import Unidades
 from utils.material_imagem_upload import (
     PAI_MATERIAL,
     TIPO_IMAGEM_MATERIAL,
+    dump_dados_json,
     get_imagem_upload_id,
     guess_image_mime_from_bytes,
+    parse_dados_json,
     remover_upload_material_se_existir,
     salvar_imagem_material,
     set_imagem_upload_id,
@@ -21,6 +23,19 @@ from utils.material_imagem_upload import (
 from models.estoque import Estoque, EstoqueMovimentacoes
 
 logger = logging.getLogger(__name__)
+
+
+def _normalizar_codigo_inteiro(valor):
+    txt = str(valor or "").strip()
+    if not txt:
+        return ""
+    txt = txt.replace(",", ".")
+    try:
+        return str(int(float(txt)))
+    except (TypeError, ValueError):
+        if "." in txt:
+            return txt.split(".", 1)[0]
+        return txt
 
 
 def register(material_bp):
@@ -284,14 +299,15 @@ def register(material_bp):
                 return jsonify({"success": False, "message": "CSRF token não fornecido"}), 400
 
             data = request.form
-            codigo = data.get("edit_codigo", "")
+            codigo = _normalizar_codigo_inteiro(data.get("edit_codigo", ""))
             nome = data.get("edit_nome", "")
             descricao = data.get("edit_descricao", "")
             categoria = data.get("edit_categoria", "")
             plano_conta = data.get("edit_plano_conta", "")
-            codigo_erp = data.get("edit_codigo_erp", "")
+            codigo_alterdata = _normalizar_codigo_inteiro(data.get("edit_codigo_alterdata") or data.get("edit_codigo_erp"))
+            codigo_mega = _normalizar_codigo_inteiro(data.get("edit_codigo_mega"))
             unidade = data.get("edit_unidade", "")
-            mascara = data.get("edit_mascara", "")
+            mascara = _normalizar_codigo_inteiro(data.get("edit_mascara", ""))
             formula_calculo = data.get("edit_formula_calculo", "").strip()
             
             # Campos de quantidade
@@ -313,13 +329,29 @@ def register(material_bp):
                 material.descricao = descricao
                 material.categoria = categoria
                 material.plano_conta = plano_conta
-                material.codigo_erp = codigo_erp
+                material.codigo_erp = codigo_alterdata
                 material.unidade_id = unidade
                 material.mascara = mascara
                 material.formula_calculo = formula_calculo if formula_calculo else None
                 material.data_atualizacao = datetime.now()
                 if hasattr(current_user, "id"):
                     material.usuario_id = current_user.id
+                extras = parse_dados_json(material.dados_adicionais)
+                if codigo:
+                    extras["codigo_sox"] = codigo
+                else:
+                    extras.pop("codigo_sox", None)
+                if codigo_alterdata:
+                    extras["codigo_alterdata"] = codigo_alterdata
+                else:
+                    extras.pop("codigo_alterdata", None)
+                if codigo_mega:
+                    extras["codigo_mega"] = codigo_mega
+                    extras["cod_mega"] = codigo_mega
+                else:
+                    extras.pop("codigo_mega", None)
+                    extras.pop("cod_mega", None)
+                material.dados_adicionais = dump_dados_json(extras)
 
                 remover_img = data.get("remover_imagem_material") == "1"
                 arquivo_img = request.files.get("imagem_material")
@@ -385,17 +417,20 @@ def register(material_bp):
                 return jsonify({"success": False, "message": f"Erro ao salvar material: {str(db_error)}"})
 
         img_id = get_imagem_upload_id(material.dados_adicionais)
+        extras = parse_dados_json(material.dados_adicionais)
         return jsonify(
             {
                 "id": material.id,
-                "codigo": material.codigo or "",
+                "codigo": _normalizar_codigo_inteiro(material.codigo),
                 "nome": material.nome,
                 "descricao": material.descricao or "",
                 "categoria": material.categoria,
                 "plano_conta": material.plano_conta or "",
-                "codigo_erp": material.codigo_erp or "",
+                "codigo_erp": _normalizar_codigo_inteiro(material.codigo_erp),
+                "codigo_alterdata": _normalizar_codigo_inteiro(extras.get("codigo_alterdata") or material.codigo_erp),
+                "codigo_mega": _normalizar_codigo_inteiro(extras.get("codigo_mega") or extras.get("cod_mega")),
                 "unidade": material.unidade_obj.nome if material.unidade_obj else "",
-                "mascara": material.mascara or "",
+                "mascara": _normalizar_codigo_inteiro(material.mascara),
                 "formula_calculo": material.formula_calculo or "",
                 "imagem_upload_id": img_id,
             }
@@ -408,19 +443,22 @@ def register(material_bp):
         if not material:
             return jsonify({"success": False, "error": "Material não encontrado"})
         img_id = get_imagem_upload_id(material.dados_adicionais)
+        extras = parse_dados_json(material.dados_adicionais)
         response = jsonify(
             {
                 "success": True,
                 "material": {
                     "id": material.id,
-                    "codigo": material.codigo or "",
-                    "codigo_erp": material.codigo_erp or "",
+                    "codigo": _normalizar_codigo_inteiro(material.codigo),
+                    "codigo_erp": _normalizar_codigo_inteiro(material.codigo_erp),
+                    "codigo_alterdata": _normalizar_codigo_inteiro(extras.get("codigo_alterdata") or material.codigo_erp),
+                    "codigo_mega": _normalizar_codigo_inteiro(extras.get("codigo_mega") or extras.get("cod_mega")),
                     "nome": material.nome or "",
                     "descricao": material.descricao or "",
                     "categoria": material.categoria or "",
                     "plano_conta": material.plano_conta or "",
                     "unidade": material.unidade or "",
-                    "mascara": material.mascara or "",
+                    "mascara": _normalizar_codigo_inteiro(material.mascara),
                     "formula_calculo": material.formula_calculo or "",
                     "imagem_upload_id": img_id,
                 },
@@ -439,19 +477,22 @@ def register(material_bp):
             return response
 
         img_id = get_imagem_upload_id(material.dados_adicionais)
+        extras = parse_dados_json(material.dados_adicionais)
         response = jsonify(
             {
                 "success": True,
                 "material": {
                     "id": material.id,
-                    "codigo": material.codigo or "",
-                    "codigo_erp": material.codigo_erp or "",
+                    "codigo": _normalizar_codigo_inteiro(material.codigo),
+                    "codigo_erp": _normalizar_codigo_inteiro(material.codigo_erp),
+                    "codigo_alterdata": _normalizar_codigo_inteiro(extras.get("codigo_alterdata") or material.codigo_erp),
+                    "codigo_mega": _normalizar_codigo_inteiro(extras.get("codigo_mega") or extras.get("cod_mega")),
                     "nome": material.nome or "",
                     "descricao": material.descricao or "",
                     "categoria": material.categoria or "",
                     "plano_conta": material.plano_conta or "",
                     "unidade": material.unidade or "",
-                    "mascara": material.mascara or "",
+                    "mascara": _normalizar_codigo_inteiro(material.mascara),
                     "formula_calculo": material.formula_calculo or "",
                     "imagem_upload_id": img_id,
                 },

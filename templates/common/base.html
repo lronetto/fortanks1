@@ -116,6 +116,9 @@
        <!-- Custom JS -->
        <script src="{{ url_for('static', filename='js/script.js') }}"></script>
        <script src="{{ url_for('static', filename='js/comum.js') }}"></script>
+       <!-- Utilitários centralizados de tabelas -->
+       <meta id="ft-config" data-dt-lang="{{ url_for('static', filename='js/datatables-pt-BR-1.13.json') }}">
+       <script src="{{ url_for('static', filename='js/ft-table.js') }}"></script>
    
        <script>
         // Verifica se há preferência de tema salva
@@ -242,18 +245,24 @@
                        }
                    }
                    
-                   // Auto-abrir o novo submenu de Cadastros se estiver em uma página relacionada
+                   // Auto-abrir o submenu de Cadastros se estiver em uma página relacionada
                    if (window.location.pathname.includes('/usuario') ||
                        window.location.pathname.includes('/contrato') ||
                        window.location.pathname.includes('/cliente') ||
                        window.location.pathname.includes('/fornecedor') ||
-                       window.location.pathname.includes('/material') ||
                        window.location.pathname.includes('/colaborador') ||
                        window.location.pathname.includes('/tanques') ||
                        window.location.pathname.includes('/pecas') ||
                        window.location.pathname.includes('/tracos')) {
                        $('#cadastrosSubmenu').addClass('show');
                        $('#cadastrosSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                   }
+
+                   // Auto-abrir o submenu de Materiais se estiver em uma página relacionada
+                   if (window.location.pathname.includes('/material') ||
+                       window.location.pathname.includes('/grupos-materiais')) {
+                       $('#materiaisSubmenu').addClass('show');
+                       $('#materiaisSubmenu').prev('.dropdown-toggle').parent().addClass('active');
                    }
    
                    // Auto-abrir o submenu de segurança se estiver em uma página relacionada
@@ -277,7 +286,8 @@
                    }
                    
                    // Auto-abrir o submenu de relatórios se estiver em uma página relacionada
-                   if (window.location.pathname.includes('/relatorios')) {
+                   if (window.location.pathname.includes('/relatorios') ||
+                       window.location.pathname.includes('/dados-analiticos')) {
                        $('#relatoriosSubmenu').addClass('show');
                        $('#relatoriosSubmenu').prev('.dropdown-toggle').parent().addClass('active');
                    }
@@ -440,8 +450,7 @@
                }
            });
        </script>
-       {% block scripts %}{% endblock %}
-    
+
 </head>
 
 <body>
@@ -524,6 +533,26 @@
                             </a>
                         </li>
                         {% endif %}
+                        {% if current_user.is_permissao('dados_analiticos') %}
+                        <li class="{{ is_active('dados_analiticos') }}">
+                            <a href="#dadosAnaliticosSubmenu" data-bs-toggle="collapse" aria-expanded="false"
+                                class="dropdown-toggle">
+                                <i class="fas fa-chart-line"></i> Dados Analiticos
+                            </a>
+                            <ul class="collapse list-unstyled" id="dadosAnaliticosSubmenu">
+                                <li>
+                                    <a href="{{ url_for('dados_analiticos.dashboard_mensal') }}">
+                                        <i class="fas fa-chart-area"></i> Dashboard
+                                    </a>
+                                </li>
+                                <li>
+                                    <a href="{{ url_for('dados_analiticos.index') }}">
+                                        <i class="fas fa-chart-line"></i> Listagem de Dados
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+                        {% endif %}
                         {% if current_user.is_permissao('relatorios_databook') %}
                         <li class="{{ is_active('relatorios_databook') }}">
                             <a href="#databookSubmenu" data-bs-toggle="collapse" aria-expanded="false"
@@ -546,38 +575,6 @@
                         {% endif %}
                     </ul>
                 </li>
-                <!-- Módulo Gerencial -->
-                {% if current_user.is_permissao('gerencial') %}
-                <li class="{{ is_active('gerencial') }}">
-                    <a href="#adminSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
-                        <i class="fas fa-cogs"></i> Gerencial
-                    </a>
-                    <ul class="collapse list-unstyled" id="adminSubmenu">
-                        <li class="{{ is_active('dados_analiticos') }}">
-                            <a href="#dadosAnaliticosSubmenu" data-bs-toggle="collapse" aria-expanded="false"
-                                class="dropdown-toggle">
-                                <i class="fas fa-chart-line"></i> Dados Analíticos
-                            </a>
-                            <ul class="collapse list-unstyled" id="dadosAnaliticosSubmenu">
-
-                                <li>
-                                    <a href="{{ url_for('dados_analiticos.dashboard_mensal') }}">
-                                        <i class="fas fa-chart-area"></i> Dashboard
-                                    </a>
-                                </li>
-                                <li>
-                                    <a href="{{ url_for('dados_analiticos.index') }}">
-                                        <i class="fas fa-chart-line"></i> Listagem de Dados
-                                    </a>
-                                </li>
-                       
-                            </ul>
-                        </li>
-                       
-                    </ul>
-                </li>
-                {% endif %}
-
                 <!-- Módulo Admin -->
                 {% if current_user.is_permissao('admin') %}
                 <li class="{{ is_active('admin') }}">
@@ -648,6 +645,11 @@
                             </ul>
                         </li>
                         <!-- Link para Logs -->
+                        <li class="{{ is_active('uploads') }}">
+                            <a href="{{ url_for('uploads.index') }}">
+                                <i class="fas fa-folder-open"></i> Uploads
+                            </a>
+                        </li>
                         <li class="{{ is_active('admin/logs') }}">
                             <a href="{{ url_for('admin.logs') }}">
                                 <i class="fas fa-file-alt"></i> Logs
@@ -700,13 +702,6 @@
                         </li>
                         {% endif %}
 
-                        {% if current_user.is_permissao('material') %}
-                        <li class="{{ is_active('material') }}">
-                            <a href="{{ url_for('material.index') }}">
-                                <i class="fas fa-boxes"></i> Materiais
-                            </a>
-                        </li>
-                        {% endif %}
                         {% if current_user.is_permissao('tanques') %}
                         <li class="{{ is_active('tanque') }}">
                             <a href="{{ url_for('tanque.index') }}">
@@ -722,6 +717,27 @@
                        
                     </ul>
                 </li>
+
+                <!-- Módulo Materiais -->
+                {% if current_user.is_permissao('material') %}
+                <li class="{{ is_active('material') }} {{ is_active('grupo_material') }} {{ is_active('grupo_material.index') }}">
+                    <a href="#materiaisSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
+                        <i class="fas fa-boxes"></i> Materiais
+                    </a>
+                    <ul class="collapse list-unstyled" id="materiaisSubmenu">
+                        <li class="{{ is_active('material') }}">
+                            <a href="{{ url_for('material.index') }}">
+                                <i class="fas fa-box"></i> Cadastro de Materiais
+                            </a>
+                        </li>
+                        <li class="{{ is_active('grupo_material') }} {{ is_active('grupo_material.index') }}">
+                            <a href="{{ url_for('grupo_material.index') }}">
+                                <i class="fas fa-layer-group"></i> Cadastro de Grupos de Materiais
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                {% endif %}
 
                 <!-- Equipamentos (menu principal) -->
                 {% if current_user.is_permissao('equipamentos') %}
@@ -1137,7 +1153,8 @@
     </div>
 
     {% block extra_js %}{% endblock %}
- 
+    {% block scripts %}{% endblock %}
+
 </body>
 
 </html>

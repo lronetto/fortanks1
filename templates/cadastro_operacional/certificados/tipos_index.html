@@ -1,0 +1,247 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Tipos de Certificados - Sistema de Gestão - Pré-moldados{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3"><i class="fas fa-tags"></i> Tipos de Certificados</h1>
+        <div>
+            <a href="{{ url_for('certificado.index') }}" class="btn btn-secondary me-2">
+                <i class="fas fa-arrow-left"></i> Voltar para Certificados
+            </a>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovoTipoCertificado">
+                <i class="fas fa-plus"></i> Novo Tipo
+            </button>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">Lista de Tipos de Certificados</h6>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Campos Específicos</th>
+                            <th>Data de Criação</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tipo in tipos %}
+                        <tr>
+                            <td>{{ tipo.id }}</td>
+                            <td>{{ tipo.nome }}</td>
+                            <td>
+                                {% set dados = tipo.get_dados_adicionais() %}
+                                {% if dados and dados is mapping and dados.get('campos') and dados.campos is iterable and dados.campos is not string %}
+                                    <span class="badge bg-info">{{ dados.campos|length }} campo(s) definido(s)</span>
+                                {% else %}
+                                    <span class="text-muted">Nenhum campo específico</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ tipo.criado_em.strftime('%d/%m/%Y %H:%M') if tipo.criado_em else 'N/A' }}</td>
+                            <td>
+                                {% if tipo.ativo %}
+                                <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                <span class="badge bg-danger">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                <div class="btn-group" role="group">
+                                    <button type="button" class="btn btn-sm btn-primary" 
+                                            onclick="editarTipoCertificado({{ tipo.id }})" 
+                                            title="Editar">
+                                        <i class="fas fa-edit"></i>
+                                    </button>
+                                    <button type="button" class="btn btn-sm btn-info" 
+                                            onclick="visualizarTipoCertificado({{ tipo.id }})" 
+                                            title="Visualizar">
+                                        <i class="fas fa-eye"></i>
+                                    </button>
+                                    <form id="form-excluir-{{ tipo.id }}"
+                                          action="{{ url_for('certificado.tipos_excluir', id=tipo.id) }}" 
+                                          method="POST"
+                                          class="d-inline form-excluir">
+                                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                        <button type="submit" class="btn btn-sm btn-danger" 
+                                                data-bs-toggle="tooltip"
+                                                title="Excluir">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </form>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Incluir modais -->
+{% include 'cadastro_operacional/certificados/modais/novo_tipo_certificado.html' %}
+{% include 'cadastro_operacional/certificados/modais/editar_tipo_certificado.html' %}
+{% include 'cadastro_operacional/certificados/modais/visualizar_tipo_certificado.html' %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Definir funções globais IMEDIATAMENTE (antes de qualquer outra coisa)
+    // Função para editar tipo de certificado (global)
+    function editarTipoCertificado(id) {
+        console.log('Editando tipo de certificado:', id);
+        
+        // Verificar se o modal existe
+        const modalElement = document.getElementById('modalEditarTipoCertificado');
+        if (!modalElement) {
+            console.error('Modal não encontrado!');
+            alert('Erro: Modal de edição não encontrado. Recarregue a página.');
+            return;
+        }
+        
+        fetch(`{{ url_for('certificado.tipos_editar', id=0) }}`.replace('0', id))
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                return response.json();
+            })
+            .then(data => {
+                console.log('Dados recebidos:', data);
+                const tipo = data.tipo;
+                
+                if (!tipo) {
+                    throw new Error('Dados do tipo não encontrados na resposta');
+                }
+                
+                const form = document.getElementById('form-editar-tipo-certificado');
+                const tipoIdInput = document.getElementById('tipo_id_editar');
+                const nomeInput = document.getElementById('nome_editar');
+                const dadosAdicionaisInput = document.getElementById('dados_adicionais_editar');
+                
+                // Verificar se todos os elementos existem
+                if (!form || !tipoIdInput || !nomeInput || !dadosAdicionaisInput) {
+                    console.error('Elementos do formulário não encontrados:', {
+                        form: !!form,
+                        tipoIdInput: !!tipoIdInput,
+                        nomeInput: !!nomeInput,
+                        dadosAdicionaisInput: !!dadosAdicionaisInput
+                    });
+                    alert('Erro: Elementos do formulário não encontrados. Recarregue a página.');
+                    return;
+                }
+                
+                // Atualizar action do form ANTES de preencher os campos
+                form.action = `{{ url_for('certificado.tipos_editar', id=0) }}`.replace('0', tipo.id);
+                
+                // Preencher campos
+                tipoIdInput.value = tipo.id;
+                nomeInput.value = tipo.nome || '';
+                
+                // Preencher dados_adicionais, tratando caso vazio
+                const dadosAdicionais = tipo.dados_adicionais || {};
+                dadosAdicionaisInput.value = Object.keys(dadosAdicionais).length > 0 
+                    ? JSON.stringify(dadosAdicionais, null, 2) 
+                    : '';
+                
+                // Abrir modal
+                try {
+                    // Verificar se Bootstrap está disponível
+                    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                        const modal = new bootstrap.Modal(modalElement);
+                        modal.show();
+                        console.log('Modal aberto com sucesso via Bootstrap 5');
+                    } else if (typeof $ !== 'undefined' && $.fn.modal) {
+                        // Fallback para jQuery Bootstrap 4
+                        $('#modalEditarTipoCertificado').modal('show');
+                        console.log('Modal aberto via jQuery Bootstrap');
+                    } else {
+                        console.error('Bootstrap Modal não disponível');
+                        alert('Erro: Biblioteca de modais não encontrada. Recarregue a página.');
+                    }
+                } catch (error) {
+                    console.error('Erro ao abrir modal:', error);
+                    alert('Erro ao abrir modal de edição: ' + error.message);
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao carregar tipo de certificado:', error);
+                alert('Erro ao carregar dados do tipo de certificado: ' + error.message);
+            });
+    }
+
+    // Função para visualizar tipo de certificado (global)
+    function visualizarTipoCertificado(id) {
+        fetch(`{{ url_for('certificado.tipos_visualizar', id=0) }}`.replace('0', id))
+            .then(response => response.json())
+            .then(data => {
+                const tipo = data.tipo;
+                document.getElementById('nome_visualizar').textContent = tipo.nome;
+                // Tratar dados_adicionais vazio
+                const dadosAdicionais = tipo.dados_adicionais || {};
+                document.getElementById('dados_adicionais_visualizar').textContent = Object.keys(dadosAdicionais).length > 0 
+                    ? JSON.stringify(dadosAdicionais, null, 2) 
+                    : 'Nenhum campo específico definido';
+                document.getElementById('criado_em_visualizar').textContent = tipo.criado_em || 'N/A';
+                document.getElementById('atualizado_em_visualizar').textContent = tipo.atualizado_em || 'N/A';
+                document.getElementById('status_visualizar').textContent = tipo.ativo ? 'Ativo' : 'Inativo';
+                document.getElementById('status_visualizar').className = tipo.ativo ? 'badge bg-success' : 'badge bg-danger';
+                
+                // Abrir modal de visualização
+                const modalVisualizar = document.getElementById('modalVisualizarTipoCertificado');
+                if (modalVisualizar) {
+                    if (typeof bootstrap !== 'undefined' && bootstrap.Modal) {
+                        const modal = new bootstrap.Modal(modalVisualizar);
+                        modal.show();
+                    } else if (typeof $ !== 'undefined' && $.fn.modal) {
+                        $('#modalVisualizarTipoCertificado').modal('show');
+                    } else {
+                        alert('Erro: Biblioteca de modais não encontrada.');
+                    }
+                } else {
+                    alert('Erro: Modal de visualização não encontrado.');
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao carregar tipo de certificado:', error);
+                alert('Erro ao carregar dados do tipo de certificado.');
+            });
+    }
+
+    // Tornar funções globais explicitamente
+    window.editarTipoCertificado = editarTipoCertificado;
+    window.visualizarTipoCertificado = visualizarTipoCertificado;
+
+    // Inicializar DataTable após definir as funções
+    $(document).ready(function () {
+        $('#dataTable').DataTable({
+            language: {
+                url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json'
+            },
+            order: [[0, 'desc']]
+        });
+
+        // Confirmar exclusão
+        $('.form-excluir').on('submit', function (e) {
+            e.preventDefault();
+            const form = this;
+            const tipoName = $(this).closest('tr').find('td:nth-child(2)').text();
+
+            if (confirm(`Tem certeza que deseja excluir o tipo de certificado "${tipoName}"?`)) {
+                form.submit();
+            }
+        });
+    });
+</script>
+{% endblock %}

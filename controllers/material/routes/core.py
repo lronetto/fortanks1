@@ -15,10 +15,30 @@ from models.estoque import Estoque
 from models.orcamento import Orcamento, ItemOrcamento
 from models.concreto import ConcretoUsinagensMateriais
 from models.epi import Epi
+from utils.material_imagem_upload import (
+    dump_dados_json,
+    parse_dados_json,
+    salvar_imagem_material,
+    set_imagem_upload_id,
+)
 
 from .. import material_bp
 
 logger = logging.getLogger(__name__)
+
+
+def _normalizar_codigo_inteiro(valor):
+    txt = str(valor or "").strip()
+    if not txt:
+        return ""
+    txt = txt.replace(",", ".")
+    try:
+        return str(int(float(txt)))
+    except (TypeError, ValueError):
+        if "." in txt:
+            return txt.split(".", 1)[0]
+        return txt
+
 
 @material_bp.before_request
 def before_request():
@@ -62,14 +82,15 @@ def novo():
     unidades = Unidades.query.filter_by(ativo=True).order_by(Unidades.nome).all()
 
     try:
-        codigo = request.form.get("codigo")
+        codigo = _normalizar_codigo_inteiro(request.form.get("codigo"))
         nome = request.form.get("nome")
         descricao = request.form.get("descricao")
         categoria = request.form.get("categoria")
         plano_conta = request.form.get("plano_conta")
-        codigo_erp = request.form.get("codigo_erp")
+        codigo_alterdata = _normalizar_codigo_inteiro(request.form.get("codigo_alterdata") or request.form.get("codigo_erp"))
+        codigo_mega = _normalizar_codigo_inteiro(request.form.get("codigo_mega"))
         unidade = request.form.get("unidade")
-        mascara = request.form.get("mascara")
+        mascara = _normalizar_codigo_inteiro(request.form.get("mascara"))
         formula_calculo = request.form.get("formula_calculo", "").strip()
 
         unidade_texto = request.form.get("unidade_texto", "")
@@ -90,24 +111,32 @@ def novo():
                 return redirect(url_for("material.index"))
             return render_template("materiais/novo.html", planos_conta=planos_conta, unidades=unidades)
 
+        extras = parse_dados_json(None)
+        if codigo:
+            extras["codigo_sox"] = codigo
+        if codigo_alterdata:
+            extras["codigo_alterdata"] = codigo_alterdata
+        if codigo_mega:
+            extras["codigo_mega"] = codigo_mega
+            extras["cod_mega"] = codigo_mega
+
         material = Materiais(
             codigo=codigo,
             nome=nome.upper(),
             descricao=descricao,
             categoria=categoria,
             plano_conta=plano_conta,
-            codigo_erp=codigo_erp,
+            codigo_erp=codigo_alterdata,
             unidade_id=unidade,
             mascara=mascara,
             formula_calculo=formula_calculo if formula_calculo else None,
+            dados_adicionais=dump_dados_json(extras) if extras else None,
         )
         material.usuario_id = current_user.id
         material.save()
 
         arquivo_img = request.files.get("imagem_material")
         if arquivo_img and arquivo_img.filename:
-            from utils.material_imagem_upload import salvar_imagem_material, set_imagem_upload_id
-
             uid = salvar_imagem_material(material.id, arquivo_img)
             if uid:
                 material.dados_adicionais = set_imagem_upload_id(material.dados_adicionais, uid)
@@ -135,14 +164,14 @@ def editar(id):
 
     if request.method == "POST":
         try:
-            codigo = request.form.get("codigo", "")
+            codigo = _normalizar_codigo_inteiro(request.form.get("codigo", ""))
             nome = request.form.get("nome", "")
             descricao = request.form.get("descricao", "")
             categoria = request.form.get("categoria", "")
             plano_conta = request.form.get("plano_conta", "")
-            codigo_erp = request.form.get("codigo_erp", "")
+            codigo_erp = _normalizar_codigo_inteiro(request.form.get("codigo_erp", ""))
             unidade = request.form.get("unidade", "")
-            mascara = request.form.get("mascara", "")
+            mascara = _normalizar_codigo_inteiro(request.form.get("mascara", ""))
             formula_calculo = request.form.get("formula_calculo", "").strip()
 
             if not nome or not categoria:

@@ -50,12 +50,12 @@
 
     <!-- Tabela de Dados -->
     <div class="card">
-        <div class="card-header">
-            <i class="fas fa-table me-1"></i>
-            Dados de Inspeção
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <h6 class="m-0 fw-bold"><i class="fas fa-table me-1"></i> Dados de Inspeção</h6>
+            <div class="ft-col-toggle-placeholder"></div>
         </div>
         <div class="card-body">
-            <div class="table-responsive">
+            <div class="ft-datatable-wrapper">
                 <table class="table table-bordered table-striped" id="dataTable" width="100%" cellspacing="0">
                     <thead>
                         <tr>
@@ -87,12 +87,11 @@
 </style>
 {% endblock %}
 
-{% block scripts %}
-
+{% block extra_js %}
 <script>
+    var TITULOS_DATABOOK = ['Número de Série', 'Data de Moldagem', 'Projeto', 'Tanque', 'Ações'];
     $(document).ready(function() {
-        let table = $('#dataTable').DataTable({
-            "processing": true,
+        let table = $('#dataTable').DataTable(FT.dtOpcoes({
             "serverSide": false,
             "ajax": {
                 "url": "{{ url_for('relatorios_databook.api_dados') }}",
@@ -126,13 +125,10 @@
                     }
                 }
             ],
-            "language": {
-                "url": "//cdn.datatables.net/plug-ins/1.10.25/i18n/Portuguese-Brasil.json"
-            },
-            "order": [[0, 'asc']],  // Ordenar por número de série
-            "pageLength": 25,
-            "lengthMenu": [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]]
-        });
+            "order": [[0, 'asc']],
+            serverSide: false
+        }));
+        FT.dtColunas.inicializar(table, 'dataTable', TITULOS_DATABOOK);
 
         // Atualizar tanques quando projeto for alterado
         $('#contrato_id').on('change', function() {

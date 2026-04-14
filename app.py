@@ -1,36 +1,38 @@
 from controllers.seguranca_controller import seguranca_bp
-from controllers.colaborador_controller import colaborador_bp
 from controllers.equipamento_controller import equipamento_bp
-from controllers.concretagem_controller import concretagem
 from controllers.api_controller import api_bp
-from controllers.peca_controller import peca
-from controllers.tanque_controller import tanque_bp
-from controllers.cliente_controller import cliente_bp
-from controllers.usuario_controller import usuario_bp
-from controllers.plano_conta_controller import plano_conta_bp
-from controllers.material_controller import material_bp
-from controllers.contrato_controller import contrato_bp
-from controllers.centro_custo_controller import centro_custo_bp
 from controllers.dashboard_controller import dashboard_bp
 from controllers.admin import admin_bp
+from controllers.admin.cadastros import (
+    cargo_bp,
+    centro_custo_bp,
+    conversao_unidade_bp,
+    departamento_bp,
+    plano_conta_bp,
+    unidade_bp,
+)
 from controllers.auth_controller import auth_bp
 from controllers.usinagem_concreto import usinagem_concreto
-from controllers.conversao_unidade_controller import conversao_unidade_bp
 from controllers.solicitacao_controller import solicitacao_bp
-from controllers.cargo_controller import cargo_bp
-from controllers.departamento_controller import departamento_bp
+from controllers.cadastros import (
+    cliente_bp,
+    colaborador_bp,
+    contrato_bp,
+    fornecedor_bp,
+    peca,
+    tanque_bp,
+    usuario_bp,
+)
 from controllers.nota_fiscal_controller import nota_fiscal_bp
 from controllers.estoque_controller import estoque_bp
 from controllers.inventario_controller import inventario_bp
 from controllers.estoque_terceiro_controller import estoque_terceiro_bp
-from controllers.unidade_controller import unidade_bp
-from controllers.produto_composto_controller import produto_composto_bp
-from controllers.dados_analiticos_controller import dados_analiticos_bp
+from controllers.cadastro_operacional import certificado_bp, produto_composto_bp
+from controllers.materiais import material_bp, grupo_material_bp
+from controllers.relatorios import dados_analiticos_bp, relatorio_bp
 from controllers.reembolso_controller import reembolso_bp, notas_json, avulsos_json
 from controllers.plr import plr_bp
-from controllers.acabamento_transporte_controller import acabamento_transporte_bp
-from controllers.grupo_material_controller import grupo_material_bp
-from controllers.certificado_controller import certificado_bp
+from controllers.operacional import acabamento_transporte_bp, concretagem
 from controllers.cronograma import cronograma_bp
 from models.usuario import Usuario
 from models.arquivei import Arquivei
@@ -53,9 +55,7 @@ from flask_sslify import SSLify
 from logging.handlers import RotatingFileHandler
 from flask_mail import Mail
 from dotenv import load_dotenv
-from controllers.relatorio_controller import relatorio_bp
 from controllers.upload_controller import upload_bp
-from controllers.fornecedor_controller import fornecedor_bp
 from controllers.pedido_compra_controller import pedido_compra_bp
 
 
@@ -152,19 +152,9 @@ logger.info("Rate Limiter inicializado...")
 csrf = CSRFProtect(app)
 logger.info("CSRF Protection inicializada...")
 
-# Isentar algumas rotas da proteção CSRF
-@csrf.exempt
-def csrf_exempt_rule():
-    # Lista de padrões de URL que serão isentos de proteção CSRF
-    exempt_urls = [
-        '/concretagens/api/tanques/pecas',
-        '/concretagens/api/concretagem',
-    ]
-    
-    for url in exempt_urls:
-        if request.path.startswith(url):
-            return True
-    return False
+# Isentar blueprints/views da proteção CSRF
+csrf.exempt(api_bp)
+csrf.exempt(concretagem)
 
 # Manipulador de erro para CSRF
 @app.errorhandler(CSRFError)
@@ -196,7 +186,7 @@ logger.info("Configurando mappers do SQLAlchemy...")
 
 # Importar os blueprints após a inicialização do db
 logger.info("Importando modelos e controladores...")
-# from controllers.fornecedor_controller import fornecedor_bp
+# from controllers.cadastros.fornecedor_controller import fornecedor_bp
 
 # Inicializar o login manager
 logger.info("Inicializando Login Manager...")
@@ -261,7 +251,7 @@ app.register_blueprint(databook_inspecao_bp)
 app.register_blueprint(databook_api_bp)
 app.register_blueprint(usinagem_bp)
 app.register_blueprint(acabamento_transporte_bp, url_prefix='/acabamento-transporte')
-app.register_blueprint(upload_bp, url_prefix='/uploads')
+app.register_blueprint(upload_bp, url_prefix='/admin/uploads')
 app.register_blueprint(pedido_compra_bp, url_prefix='/pedido_compra')
 logger.info("Blueprints registrados com sucesso!")
 
@@ -278,6 +268,9 @@ def verificar_permissao():
         request.endpoint.startswith('static') or
         request.endpoint == 'index'
     ):
+        return None
+
+    if request.path.startswith('/api/mobile/'):
         return None
     
     # Aplicar login_required apenas para outras rotas

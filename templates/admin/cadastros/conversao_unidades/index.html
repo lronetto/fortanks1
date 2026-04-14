@@ -1,0 +1,213 @@
+{% extends "common/base.html" %}
+
+{% block title %}Conversão de Unidades{% endblock %}
+
+{% block mobile_title %}Conversão de Unidades{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="ft-page-header">
+        <h1 class="h3 mb-0">Conversão de Unidades</h1>
+        <button type="button" class="btn btn-primary btn-sm" id="btnNova">
+            <i class="fas fa-plus"></i>
+            <span class="d-none d-md-inline ms-1">Nova Conversão</span>
+        </button>
+    </div>
+
+    <div class="alert-container">
+        {% include 'common/alerts.html' %}
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex align-items-center justify-content-between">
+            <h6 class="m-0 fw-bold">Conversões Cadastradas</h6>
+            <div class="ft-col-toggle-placeholder"></div>
+        </div>
+        <div class="card-body p-md-3 p-2 ft-datatable-wrapper">
+            <table class="table table-bordered table-hover w-100" id="tabelaConversoes" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Nome</th>
+                            <th>Unidade de Entrada</th>
+                            <th>Unidade de Saída</th>
+                            <th>Fator de Conversão</th>
+                            <th>Materiais</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Dados carregados via AJAX -->
+                    </tbody>
+                </table>
+        </div>
+    </div>
+</div>
+
+{% include 'admin/cadastros/conversao_unidades/modais/conversao.html' %}
+{% include 'admin/cadastros/conversao_unidades/modais/nova_unidade.html' %}
+{% include 'admin/cadastros/conversao_unidades/modais/excluir.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    var table;
+    var campoAlvo = '';
+
+    var TITULOS_CONV = ['Nome', 'Unidade de Entrada', 'Unidade de Saída', 'Fator de Conversão', 'Materiais', 'Ações'];
+
+    function inicializarDataTable() {
+        table = $('#tabelaConversoes').DataTable(FT.dtOpcoes({
+            ajax: {
+                url: '{{ request.script_root or "" }}/conversao-unidade/api/datatables',
+                type: 'GET',
+                dataSrc: function (json) {
+                    if (json.error) { console.error('Erro ao carregar dados:', json.error); return []; }
+                    return json.data;
+                }
+            },
+            columns: [
+                { data: 'nome',          name: 'nome' },
+                { data: 'unidade_entrada', name: 'unidade_entrada' },
+                { data: 'unidade_saida', name: 'unidade_saida' },
+                { data: 'fator',         name: 'fator', className: 'text-end' },
+                { data: 'materiais',     name: 'materiais', orderable: false, searchable: false, defaultContent: '—' },
+                {
+                    data: null, orderable: false, searchable: false, className: 'text-center',
+                    render: function (data, type, row) {
+                        return FT.renderAcoesDropdown([
+                            { label: 'Editar',  icon: 'fa-edit',  iconCor: 'primary', classe: 'btn-editar',  attrs: 'data-id="' + row.id + '"' },
+                            { divider: true },
+                            { label: 'Excluir', icon: 'fa-trash', iconCor: 'danger',  classe: 'btn-excluir', attrs: 'data-id="' + row.id + '" data-nome="' + FT.escAttr(row.nome) + '"' },
+                        ]);
+                    }
+                }
+            ]
+        }));
+    }
+
+    inicializarDataTable();
+    FT.dtColunas.inicializar(table, 'tabelaConversoes', TITULOS_CONV);
+
+    function resetarModal() {
+        $('#formConversao').trigger('reset');
+        $('#conversao_id').val('');
+        $('#exemplo-conversao').html('Digite os valores acima para ver um exemplo de conversão.');
+        if (window.conversaoModalMateriais && window.conversaoModalMateriais.reset) {
+            window.conversaoModalMateriais.reset();
+        }
+    }
+
+    function atualizarExemplo() {
+        var unidadeEntrada = $('#unidade_entrada').val() || '[unidade de entrada]';
+        var unidadeSaida = $('#unidade_saida').val() || '[unidade de saída]';
+        var fator = parseFloat($('#fator').val()) || 0;
+        if (unidadeEntrada && unidadeSaida && !isNaN(fator)) {
+            $('#exemplo-conversao').html('1 ' + unidadeEntrada + ' = ' + fator + ' ' + unidadeSaida);
+        } else {
+            $('#exemplo-conversao').html('Digite os valores acima para ver um exemplo de conversão.');
+        }
+    }
+
+    $('#btnNova').on('click', function() {
+        resetarModal();
+        $('#formConversao').attr('action', "{{ url_for('conversao_unidade.novo') }}");
+        $('#conversaoModalLabel').text('Nova Conversão de Unidade');
+        if (window.conversaoModalMateriais && window.conversaoModalMateriais.carregarSelect) {
+            window.conversaoModalMateriais.carregarSelect();
+        }
+        var modal = new bootstrap.Modal(document.getElementById('conversaoModal'));
+        modal.show();
+    });
+
+    $('#tabelaConversoes').on('click', '.btn-editar', function() {
+        var id = $(this).data('id');
+        resetarModal();
+        $('#conversaoModalLabel').text('Editar Conversão de Unidade');
+        $('#formConversao').attr('action', "{{ url_for('conversao_unidade.editar', id=0) }}".replace('0', id));
+        $('#conversao_id').val(id);
+        $.getJSON("{{ url_for('conversao_unidade.obter_conversao', id=0) }}".replace('0', id), function(data) {
+            $('#nome').val(data.nome);
+            $('#unidade_entrada').val(data.unidade_entrada);
+            $('#unidade_saida').val(data.unidade_saida);
+            $('#fator').val(data.fator);
+            if (window.conversaoModalMateriais && window.conversaoModalMateriais.setMateriais) {
+                window.conversaoModalMateriais.setMateriais(data.materiais || []);
+            }
+            atualizarExemplo();
+            var modal = new bootstrap.Modal(document.getElementById('conversaoModal'));
+            modal.show();
+        }).fail(function() {
+            alert('Erro ao buscar dados da conversão.');
+        });
+    });
+
+    $('#tabelaConversoes').on('click', '.btn-excluir', function() {
+        var id = $(this).data('id');
+        var nome = $(this).data('nome') || '';
+        window.abrirModalExclusaoConversao(id, nome);
+        var modal = new bootstrap.Modal(document.getElementById('modalExcluirConversao'));
+        modal.show();
+    });
+
+    $('#btnSalvar').on('click', function() {
+        $('#formConversao').submit();
+    });
+
+    $('#modalExcluirConversao').on('hidden.bs.modal', function() {
+        table.ajax.reload(null, false);
+    });
+
+    $('#conversaoModal').on('hidden.bs.modal', function() {
+        table.ajax.reload(null, false);
+    });
+
+    $('#btn-nova-unidade-entrada').on('click', function(e) {
+        e.preventDefault();
+        campoAlvo = 'entrada';
+        $('#nova-unidade').val('');
+        var modal = new bootstrap.Modal(document.getElementById('novaUnidadeModal'));
+        modal.show();
+    });
+
+    $('#btn-nova-unidade-saida').on('click', function(e) {
+        e.preventDefault();
+        campoAlvo = 'saida';
+        $('#nova-unidade').val('');
+        var modal = new bootstrap.Modal(document.getElementById('novaUnidadeModal'));
+        modal.show();
+    });
+
+    $('#btn-adicionar-unidade').on('click', function() {
+        var novaUnidade = $('#nova-unidade').val().trim();
+        if (!novaUnidade) return;
+        if (campoAlvo === 'entrada') {
+            $('#unidade_entrada').append(new Option(novaUnidade, novaUnidade, true, true));
+        } else if (campoAlvo === 'saida') {
+            $('#unidade_saida').append(new Option(novaUnidade, novaUnidade, true, true));
+        }
+        var outroSelect = campoAlvo === 'entrada' ? $('#unidade_saida') : $('#unidade_entrada');
+        if (outroSelect.find('option[value="' + novaUnidade + '"]').length === 0) {
+            outroSelect.append(new Option(novaUnidade, novaUnidade));
+        }
+        var modalInstance = bootstrap.Modal.getInstance(document.getElementById('novaUnidadeModal'));
+        if (modalInstance) modalInstance.hide();
+        atualizarExemplo();
+    });
+
+    $('#unidade_entrada, #unidade_saida, #fator').on('change input', function() {
+        atualizarExemplo();
+    });
+
+    $('#unidade_entrada, #unidade_saida').on('change', function() {
+        var entrada = $('#unidade_entrada').val();
+        var saida = $('#unidade_saida').val();
+        if (entrada && saida) {
+            var nomeConversao = entrada.charAt(0).toUpperCase() + entrada.slice(1) + ' para ' +
+                saida.charAt(0).toUpperCase() + saida.slice(1);
+            $('#nome').val(nomeConversao);
+        }
+    });
+});
+</script>
+{% endblock %}

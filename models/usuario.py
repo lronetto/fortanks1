@@ -1,8 +1,22 @@
+import logging
 from datetime import datetime
 from flask_login import UserMixin
-from utils.password import hash_password, check_password
+from werkzeug.security import check_password_hash as _werkzeug_check
 
-from models.database import db  
+from models.database import db
+
+logger = logging.getLogger(__name__)
+
+_argon2_hasher = None
+
+
+def _get_argon2_hasher():
+    global _argon2_hasher
+    if _argon2_hasher is None:
+        from argon2 import PasswordHasher
+        _argon2_hasher = PasswordHasher()
+    return _argon2_hasher
+
 
 class Usuario(db.Model, UserMixin):
     """
@@ -34,13 +48,45 @@ class Usuario(db.Model, UserMixin):
     def cargo(self):
         """Retorna o nome do cargo para compatibilidade"""
         return self.cargo_rel.nome if self.cargo_rel else ''
+
+    @staticmethod
+    def hash_password(password: str) -> str:
+        """Gera hash da senha com Argon2id. Use esta função para novas senhas."""
+        return _get_argon2_hasher().hash(password)
+
+    @staticmethod
+    def is_argon2_hash(pwhash: str) -> bool:
+        """Retorna True se o hash armazenado é Argon2 (argon2id/argon2i/argon2d)."""
+        return bool(pwhash and pwhash.strip().startswith("$argon2"))
+
+    @staticmethod
+    def check_password(pwhash: str, password: str) -> bool:
+        """
+        Verifica se a senha confere com o hash armazenado.
+        Aceita hashes Argon2id (novos) e scrypt/pbkdf2 do Werkzeug (legado).
+        """
+        if not pwhash or not password:
+            return False
+        pwhash = pwhash.strip()
+        if pwhash.startswith("$argon2"):
+            try:
+                from argon2.exceptions import VerifyMismatchError, InvalidHashError
+                _get_argon2_hasher().verify(pwhash, password)
+                return True
+            except (VerifyMismatchError, InvalidHashError):
+                return False
+            except Exception as e:
+                logger.warning("Erro ao verificar hash Argon2: %s", e)
+                return False
+        return _werkzeug_check(pwhash, password)
+
     def set_senha(self, senha):
         """Define a senha do usuário com hash (Argon2id)"""
-        self.senha = hash_password(senha)
+        self.senha = Usuario.hash_password(senha)
 
     def verificar_senha(self, senha):
         """Verifica se a senha informada é correta (aceita Argon2id e hashes legados)"""
-        return check_password(self.senha, senha)
+        return Usuario.check_password(self.senha, senha)
 
     def atualizar_ultimo_login(self):
         """Atualiza a data/hora do último login"""

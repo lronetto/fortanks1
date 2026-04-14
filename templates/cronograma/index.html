@@ -19,11 +19,11 @@
     {% endwith %}
 
     <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Contratos ativos</h6>
+        <div class="card-header py-3 d-flex align-items-center justify-content-between">
+            <h6 class="m-0 fw-bold">Contratos ativos</h6>
+            <div class="ft-col-toggle-placeholder"></div>
         </div>
-        <div class="card-body">
-            <div class="table-responsive">
+        <div class="card-body p-md-3 p-2 ft-datatable-wrapper">
                 <table class="table table-bordered table-sm" id="tabelaContratos" width="100%">
                     <thead>
                         <tr>
@@ -36,26 +36,19 @@
                     </thead>
                     <tbody></tbody>
                 </table>
-            </div>
         </div>
     </div>
 </div>
 {% endblock %}
 
-{% block scripts %}
+{% block extra_js %}
 <script>
 (function() {
-    var urlDt = "{{ url_for('cronograma.api_contratos_datatables') }}";
+    var TITULOS_CRON = ['ID', 'Projeto', 'Centro de Custo', 'Local', 'Ações'];
     $(function() {
-        $('#tabelaContratos').DataTable({
-            processing: true,
-            serverSide: true,
-            searching: true,
-            ajax: { url: urlDt, type: 'GET' },
-            language: { url: '{{ url_for("static", filename="js/datatables-pt-BR-1.13.json") }}' },
+        var dt = $('#tabelaContratos').DataTable(FT.dtOpcoes({
+            ajax: { url: "{{ url_for('cronograma.api_contratos_datatables') }}", type: 'GET' },
             order: [[1, 'asc']],
-            pageLength: 25,
-            responsive: true,
             columns: [
                 { data: 'id' },
                 { data: 'nome' },
@@ -63,7 +56,8 @@
                 { data: 'local' },
                 { data: 'acoes', orderable: false, searchable: false, className: 'text-center' }
             ]
-        });
+        }));
+        FT.dtColunas.inicializar(dt, 'tabelaContratos', TITULOS_CRON);
     });
 })();
 </script>

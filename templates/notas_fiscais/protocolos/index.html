@@ -24,8 +24,9 @@
     {% include 'common/alerts.html' %}
 
     <div class="card shadow mb-4">
-        <div class="card-header py-3">
-            <h6 class="m-0 font-weight-bold text-primary">Protocolos cadastrados</h6>
+        <div class="card-header py-3 d-flex align-items-center justify-content-between">
+            <h6 class="m-0 fw-bold">Protocolos cadastrados</h6>
+            <div class="ft-col-toggle-placeholder"></div>
         </div>
         <div class="card-body">
             <div class="row g-2 align-items-end mb-3">
@@ -44,7 +45,7 @@
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="btnLimparFiltroNotaRef">Limpar</button>
                 </div>
             </div>
-            <div class="table-responsive">
+            <div class="ft-datatable-wrapper">
                 <table class="table table-bordered" id="tabelaProtocolos" width="100%" cellspacing="0">
                     <thead>
                         <tr>
@@ -67,14 +68,12 @@
 {% include 'notas_fiscais/modais/protocolo_arquivos.html' %}
 {% endblock %}
 
-{% block scripts %}
-{{ super() }}
+{% block extra_js %}
 <script>
+var TITULOS_PROT = ['Data', 'Número', 'Qtd. Arquivos', 'Ações'];
 $(document).ready(function() {
     var baseUrl = '{{ request.script_root or "" }}/notas-fiscais';
-    var table = $('#tabelaProtocolos').DataTable({
-        processing: true,
-        serverSide: true,
+    var table = $('#tabelaProtocolos').DataTable(FT.dtOpcoes({
         ajax: {
             url: baseUrl + '/protocolos/api/datatables',
             type: 'GET',
@@ -90,11 +89,7 @@ $(document).ready(function() {
                 return json.data || [];
             }
         },
-        language: {
-            url: "//cdn.datatables.net/plug-ins/1.10.24/i18n/Portuguese-Brasil.json"
-        },
         order: [[0, 'desc']],
-        pageLength: 25,
         columns: [
             { data: 'data', name: 'data' },
             { data: 'numero', name: 'numero' },
@@ -105,17 +100,19 @@ $(document).ready(function() {
                 searchable: false,
                 className: 'text-center',
                 render: function(data, type, row) {
-                    var numeroEsc = (row.numero || '').replace(/'/g, "\\'");
-                    return '<div class="btn-group btn-group-sm">' +
-                        '<button type="button" class="btn btn-outline-primary btn-importar-pdfs" data-id="' + row.id + '" title="Importar PDFs"><i class="fas fa-file-pdf"></i></button>' +
-                        '<button type="button" class="btn btn-outline-info btn-protocolo-email" data-id="' + row.id + '" data-numero="' + numeroEsc + '" title="Enviar por e-mail"><i class="fas fa-envelope"></i></button>' +
-                        '<button type="button" class="btn btn-outline-secondary btn-protocolo-arquivos" data-id="' + row.id + '" data-numero="' + numeroEsc + '" title="Visualizar/Editar arquivos"><i class="fas fa-folder-open"></i></button>' +
-                        '<button type="button" class="btn btn-outline-danger btn-protocolo-excluir" data-id="' + row.id + '" data-numero="' + numeroEsc + '" title="Excluir protocolo e arquivos"><i class="fas fa-trash"></i></button>' +
-                        '</div>';
+                    var numeroEsc = FT.escAttr(row.numero || '');
+                    return FT.renderAcoesDropdown([
+                        { label: 'Importar PDFs', icon: 'fa-file-pdf', iconCor: 'primary', classe: 'btn-importar-pdfs', attrs: 'data-id="' + row.id + '"' },
+                        { label: 'Enviar por e-mail', icon: 'fa-envelope', iconCor: 'info', classe: 'btn-protocolo-email', attrs: 'data-id="' + row.id + '" data-numero="' + numeroEsc + '"' },
+                        { label: 'Ver/Editar Arquivos', icon: 'fa-folder-open', iconCor: 'secondary', classe: 'btn-protocolo-arquivos', attrs: 'data-id="' + row.id + '" data-numero="' + numeroEsc + '"' },
+                        { divider: true },
+                        { label: 'Excluir', icon: 'fa-trash', iconCor: 'danger', classe: 'btn-protocolo-excluir', attrs: 'data-id="' + row.id + '" data-numero="' + numeroEsc + '"' }
+                    ]);
                 }
             }
         ]
-    });
+    }));
+    FT.dtColunas.inicializar(table, 'tabelaProtocolos', TITULOS_PROT);
 
     $('#btnFiltrarProtocolosNotaRef').on('click', function() {
         table.ajax.reload();

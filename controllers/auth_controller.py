@@ -5,7 +5,6 @@ from urllib.parse import urlparse, urljoin
 import logging
 from models.database import db
 from models.usuario import Usuario
-from utils.password import is_argon2_hash
 from models.colaborador import Colaborador
 from extensions import limiter
 
@@ -80,7 +79,7 @@ def login():
                 flash('Colaborador inativo. Por favor, contate o administrador.', 'danger')
                 return redirect(url_for('auth.login'))
 
-            if not is_argon2_hash(usuario.senha):
+            if not Usuario.is_argon2_hash(usuario.senha):
                 usuario.set_senha(senha)
 
             _limpar_tentativas(email)

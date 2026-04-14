@@ -52,6 +52,7 @@ def _build_analise_query(agrupar_por, fornecedor, data_inicio, data_fim, termo_i
                 Unidades.nome.label("material_unidade"),
                 func.sum(NotaFiscalItem.quantidade).label("quantidade_total"),
                 func.sum(NotaFiscalItem.valor_total).label("valor_total_agregado"),
+                func.count(distinct(NotaFiscal.id)).label("quantidade_notas"),
                 func.group_concat(distinct(NotaFiscal.nome_emitente)).label("fornecedores"),
             )
             .join(NotaFiscalItem, Materiais.id == NotaFiscalItem.material_id)
@@ -66,6 +67,7 @@ def _build_analise_query(agrupar_por, fornecedor, data_inicio, data_fim, termo_i
                 NotaFiscalItem.descricao,
                 func.sum(NotaFiscalItem.quantidade).label("quantidade_total"),
                 func.sum(NotaFiscalItem.valor_total).label("valor_total_agregado"),
+                func.count(distinct(NotaFiscal.id)).label("quantidade_notas"),
                 func.group_concat(distinct(NotaFiscal.nome_emitente)).label("fornecedores"),
                 func.group_concat(distinct(Unidades.nome)).label("unidades"),
                 func.group_concat(distinct(Materiais.nome)).label("materiais_vinculados"),
@@ -189,7 +191,8 @@ def analise_ajax():
             1: Unidades.nome,
             2: func.sum(NotaFiscalItem.quantidade),
             3: func.sum(NotaFiscalItem.valor_total),
-            4: func.group_concat(distinct(NotaFiscal.nome_emitente)),
+            4: func.count(distinct(NotaFiscal.id)),
+            5: func.group_concat(distinct(NotaFiscal.nome_emitente)),
         }
     else:
         col_map = {
@@ -199,7 +202,8 @@ def analise_ajax():
             3: func.sum(NotaFiscalItem.quantidade),
             4: func.group_concat(distinct(Unidades.nome)),
             5: func.sum(NotaFiscalItem.valor_total),
-            6: func.group_concat(distinct(NotaFiscal.nome_emitente)),
+            6: func.count(distinct(NotaFiscal.id)),
+            7: func.group_concat(distinct(NotaFiscal.nome_emitente)),
         }
 
     order_column = col_map.get(order_col_idx, func.sum(NotaFiscalItem.valor_total))
@@ -225,6 +229,7 @@ def analise_ajax():
                 item.material_unidade or "N/D",
                 f"{float(item.quantidade_total or 0):.2f}",
                 f"{float(item.valor_total_agregado or 0):.2f}",
+                int(item.quantidade_notas or 0),
                 fornecedores_str,
             ])
     else:
@@ -243,6 +248,7 @@ def analise_ajax():
                 f"{float(item.quantidade_total or 0):.2f}",
                 unidades_str,
                 f"{float(item.valor_total_agregado or 0):.2f}",
+                int(item.quantidade_notas or 0),
                 fornecedores_str,
             ])
 

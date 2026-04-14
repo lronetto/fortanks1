@@ -71,6 +71,7 @@ dependencies = [
     "prompt-toolkit==3.0.52",
     "pure-eval==0.2.3",
     "pygments==2.19.2",
+    "pyjwt>=2.12.1",
     "pymysql>=1.1.2",
     "pypdf2>=3.0.1",
     "python-dateutil==2.9.0.post0",

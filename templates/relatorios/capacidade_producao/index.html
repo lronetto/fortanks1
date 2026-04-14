@@ -176,11 +176,12 @@
     <div class="row">
         <div class="col-12">
             <div class="card">
-                <div class="card-header">
-                    <h5 class="mb-0"><i class="fas fa-table"></i> Materiais de Estoque - Análise de Capacidade de Produção</h5>
+                <div class="card-header d-flex align-items-center justify-content-between">
+                    <h5 class="mb-0 fw-bold"><i class="fas fa-table"></i> Materiais de Estoque - Análise de Capacidade de Produção</h5>
+                    <div class="ft-col-toggle-placeholder"></div>
                 </div>
                 <div class="card-body">
-                    <div class="table-responsive">
+                    <div class="ft-datatable-wrapper">
                         <table id="tabelaMateriais" class="table table-bordered table-hover align-middle">
                             <thead class="table-light">
                                 <tr>
@@ -224,7 +225,7 @@
 
 {% endblock %}
 
-{% block scripts %}
+{% block extra_js %}
 <script>
 $(document).ready(function() {
     let tabelaMateriais;
@@ -258,11 +259,8 @@ $(document).ready(function() {
 
     // Inicializar DataTable
     try {
-        tabelaMateriais = tabelaElement.DataTable({
-        language: {
-            url: 'https://cdn.datatables.net/plug-ins/1.13.7/i18n/pt-BR.json'
-        },
-        processing: true,
+        var TITULOS_CAP = ['Material', 'Unidade', 'Estoque Atual', 'Quantidade Prevista Total', 'Consumida (produzidas)', 'Quantidade Restante Total', 'Previsto de Uso Futuro', 'Estoque Após Uso', '% de Uso', 'Status'];
+        tabelaMateriais = tabelaElement.DataTable(FT.dtOpcoes({
         serverSide: false,
         ajax: {
             url: "{{ url_for('relatorios_capacidade_producao.api_dados_materiais') }}",
@@ -384,8 +382,6 @@ $(document).ready(function() {
             }
         ],
         order: [[0, 'asc']],
-        pageLength: 25,
-        responsive: true,
         drawCallback: function(settings) {
             // Garantir que o tfoot existe após o desenho
             try {
@@ -401,7 +397,8 @@ $(document).ready(function() {
                 console.warn('Erro ao verificar tfoot:', e);
             }
         }
-    });
+    }));
+        FT.dtColunas.inicializar(tabelaMateriais, 'tabelaMateriais', TITULOS_CAP);
     } catch (e) {
         console.error('Erro ao inicializar DataTable:', e);
         return;

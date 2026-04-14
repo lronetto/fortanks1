@@ -12,10 +12,24 @@ from models.material import Materiais
 from models.plano_conta import PlanoConta
 from models.solicitacao import SolicitacoesItens
 from models.unidade import Unidades
+from utils.material_imagem_upload import parse_dados_json
 
 from .. import material_bp
 
 logger = logging.getLogger(__name__)
+
+
+def _normalizar_codigo_inteiro(valor):
+    txt = str(valor or "").strip()
+    if not txt:
+        return ""
+    txt = txt.replace(",", ".")
+    try:
+        return str(int(float(txt)))
+    except (TypeError, ValueError):
+        if "." in txt:
+            return txt.split(".", 1)[0]
+        return txt
 
 
 @material_bp.route("/datatables", methods=["POST"])
@@ -56,18 +70,20 @@ def materiais_datatables():
 
         records_filtered = query.count()
 
-        order_column_index = int(request.form.get("order[0][column]", 4))
+        order_column_index = int(request.form.get("order[0][column]", 6))
         order_dir = request.form.get("order[0][dir]", "asc")
 
         column_map = {
             1: Materiais.id,
             2: Materiais.mascara,
-            3: Materiais.codigo_erp,
-            4: Materiais.nome,
-            5: Materiais.categoria,
-            6: Unidades.nome,
-            7: PlanoConta.descricao,
-            8: Materiais.criado_em,
+            3: Materiais.codigo,
+            4: Materiais.codigo_erp,
+            5: Materiais.codigo_erp,
+            6: Materiais.nome,
+            7: Materiais.categoria,
+            8: Unidades.nome,
+            9: PlanoConta.descricao,
+            10: Materiais.criado_em,
         }
 
         order_col = column_map.get(order_column_index, Materiais.nome)
@@ -97,6 +113,11 @@ def materiais_datatables():
 
         data = []
         for m in items:
+            extras = parse_dados_json(m.dados_adicionais)
+            mascara = _normalizar_codigo_inteiro(m.mascara)
+            codigo_sox = _normalizar_codigo_inteiro(extras.get("codigo_sox") or m.codigo)
+            codigo_alterdata = _normalizar_codigo_inteiro(extras.get("codigo_alterdata") or m.codigo_erp)
+            codigo_mega = _normalizar_codigo_inteiro(extras.get("codigo_mega") or extras.get("cod_mega"))
             plano_codigo = m.plano_conta or ""
             if m.plano_conta_obj:
                 plano_desc = m.plano_conta_obj.descricao or ""
@@ -108,9 +129,12 @@ def materiais_datatables():
             data.append(
                 {
                     "id": m.id,
-                    "mascara": m.mascara or "",
-                    "codigo_erp": m.codigo_erp or "",
-                    "codigo": m.codigo or "",
+                    "mascara": mascara,
+                    "codigo_erp": codigo_alterdata,
+                    "codigo": codigo_sox,
+                    "codigo_sox": codigo_sox,
+                    "codigo_alterdata": codigo_alterdata,
+                    "codigo_mega": codigo_mega,
                     "nome": m.nome or "",
                     "categoria": m.categoria or "",
                     "unidade_id": unidade_id,

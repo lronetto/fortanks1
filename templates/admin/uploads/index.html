@@ -1,0 +1,285 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Uploads - Admin{% endblock %}
+{% block mobile_title %}Uploads{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="ft-page-header">
+        <h1 class="h3 mb-0"><i class="fas fa-folder-open"></i> Uploads</h1>
+    </div>
+
+    <div class="card shadow mb-3">
+        <div class="card-body">
+            <form id="formFiltrosUploads" class="row g-2 align-items-end">
+                <div class="col-md-4">
+                    <label for="filtro-filename" class="form-label">Nome do arquivo</label>
+                    <input id="filtro-filename" type="text" name="filename" class="form-control"
+                           placeholder="Ex.: nota_123.pdf">
+                </div>
+                <div class="col-md-3">
+                    <label for="filtro-pai" class="form-label">Pai</label>
+                    <input id="filtro-pai" type="text" name="pai" class="form-control"
+                           placeholder="Ex.: NotaFiscal">
+                </div>
+                <div class="col-md-2">
+                    <label for="filtro-tipo" class="form-label">Tipo</label>
+                    <input id="filtro-tipo" type="text" name="tipo" class="form-control"
+                           placeholder="Ex.: 1">
+                </div>
+                <div class="col-md-3">
+                    <label for="filtro-dados-adicionais" class="form-label">Dados adicionais</label>
+                    <input id="filtro-dados-adicionais" type="text" name="dados_adicionais" class="form-control"
+                           placeholder="Buscar no conteudo">
+                </div>
+                <div class="col-md-auto">
+                    <button type="submit" class="btn btn-primary">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                    <button id="btnLimparFiltrosUploads" type="button" class="btn btn-outline-secondary">
+                        <i class="fas fa-eraser"></i> Limpar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow" data-ft-colvis="tabelaUploads">
+        <div class="card-header py-3 d-flex align-items-center justify-content-between">
+            <h6 class="m-0 fw-bold">Documentos</h6>
+            <div class="ft-col-toggle-placeholder"></div>
+        </div>
+        <div class="card-body">
+            <div class="ft-datatable-wrapper">
+                <table id="tabelaUploads" class="table table-bordered table-hover w-100">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome do Arquivo</th>
+                            <th>Pai</th>
+                            <th>Pai ID</th>
+                            <th>Tipo</th>
+                            <th>Mimetype</th>
+                            <th>Data de Upload</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="modal fade" id="modalVisualizarUpload" tabindex="-1" aria-labelledby="modalVisualizarUploadLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalVisualizarUploadLabel">
+                    <i class="fas fa-eye"></i> Detalhes do Upload
+                </h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <label class="form-label text-muted mb-1">ID</label>
+                        <div id="det-upload-id" class="fw-semibold">-</div>
+                    </div>
+                    <div class="col-md-5">
+                        <label class="form-label text-muted mb-1">Nome do arquivo</label>
+                        <div id="det-upload-filename" class="fw-semibold">-</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label text-muted mb-1">Data de upload</label>
+                        <div id="det-upload-data" class="fw-semibold">-</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label text-muted mb-1">Pai</label>
+                        <div id="det-upload-pai" class="fw-semibold">-</div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label text-muted mb-1">Pai ID</label>
+                        <div id="det-upload-pai-id" class="fw-semibold">-</div>
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label text-muted mb-1">Tipo</label>
+                        <div id="det-upload-tipo" class="fw-semibold">-</div>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label text-muted mb-1">Mimetype</label>
+                        <div id="det-upload-mimetype" class="fw-semibold">-</div>
+                    </div>
+                    <div class="col-12">
+                        <label class="form-label text-muted mb-1">Dados adicionais</label>
+                        <pre id="det-upload-dados-adicionais" class="bg-light border rounded p-3 mb-0" style="white-space: pre-wrap;">-</pre>
+                    </div>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <a id="det-upload-download" href="#" class="btn btn-success">
+                    <i class="fas fa-download"></i> Baixar
+                </a>
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    var TITULOS_UPLOADS = ['ID', 'Nome do Arquivo', 'Pai', 'Pai ID', 'Tipo', 'Mimetype', 'Data de Upload', 'Ações'];
+    var modalVisualizarUpload = new bootstrap.Modal(document.getElementById('modalVisualizarUpload'));
+
+    function formatarDadosAdicionais(valor) {
+        if (!valor) {
+            return '—';
+        }
+        try {
+            var obj = JSON.parse(valor);
+            return JSON.stringify(obj, null, 2);
+        } catch (e) {
+            return valor;
+        }
+    }
+
+    var tabela = $('#tabelaUploads').DataTable(FT.dtOpcoes({
+        processing: true,
+        serverSide: true,
+        ajax: {
+            url: "{{ url_for('uploads.datatables') }}",
+            type: 'POST',
+            headers: FT.ajaxHeaders(),
+            data: function (d) {
+                d.filename = $('#filtro-filename').val();
+                d.pai = $('#filtro-pai').val();
+                d.tipo = $('#filtro-tipo').val();
+                d.dados_adicionais = $('#filtro-dados-adicionais').val();
+            }
+        },
+        columns: [
+            { data: 'id' },
+            { data: 'filename' },
+            { data: 'pai' },
+            { data: 'pai_id' },
+            { data: 'tipo' },
+            { data: 'mimetype' },
+            {
+                data: 'uploaded_at',
+                render: function (data, type, row) {
+                    if (type === 'sort' || type === 'type') {
+                        return row.uploaded_at_sort || '';
+                    }
+                    return data || '';
+                }
+            },
+            {
+                data: null,
+                orderable: false,
+                searchable: false,
+                className: 'text-center',
+                render: function (data, type, row) {
+                    return FT.renderAcoesDropdown([
+                        {
+                            label: 'Visualizar',
+                            icon: 'fa-eye',
+                            iconCor: 'info',
+                            classe: 'btn-visualizar-upload',
+                            attrs: 'data-upload=\'' + JSON.stringify(row).replace(/'/g, '&#39;') + '\''
+                        },
+                        {
+                            label: 'Baixar',
+                            icon: 'fa-download',
+                            iconCor: 'success',
+                            classe: 'btn-baixar-upload',
+                            attrs: 'data-url="' + FT.escAttr(row.download_url || '#') + '"'
+                        },
+                        { divider: true },
+                        {
+                            label: 'Excluir',
+                            icon: 'fa-trash',
+                            iconCor: 'danger',
+                            classe: 'text-danger btn-excluir-upload',
+                            attrs: 'data-id="' + row.id + '" data-url="' + FT.escAttr(row.excluir_url || '#') + '"'
+                        }
+                    ]);
+                }
+            }
+        ],
+        order: [[6, 'desc']],
+        language: {
+            emptyTable: 'Nenhum documento encontrado.'
+        }
+    }));
+
+    $('#formFiltrosUploads').on('submit', function (e) {
+        e.preventDefault();
+        tabela.ajax.reload();
+    });
+
+    $('#btnLimparFiltrosUploads').on('click', function () {
+        $('#filtro-filename').val('');
+        $('#filtro-pai').val('');
+        $('#filtro-tipo').val('');
+        $('#filtro-dados-adicionais').val('');
+        tabela.ajax.reload();
+    });
+
+    $(document).on('click', '.btn-visualizar-upload', function () {
+        var upload = $(this).data('upload') || {};
+        $('#det-upload-id').text(upload.id || '-');
+        $('#det-upload-filename').text(upload.filename || '-');
+        $('#det-upload-data').text(upload.uploaded_at || '-');
+        $('#det-upload-pai').text(upload.pai || '-');
+        $('#det-upload-pai-id').text(upload.pai_id || '-');
+        $('#det-upload-tipo').text(upload.tipo || '-');
+        $('#det-upload-mimetype').text(upload.mimetype || '-');
+        $('#det-upload-dados-adicionais').text(formatarDadosAdicionais(upload.dados_adicionais));
+        $('#det-upload-download').attr('href', upload.download_url || '#');
+        modalVisualizarUpload.show();
+    });
+
+    $(document).on('click', '.btn-baixar-upload', function () {
+        var url = $(this).data('url');
+        if (url) {
+            window.location.href = url;
+        }
+    });
+
+    $(document).on('click', '.btn-excluir-upload', function () {
+        var id = $(this).data('id');
+        var url = $(this).data('url');
+        if (!url) return;
+
+        if (!confirm('Deseja realmente excluir o upload #' + id + '?')) {
+            return;
+        }
+
+        $.ajax({
+            url: url,
+            type: 'POST',
+            headers: FT.ajaxHeaders(),
+            success: function (resp) {
+                if (resp && resp.success) {
+                    FT.alerta(resp.message || 'Upload excluido com sucesso.', 'success');
+                    tabela.ajax.reload(null, false);
+                    return;
+                }
+                FT.alerta((resp && resp.message) || 'Nao foi possivel excluir o upload.', 'danger');
+            },
+            error: function (xhr) {
+                var msg = 'Erro ao excluir upload.';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    msg = xhr.responseJSON.message;
+                }
+                FT.alerta(msg, 'danger');
+            }
+        });
+    });
+
+    FT.dtColunas.inicializar(tabela, 'tabelaUploads', TITULOS_UPLOADS);
+});
+</script>
+{% endblock %}

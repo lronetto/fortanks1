@@ -1,0 +1,3 @@
+from controllers.cadastro_operacional.certificado_controller import certificado_bp
+from controllers.cadastro_operacional.produto_composto_controller import produto_composto_bp
+

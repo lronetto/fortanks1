@@ -80,12 +80,10 @@
 
     <!-- Tabela de Dados -->
     <div class="card" id="tabelaCard">
-        <div class="card-header d-flex justify-content-between align-items-center">
-            <div>
-                <i class="fas fa-table me-1"></i>
-                Dados de Concretagem
-            </div>
-            <div>
+        <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+            <h6 class="m-0 fw-bold"><i class="fas fa-table me-1"></i> Dados de Concretagem</h6>
+            <div class="d-flex align-items-center gap-2">
+            <div class="ft-col-toggle-placeholder"></div>
                 <button type="button" id="btnResumo" class="btn btn-info btn-sm me-2" data-bs-toggle="modal" data-bs-target="#modalResumo">
                     <i class="fas fa-chart-bar"></i> Resumo
                 </button>
@@ -96,9 +94,10 @@
                     <i class="fas fa-file-pdf"></i> Exportar em Massa (PDF)
                 </button>
             </div>
+            </div>
         </div>
         <div class="card-body">
-            <div class="table-responsive">
+            <div class="ft-datatable-wrapper">
                 <table class="table table-bordered table-striped" id="dataTable" width="100%" cellspacing="0">
                     <thead>
                         <tr>
@@ -137,9 +136,9 @@
 </style>
 {% endblock %}
 
-{% block scripts %}
-
+{% block extra_js %}
 <script>
+    var TITULOS_DB_CONC = ['', 'Número de Série', 'Rompimentos', 'Data de Moldagem', 'Projeto', 'Tanque', 'Ações'];
     $(document).ready(function() {
         // Função para mostrar/ocultar indicador de carregamento
         function mostrarCarregamento(mostrar) {
@@ -167,8 +166,7 @@
             });
         };
 
-        let table = $('#dataTable').DataTable({
-            "processing": true,
+        let table = $('#dataTable').DataTable(FT.dtOpcoes({
             "serverSide": false,
             "ajax": {
                 "url": "{{ url_for('databook_concretagem.api_dados') }}",
@@ -238,37 +236,12 @@
                     }
                 }
             ],
-            "language": {
-                "sEmptyTable": "Nenhum registro encontrado",
-                "sInfo": "Mostrando de _START_ até _END_ de _TOTAL_ registros",
-                "sInfoEmpty": "Mostrando 0 até 0 de 0 registros",
-                "sInfoFiltered": "(Filtrados de _MAX_ registros)",
-                "sInfoPostFix": "",
-                "sInfoThousands": ".",
-                "sLengthMenu": "_MENU_ resultados por página",
-                "sLoadingRecords": "Carregando...",
-                "sProcessing": "Processando...",
-                "sZeroRecords": "Nenhum registro encontrado",
-                "sSearch": "Pesquisar",
-                "oPaginate": {
-                    "sFirst": "Primeiro",
-                    "sLast": "Último",
-                    "sNext": "Próximo",
-                    "sPrevious": "Anterior"
-                },
-                "oAria": {
-                    "sSortAscending": ": Ordenar colunas de forma ascendente",
-                    "sSortDescending": ": Ordenar colunas de forma descendente"
-                }
-            },
-            "order": [[0, 'asc']],  // Ordenar por número de série
-            "pageLength": 25,
-            "lengthMenu": [[10, 25, 50, 100, -1], [10, 25, 50, 100, "Todos"]],
+            "order": [[0, 'asc']],
             "initComplete": function() {
-                // Garantir que o indicador seja ocultado após a inicialização
                 mostrarCarregamento(false);
             }
-        });
+        }));
+        FT.dtColunas.inicializar(table, 'dataTable', TITULOS_DB_CONC);
 
         // Função para carregar grupos baseado no projeto
         function carregarGrupos() {

@@ -1,0 +1,369 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Produtos Compostos{% endblock %}
+
+{% block content %}
+
+<div class="container-fluid">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+        <h1 class="h3 mb-0 text-gray-800">Produtos Compostos</h1>
+        <div>
+            <button class="btn btn-secondary btn-icon-split btn-sm mr-2" id="btn-comparar-produtos" title="Comparar materiais entre produtos selecionados" disabled>
+                <span class="icon text-white-50">
+                    <i class="fas fa-balance-scale"></i>
+                </span>
+                <span class="text">Comparar</span>
+            </button>
+            <button class="btn btn-success btn-icon-split btn-sm mr-2" id="btn-exportar-excel" title="Exportar produtos selecionados para Excel">
+                <span class="icon text-white-50">
+                    <i class="fas fa-file-excel"></i>
+                </span>
+                <span class="text">Exportar Excel</span>
+            </button>
+            <button class="btn btn-info btn-icon-split btn-sm mr-2" id="btn-importar-excel" title="Importar produtos de arquivo Excel">
+                <span class="icon text-white-50">
+                    <i class="fas fa-file-import"></i>
+                </span>
+                <span class="text">Importar Excel</span>
+            </button>
+            <button class="btn btn-primary btn-icon-split btn-sm" id="btn-novo-produto">
+                <span class="icon text-white-50">
+                    <i class="fas fa-plus"></i>
+                </span>
+                <span class="text">Novo Produto Composto</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
+            <h6 class="m-0 fw-bold">Lista de Produtos</h6>
+            <div class="d-flex align-items-center gap-2">
+                <div class="input-group input-group-sm">
+                    <input type="text" class="form-control" id="filtro-nome" placeholder="Filtrar por nome ou ID...">
+                    <button class="btn btn-outline-secondary" type="button" id="btn-limpar-filtro">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="ft-col-toggle-placeholder"></div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="row mb-3">
+                <div class="col-md-6">
+                    <small class="text-muted">
+                        Com filtro: <span id="contador-produtos">0</span> de <span id="total-produtos">0</span> produtos no cadastro
+                    </small>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-bordered" id="tabela-produtos-compostos" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th class="text-center" style="width: 3%;">
+                                <input type="checkbox" id="selecionar-todos" title="Selecionar todos nesta página">
+                            </th>
+                            <th style="width: 5%;">ID</th>
+                            <th style="width: 10%;">Imagem</th>
+                            <th style="width: 30%;">Nome</th>
+                            <th style="width: 8%;">Estoque</th>
+                            <th class="text-center" style="width: 15%;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal Container -->
+{% include 'cadastro_operacional/produto_composto/modais/form.html' %}
+
+
+<!-- Modal de Exclusão (pode ser um só e genérico) -->
+{% include 'cadastro_operacional/produto_composto/modais/delete.html' %}
+
+<!-- Modal de Duplicação -->
+{% include 'cadastro_operacional/produto_composto/modais/duplicate.html' %}
+
+<!-- Modal de Produção -->
+{% include 'cadastro_operacional/produto_composto/modais/producao.html' %}
+
+<!-- Modal de Histórico de Custo -->
+{% include 'cadastro_operacional/produto_composto/modais/historico_custo.html' %}
+
+<!-- Modal de Importação -->
+{% include 'cadastro_operacional/produto_composto/modais/importar.html' %}
+
+<!-- Modal de Comparação -->
+{% include 'cadastro_operacional/produto_composto/modais/comparacao.html' %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function() {
+    var escAttr = FT.escAttr;
+
+    let dtProdutosCompostos;
+    let filtroTimeout = null;
+
+    window.recarregarDataTableProdutosCompostos = function() {
+        if (dtProdutosCompostos) {
+            dtProdutosCompostos.ajax.reload(null, false);
+        }
+    };
+
+    /** Mantido para modais (delete, duplicate, import, save) que chamam carregarProduto(0). */
+    function carregarProduto(id) {
+        if (id === 0) {
+            window.recarregarDataTableProdutosCompostos();
+        }
+    }
+    window.carregarProduto = carregarProduto;
+
+    $(document).ready(function() {
+        var TITULOS_PC2 = ['', 'ID', 'Imagem', 'Nome', 'Estoque', 'Ações'];
+        dtProdutosCompostos = $('#tabela-produtos-compostos').DataTable(FT.dtOpcoes({
+            processing: true,
+            serverSide: true,
+            searching: true,
+            dom: 'lrtip',
+            ajax: {
+                url: '{{ url_for("produto_composto.api_datatables") }}',
+                type: 'GET',
+                dataSrc: function(json) {
+                    if (json.error) {
+                        console.error('Erro ao carregar dados:', json.error);
+                        return [];
+                    }
+                    return json.data;
+                },
+                error: function(xhr, err) {
+                    console.error('Erro AJAX DataTables:', err);
+                    alert('Erro ao carregar a lista de produtos. Verifique o console.');
+                }
+            },
+            language: {
+                url: '//cdn.datatables.net/plug-ins/1.13.4/i18n/pt-BR.json'
+            },
+            order: [[3, 'asc']],
+            pageLength: 25,
+            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'Todos']],
+            scrollX: true,
+            columns: [
+                {
+                    data: null,
+                    name: 'select',
+                    orderable: false,
+                    searchable: false,
+                    className: 'text-center',
+                    render: function(_data, type, row) {
+                        if (type !== 'display') {
+                            return '';
+                        }
+                        return (
+                            '<input type="checkbox" class="checkbox-produto" data-id="' + row.id + '" data-nome="' +
+                            escAttr(row.nome) + '">'
+                        );
+                    }
+                },
+                { data: 'id', name: 'id', className: 'text-center' },
+                {
+                    data: null,
+                    name: 'imagem',
+                    orderable: false,
+                    searchable: false,
+                    render: function(_data, type, row) {
+                        if (type !== 'display') {
+                            return '';
+                        }
+                        return (
+                            '<img src="/produto-composto/imagem/' + row.id + '" alt="' + escAttr(row.nome) +
+                            '" class="img-thumbnail" style="width:120px;height:100px;object-fit:cover;">'
+                        );
+                    }
+                },
+                { data: 'nome', name: 'nome' },
+                {
+                    data: 'estoque',
+                    name: 'estoque',
+                    orderable: false,
+                    searchable: false,
+                    render: function(data, type) {
+                        if (type !== 'display') {
+                            return data != null ? data : 0;
+                        }
+                        return data != null ? data : '0';
+                    }
+                },
+                {
+                    data: null,
+                    name: 'acoes',
+                    orderable: false,
+                    searchable: false,
+                    className: 'text-center',
+                    render: function(_data, type, row) {
+                        if (type !== 'display') {
+                            return '';
+                        }
+                        var nome = escAttr(row.nome);
+                        var est = row.estoque != null ? row.estoque : 0;
+                        return (
+                            '<button class="btn btn-success btn-circle btn-sm btn-produzir" data-id="' + row.id +
+                            '" data-nome="' + nome + '" data-estoque="' + est +
+                            '" title="Produzir"><i class="fas fa-industry"></i></button> ' +
+                            '<button class="btn btn-primary btn-circle btn-sm btn-historico-custo" data-id="' + row.id +
+                            '" data-nome="' + nome + '" title="Histórico de Custo"><i class="fas fa-chart-line"></i></button> ' +
+                            '<button class="btn btn-info btn-circle btn-sm btn-editar" data-id="' + row.id +
+                            '" data-nome="' + nome + '" title="Editar"><i class="fas fa-edit"></i></button> ' +
+                            '<button class="btn btn-warning btn-circle btn-sm btn-duplicar" data-id="' + row.id +
+                            '" data-nome="' + nome + '" title="Duplicar"><i class="fas fa-copy"></i></button> ' +
+                            '<button class="btn btn-danger btn-circle btn-sm btn-excluir" data-id="' + row.id +
+                            '" data-nome="' + nome + '" title="Excluir"><i class="fas fa-trash"></i></button>'
+                        );
+                    }
+                }
+            ],
+            drawCallback: function() {
+                var info = this.api().page.info();
+                $('#contador-produtos').text(info.recordsDisplay);
+                $('#total-produtos').text(info.recordsTotal);
+                $('#selecionar-todos').prop('checked', false);
+                atualizarEstadoBotaoComparar();
+            }
+        }));
+        FT.dtColunas.inicializar(dtProdutosCompostos, 'tabela-produtos-compostos', TITULOS_PC2);
+
+        $('#filtro-nome').on('input', function() {
+            clearTimeout(filtroTimeout);
+            var v = $(this).val();
+            filtroTimeout = setTimeout(function() {
+                dtProdutosCompostos.search(v).draw();
+            }, 300);
+        });
+
+        $('#btn-limpar-filtro').on('click', function() {
+            $('#filtro-nome').val('');
+            dtProdutosCompostos.search('').draw();
+        });
+
+        $('#selecionar-todos').on('change', function() {
+            var marcado = $(this).prop('checked');
+            $('#tabela-produtos-compostos tbody .checkbox-produto').prop('checked', marcado);
+            atualizarEstadoBotaoComparar();
+        });
+
+        $('#tabela-produtos-compostos tbody').on('change', '.checkbox-produto', function() {
+            atualizarEstadoBotaoComparar();
+        });
+
+        $('#btn-comparar-produtos').on('click', function() {
+            abrirModalComparacao();
+        });
+
+        $('#btn-exportar-excel').on('click', function() {
+            exportarExcel();
+        });
+
+        $('#btn-importar-excel').on('click', function() {
+            $('#importModal').modal('show');
+        });
+
+        $('#tabela-produtos-compostos tbody').on('click', '.btn-duplicar', function(e) {
+            e.preventDefault();
+            var produtoId = $(this).data('id');
+            var produtoNome = $(this).data('nome');
+            $('.btn-send-duplicar').data('id', produtoId);
+            $('.btn-send-duplicar').data('nome', produtoNome);
+            $('#nome-produto-duplicar').text(produtoNome);
+            $('#duplicateModal').modal('show');
+        });
+
+        $('#tabela-produtos-compostos tbody').on('click', '.btn-excluir', function(e) {
+            e.preventDefault();
+            var produtoId = $(this).data('id');
+            var produtoNome = $(this).data('nome');
+            $('.btn-send-excluir').data('id', produtoId);
+            $('.btn-send-excluir').data('nome', produtoNome);
+            $('#nome-produto-excluir').text(produtoNome);
+            $('#deleteModal').modal('show');
+        });
+    });
+
+    function exportarExcel() {
+        var produtosSelecionados = [];
+        document.querySelectorAll('.checkbox-produto:checked').forEach(function(cb) {
+            produtosSelecionados.push(cb.dataset.id);
+        });
+
+        if (produtosSelecionados.length === 0) {
+            alert('Selecione pelo menos um produto na página atual para exportar.');
+            return;
+        }
+
+        var csrfToken = document.querySelector('meta[name="csrf-token"]')?.content ||
+            document.querySelector('input[name="csrf_token"]')?.value;
+
+        var form = document.createElement('form');
+        form.method = 'POST';
+        form.action = '/produto-composto/exportar-excel';
+        form.style.display = 'none';
+
+        if (csrfToken) {
+            var csrfInput = document.createElement('input');
+            csrfInput.type = 'hidden';
+            csrfInput.name = 'csrf_token';
+            csrfInput.value = csrfToken;
+            form.appendChild(csrfInput);
+        }
+
+        produtosSelecionados.forEach(function(id) {
+            var input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = 'produto_ids';
+            input.value = id;
+            form.appendChild(input);
+        });
+
+        document.body.appendChild(form);
+        form.submit();
+        setTimeout(function() {
+            document.body.removeChild(form);
+        }, 1000);
+    }
+
+    function getProdutosSelecionadosNaPagina() {
+        var produtos = [];
+        document.querySelectorAll('.checkbox-produto:checked').forEach(function(cb) {
+            produtos.push({
+                id: Number(cb.dataset.id),
+                nome: cb.dataset.nome || ''
+            });
+        });
+        return produtos;
+    }
+
+    function atualizarEstadoBotaoComparar() {
+        var selecionados = getProdutosSelecionadosNaPagina();
+        $('#btn-comparar-produtos').prop('disabled', selecionados.length < 2);
+    }
+
+    function abrirModalComparacao() {
+        var selecionados = getProdutosSelecionadosNaPagina();
+        if (selecionados.length < 2) {
+            alert('Selecione pelo menos 2 produtos (nesta página) para comparar.');
+            return;
+        }
+        if (typeof window.ProdutoCompostoComparacao === 'object' && typeof window.ProdutoCompostoComparacao.open === 'function') {
+            window.ProdutoCompostoComparacao.open(selecionados);
+        } else {
+            console.error('Comparação: módulo não encontrado (ProdutoCompostoComparacao).');
+            alert('Não foi possível abrir a comparação. Verifique o console.');
+        }
+    }
+})();
+</script>
+{% endblock %}

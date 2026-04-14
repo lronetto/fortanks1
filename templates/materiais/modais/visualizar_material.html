@@ -14,9 +14,16 @@
                         <p id="view_codigo" class="border-bottom pb-2">-</p>
                     </div>
                     <div class="col-md-4 mb-3">
-                        <label class="form-label fw-bold">Código ERP</label>
-                        <p id="view_codigo_erp" class="border-bottom pb-2">-</p>
+                        <label class="form-label fw-bold">Código Alterdata</label>
+                        <p id="view_codigo_alterdata" class="border-bottom pb-2">-</p>
                     </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label fw-bold">Código Mega</label>
+                        <p id="view_codigo_mega" class="border-bottom pb-2">-</p>
+                    </div>
+                </div>
+
+                <div class="row">
                     <div class="col-md-4 mb-3">
                         <label class="form-label fw-bold">Categoria</label>
                         <p id="view_categoria" class="border-bottom pb-2">-</p>
@@ -58,7 +65,8 @@ document.addEventListener('DOMContentLoaded', function() {
     function preencherModalVisualizacao(button) {
         const data = button.dataset;
         document.getElementById('view_codigo').textContent = data.codigo || '-';
-        document.getElementById('view_codigo_erp').textContent = data.codigo_erp || '-';
+        document.getElementById('view_codigo_alterdata').textContent = data.codigoAlterdata || data.codigo_erp || '-';
+        document.getElementById('view_codigo_mega').textContent = data.codigoMega || '-';
         document.getElementById('view_nome').textContent = data.nome || '-';
         document.getElementById('view_categoria').textContent = data.categoria || '-';
         document.getElementById('view_unidade').textContent = data.unidadeNome || data.unidade || '-';

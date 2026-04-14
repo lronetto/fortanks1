@@ -3,6 +3,7 @@ import json
 from flask import Blueprint, render_template, request, send_file, jsonify
 from datetime import datetime, timedelta
 from functools import wraps
+from collections import defaultdict
 from flask_login import current_user, login_required
 from flask_wtf.csrf import validate_csrf
 from decimal import Decimal
@@ -102,31 +103,80 @@ def _processar_notas_fiscais(query):
     notas_material_ids = [nf.id for nf in [r[0] for r in resultados] if nf.tipo in [0, 1]]
     notas_servico_ids = [nf.id for nf in [r[0] for r in resultados] if nf.tipo == 3]
     
-    # Buscar todos os itens de nota fiscal relacionados de uma vez (para quantidade e data prevista)
-    # Apenas para notas de material
+    # Notas de material: para cada item da NF, se existir tanque do projeto com
+    # codigo do item = item_nf do tanque, soma a quantidade do item (uma vez por item).
     nf_items_dict = {}
     if notas_material_ids:
-        nf_items_query = db.session.query(NotaFiscalItem, Tanques, Contrato)\
+        soma_por_nf = defaultdict(float)
+        primeiro_vinculo_por_nf = {}
+        itens_ja_somados = set()
+
+        linhas_vinculo = (
+            db.session.query(NotaFiscalItem, Tanques, Contrato)
             .join(
                 Tanques,
                 Tanques.sql_codigo_nf_igual_item_nf_colunas(
                     NotaFiscalItem.codigo, Tanques.item_nf
                 ),
-            )\
-            .join(Contrato, Contrato.id == Tanques.contrato_id)\
-            .filter(NotaFiscalItem.nf_id.in_(notas_material_ids))\
-            .group_by(NotaFiscalItem.nf_id).all()
-        
-        for nf_item, tanque, contrato in nf_items_query:
-            if nf_item.nf_id not in nf_items_dict:
-                nf_items_dict[nf_item.nf_id] = {
-                    'tanque': tanque,
-                    'contrato': contrato,
-                    'quantidade': nf_item.quantidade
-                }
-            else:
-                # Se houver múltiplos itens, somar a quantidade
-                nf_items_dict[nf_item.nf_id]['quantidade'] += nf_item.quantidade
+            )
+            .join(Contrato, Contrato.id == Tanques.contrato_id)
+            .filter(NotaFiscalItem.nf_id.in_(notas_material_ids))
+            .all()
+        )
+        for item, tanque, contrato in linhas_vinculo:
+            if item.id in itens_ja_somados:
+                continue
+            itens_ja_somados.add(item.id)
+            try:
+                qtd = float(item.quantidade or 0)
+            except (TypeError, ValueError):
+                qtd = 0.0
+            soma_por_nf[item.nf_id] += qtd
+            if item.nf_id not in primeiro_vinculo_por_nf:
+                primeiro_vinculo_por_nf[item.nf_id] = (tanque, contrato)
+
+        # Passo 2: itens ainda sem vínculo — mesmo critério usado em Tanques (codigo contém item_nf)
+        itens_restantes_q = db.session.query(NotaFiscalItem).filter(
+            NotaFiscalItem.nf_id.in_(notas_material_ids),
+            NotaFiscalItem.codigo.isnot(None),
+        )
+        if itens_ja_somados:
+            itens_restantes_q = itens_restantes_q.filter(
+                NotaFiscalItem.id.notin_(list(itens_ja_somados))
+            )
+        tanques_projeto = (
+            db.session.query(Tanques, Contrato)
+            .join(Contrato, Contrato.id == Tanques.contrato_id)
+            .filter(Tanques.item_nf.isnot(None))
+            .all()
+        )
+        for item in itens_restantes_q.all():
+            codigo = str(item.codigo).strip()
+            if not codigo:
+                continue
+            for tanque, contrato in tanques_projeto:
+                chave = str(tanque.item_nf).strip()
+                if not chave:
+                    continue
+                if chave not in codigo:
+                    continue
+                try:
+                    qtd = float(item.quantidade or 0)
+                except (TypeError, ValueError):
+                    qtd = 0.0
+                soma_por_nf[item.nf_id] += qtd
+                itens_ja_somados.add(item.id)
+                if item.nf_id not in primeiro_vinculo_por_nf:
+                    primeiro_vinculo_por_nf[item.nf_id] = (tanque, contrato)
+                break
+
+        for nf_id, total_qtd in soma_por_nf.items():
+            tanque, contrato = primeiro_vinculo_por_nf.get(nf_id, (None, None))
+            nf_items_dict[nf_id] = {
+                'tanque': tanque,
+                'contrato': contrato,
+                'quantidade': total_qtd,
+            }
     
     # Buscar todos os contratos que têm cnpjs_associados (usado para serviço e material por CNPJ)
     contratos_com_cnpjs = db.session.query(Contrato)\
@@ -319,10 +369,7 @@ def api_dados():
     status_pagamento = request.args.get('status_pagamento', None)
     tipo_nota = request.args.get('tipo_nota', None)
 
-    print(f'request.args: {request.args}')
-    print(f'centro_custo_ids (getlist): {request.args.getlist("centro_custo")}')
-    print(f'centro_custo_ids (get): {request.args.get("centro_custo")}')
-    print(f'centro_custo_ids (final): {centro_custo_ids}')
+    
     data_inicio_dt = datetime.strptime(data_inicio, '%Y-%m-%d') if data_inicio else None
     data_fim_dt = datetime.strptime(data_fim, '%Y-%m-%d') if data_fim else None
     centro_custo_ids_int = [int(cid) for cid in centro_custo_ids if cid]
@@ -351,6 +398,7 @@ def api_dados():
    
     
     dados_relatorio = _processar_notas_fiscais(query)
+    print(f'dados_relatorio: {dados_relatorio}')
     # Calcular totais por categoria
     total_valor = sum([d['valor'] if d['status'] != 'cancelada' else 0 for d in dados_relatorio])
     total_quantidade = sum([d['quantidade'] if d['status'] != 'cancelada' else 0 for d in dados_relatorio])
@@ -412,9 +460,9 @@ def api_dados():
     # Placas já faturadas (apenas NFE material), para "a faturar" = contrato − faturado
     quantidade_material_faturada = sum([
         d['quantidade'] for d in dados_relatorio
-        if d['status'] != 'cancelada' and d.get('tipo_nf', None) in [0, 1]
+        
     ])
-
+    print(f'quantidade_material_faturada: {quantidade_material_faturada}')
     valor_material_recebido = sum([
         d['valor'] for d in dados_relatorio
         if d['pago'] != 'Não' and d['pago'] != 'Não definido' and d['status'] != 'cancelada'
@@ -425,7 +473,7 @@ def api_dados():
         if d['pago'] != 'Não' and d['pago'] != 'Não definido' and d['status'] != 'cancelada'
         and d.get('tipo_nf', None) in [0, 1]
     ])
-    
+    print(f'quantidade_material_recebida: {quantidade_material_recebida}')
     # Calcular valores ainda não faturados
     valor_material_nao_faturado = float(valor_total_material) - float(valor_material_faturado)
     valor_servico_nao_faturado = float(valor_total_servico) - float(valor_servico_faturado)

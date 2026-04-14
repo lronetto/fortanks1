@@ -1,0 +1,1730 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Peças de Tanques - Sistema de Gestão - Pré-moldados{% endblock %}
+
+{% block content %}
+<style>
+    .border-left-primary {
+        border-left: 0.25rem solid #4e73df !important;
+    }
+    .border-left-success {
+        border-left: 0.25rem solid #1cc88a !important;
+    }
+    .border-left-info {
+        border-left: 0.25rem solid #36b9cc !important;
+    }
+    .text-xs {
+        font-size: 0.7rem;
+    }
+    .text-gray-300 {
+        color: #dddfeb !important;
+    }
+    .text-gray-800 {
+        color: #5a5c69 !important;
+    }
+</style>
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1 class="h3"><i class="fas fa-cogs"></i> Peças de Tanques</h1>
+        <div>
+            <button type="button" class="btn btn-info me-2" data-bs-toggle="modal" data-bs-target="#modalResumoConcretagem">
+                <i class="fas fa-chart-bar"></i> Resumo de Concretagem
+            </button>
+            <button type="button" class="btn btn-success me-2" id="btnProcessarProducao">
+                <i class="fas fa-cogs"></i> Processar Produção
+            </button>
+            <button type="button" class="btn btn-primary me-2" data-bs-toggle="modal" data-bs-target="#modalVinculacaoProdutoComposto">
+                <i class="fas fa-link"></i> Vincular Produto Composto
+            </button>
+            <button type="button" class="btn btn-info me-2" data-bs-toggle="modal" data-bs-target="#modalImportacaoInspecao">
+                <i class="fas fa-file-excel"></i> Importar Inspeção
+            </button>
+            <button type="button" class="btn btn-success me-2" id="btnExportarExcel" title="Exportar peças filtradas para Excel">
+                <i class="fas fa-file-excel"></i> Exportar Excel
+            </button>
+            <a href="{{ url_for('tanque.index') }}" class="btn btn-secondary">
+                <i class="fas fa-water"></i> Ver Todos os Tanques
+            </a>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-filter"></i> Filtros
+            </h6>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('peca.index') }}" id="filtroForm">
+                <div class="row">
+                    <div class="col-md-4">
+                        <label for="projeto_id" class="form-label">Projeto (Contrato)</label>
+                        <select class="form-select" id="projeto_id" name="projeto_id">
+                            <option value="">Todos os projetos</option>
+                            <!-- Dados serão carregados via AJAX -->
+                        </select>
+                    </div>
+                    <div class="col-md-4">
+                        <label for="tanque_id" class="form-label">Tanque(s) <small class="text-muted">(Ctrl+Click para múltipla seleção)</small></label>
+                        <select class="form-select" id="tanque_id" name="tanque_ids[]" multiple size="5">
+                            <!-- Dados serão carregados via AJAX -->
+                        </select>
+                        <small class="text-muted">Selecione um ou mais tanques. Use Ctrl (ou Cmd no Mac) para seleção múltipla.</small>
+                    </div>
+                    <div class="col-md-4">
+                        <label class="form-label">Filtros de Status</label>
+                        <div class="row">
+                            <div class="col-6">
+                                <small class="text-muted d-block mb-2"><strong>Com Status:</strong></small>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filtro_concretado" name="filtro_concretado" value="1" {% if filtro_concretado %}checked{% endif %}>
+                                    <label class="form-check-label" for="filtro_concretado">
+                                        <span class="badge bg-success"><i class="fas fa-check-circle"></i> Concretado</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filtro_produzido" name="filtro_produzido" value="1" {% if filtro_produzido %}checked{% endif %}>
+                                    <label class="form-check-label" for="filtro_produzido">
+                                        <span class="badge bg-warning"><i class="fas fa-industry"></i> Produzido</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filtro_acabado" name="filtro_acabado" value="1" {% if filtro_acabado %}checked{% endif %}>
+                                    <label class="form-check-label" for="filtro_acabado">
+                                        <span class="badge bg-info"><i class="fas fa-check"></i> Acabado</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filtro_transportado" name="filtro_transportado" value="1" {% if filtro_transportado %}checked{% endif %}>
+                                    <label class="form-check-label" for="filtro_transportado">
+                                        <span class="badge bg-primary"><i class="fas fa-truck"></i> Transportado</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filtro_perca" name="filtro_perca" value="1" {% if filtro_perca %}checked{% endif %}>
+                                    <label class="form-check-label" for="filtro_perca">
+                                        <span class="badge bg-danger"><i class="fas fa-times-circle"></i> Perca</span>
+                                    </label>
+                                </div>
+                            </div>
+                            <div class="col-6">
+                                <small class="text-muted d-block mb-2"><strong>Sem Status:</strong></small>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filtro_nao_concretado" name="filtro_nao_concretado" value="1" {% if filtro_nao_concretado %}checked{% endif %}>
+                                    <label class="form-check-label" for="filtro_nao_concretado">
+                                        <span class="badge bg-secondary"><i class="fas fa-times-circle"></i> Não Concretado</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filtro_nao_produzido" name="filtro_nao_produzido" value="1" {% if filtro_nao_produzido %}checked{% endif %}>
+                                    <label class="form-check-label" for="filtro_nao_produzido">
+                                        <span class="badge bg-secondary"><i class="fas fa-times-circle"></i> Não Produzido</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filtro_nao_acabado" name="filtro_nao_acabado" value="1" {% if filtro_nao_acabado %}checked{% endif %}>
+                                    <label class="form-check-label" for="filtro_nao_acabado">
+                                        <span class="badge bg-secondary"><i class="fas fa-times-circle"></i> Não Acabado</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filtro_nao_transportado" name="filtro_nao_transportado" value="1" {% if filtro_nao_transportado %}checked{% endif %}>
+                                    <label class="form-check-label" for="filtro_nao_transportado">
+                                        <span class="badge bg-secondary"><i class="fas fa-times-circle"></i> Não Transportado</span>
+                                    </label>
+                                </div>
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox" id="filtro_nao_perca" name="filtro_nao_perca" value="1" {% if filtro_nao_perca %}checked{% endif %}>
+                                    <label class="form-check-label" for="filtro_nao_perca">
+                                        <span class="badge bg-secondary"><i class="fas fa-times-circle"></i> Não Perca</span>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div class="row mt-2">
+                    <div class="col-12">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Filtrar
+                        </button>
+                    </div>
+                </div>
+                {% if tanque_id_filtro or projeto_id_filtro %}
+                <div class="row mt-2">
+                    <div class="col-12">
+                        <a href="{{ url_for('peca.index') }}" class="btn btn-sm btn-secondary">
+                            <i class="fas fa-times"></i> Limpar Filtros
+                        </a>
+                    </div>
+                </div>
+                {% endif %}
+            </form>
+        </div>
+    </div>
+
+    <!-- Card Resumo por Tipo -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 font-weight-bold text-primary">
+                <i class="fas fa-layer-group"></i> Resumo por Tipo
+            </h6>
+        </div>
+        <div class="card-body py-2">
+            <div class="table-responsive">
+                <table class="table table-sm table-bordered table-hover mb-0" id="tabelaResumoPorTipo">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Tipo</th>
+                            <th class="text-center">Total</th>
+                            <th class="text-center"><span class="badge bg-success">Concretadas</span></th>
+                            <th class="text-center"><span class="badge bg-warning">Produzidas</span></th>
+                            <th class="text-center"><span class="badge bg-info">Acabadas</span></th>
+                            <th class="text-center"><span class="badge bg-primary">Transportadas</span></th>
+                            <th class="text-center"><span class="badge bg-danger">Percas</span></th>
+                        </tr>
+                    </thead>
+                    <tbody id="resumoPorTipoContainer">
+                        <tr><td colspan="7" class="text-center text-muted">Carregando...</td></tr>
+                    </tbody>
+                    <tfoot id="resumoPorTipoSubtotais" class="table-light fw-bold">
+                        <tr><td colspan="7" class="text-center text-muted small">—</td></tr>
+                    </tfoot>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabela de Peças -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex justify-content-between align-items-center">
+            <h6 class="m-0 fw-bold">
+                <i class="fas fa-list"></i> Peças Cadastradas
+            </h6>
+            <div class="d-flex align-items-center gap-2">
+                <span class="badge bg-info" id="badgeTotalPecas">0 peça(s)</span>
+                <div class="ft-col-toggle-placeholder"></div>
+            </div>
+        </div>
+        <div class="card-body">
+            <div class="ft-datatable-wrapper">
+                <table class="table table-bordered table-hover" id="tabelaPecas" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Nº Seq.</th>
+                            <th>Tanque</th>
+                            <th>Projeto</th>
+                            <th>Tipo</th>
+                            <th>Nome</th>
+                            <th>Status</th>
+                            <th>Data de Concretagem</th>
+                            <th>Data de Cadastro</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Dados serão carregados via AJAX -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal de Exclusão Genérico (será usado dinamicamente) -->
+    <div class="modal fade" id="excluirModalGenerico" tabindex="-1" aria-labelledby="excluirModalLabelGenerico" aria-hidden="true">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="excluirModalLabelGenerico">Confirmar Exclusão</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body">
+                    <p id="excluirModalTexto">Tem certeza que deseja excluir esta peça?</p>
+                    <p class="text-danger">Esta ação não pode ser desfeita!</p>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <form id="excluirModalForm" method="post">
+                        <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                        <button type="submit" class="btn btn-danger">Excluir</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Vinculação -->
+{% include 'cadastros/pecas/modais/vinculacao_produto_composto.html' %}
+
+<!-- Modal de Resumo de Concretagem -->
+{% include 'cadastros/pecas/modais/resumo_concretagem.html' %}
+
+<!-- Modal de Importação de Inspeção -->
+{% include 'cadastros/pecas/modais/importacao_inspecao.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function () {
+        // Variáveis no escopo do ready (acessíveis aos eventos de filtro)
+        var table;
+        var todosContratos = [];
+        var todosTanques = [];
+        var filtrosIniciais = {{ filtros_iniciais_json|tojson }};
+        
+        // Função para carregar dados de filtros
+        function carregarDadosFiltros() {
+            try {
+                console.log('Carregando dados de filtros...');
+                var apiUrl = '{{ url_for("peca.api_filtros") }}';
+                console.log('URL da API:', apiUrl);
+                
+                // Verificar se os elementos existem
+                if ($('#projeto_id').length === 0 || $('#tanque_id').length === 0) {
+                    console.error('Elementos de filtro não encontrados no DOM!');
+                    setTimeout(carregarDadosFiltros, 100); // Tentar novamente após 100ms
+                    return;
+                }
+                
+                $.ajax({
+                    url: apiUrl,
+                    method: 'GET',
+                    dataType: 'json',
+                    success: function(response) {
+                        try {
+                            console.log('Resposta da API:', response);
+                            if (response && response.success) {
+                                todosContratos = response.contratos || [];
+                                todosTanques = response.tanques || [];
+                                
+                                console.log('Contratos carregados:', todosContratos.length);
+                                console.log('Tanques carregados:', todosTanques.length);
+                                
+                                // Popular select de projetos
+                                var selectProjeto = $('#projeto_id');
+                                if (selectProjeto.length === 0) {
+                                    console.error('Select de projeto não encontrado!');
+                                    return;
+                                }
+                                selectProjeto.empty();
+                                selectProjeto.append('<option value="">Todos os projetos</option>');
+                                todosContratos.forEach(function(contrato) {
+                                    var option = $('<option></option>')
+                                        .attr('value', contrato.id)
+                                        .text(contrato.nome);
+                                    // Comparar como números para evitar problemas de tipo
+                                    if (filtrosIniciais.projeto_id && parseInt(filtrosIniciais.projeto_id) == parseInt(contrato.id)) {
+                                        option.prop('selected', true);
+                                    }
+                                    selectProjeto.append(option);
+                                });
+                                console.log('Projetos populados:', selectProjeto.find('option').length);
+                                
+                                // Popular select de tanques (com filtro inicial se houver)
+                                var projetoInicial = filtrosIniciais.projeto_id || null;
+                                popularTanques(projetoInicial);
+                                
+                                // Aplicar filtros iniciais se houver
+                                aplicarFiltrosIniciais();
+                                
+                                // Inicializar DataTable após carregar filtros
+                                inicializarDataTable();
+                            } else {
+                                console.error('Resposta da API sem success:', response);
+                                alert('Erro ao carregar dados de filtros: ' + (response.error || 'Resposta inválida da API'));
+                            }
+                        } catch (e) {
+                            console.error('Erro ao processar resposta:', e);
+                            alert('Erro ao processar dados de filtros: ' + e.message);
+                        }
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Erro AJAX ao carregar dados de filtros:', {
+                            status: status,
+                            error: error,
+                            responseText: xhr.responseText,
+                            statusCode: xhr.status,
+                            url: apiUrl
+                        });
+                        var errorMsg = 'Erro ao carregar dados de filtros. ';
+                        if (xhr.status === 404) {
+                            errorMsg += 'API não encontrada. Verifique se a rota está correta.';
+                        } else if (xhr.status === 500) {
+                            errorMsg += 'Erro no servidor. Verifique os logs.';
+                        } else {
+                            errorMsg += 'Status: ' + xhr.status + ', Erro: ' + error;
+                        }
+                        alert(errorMsg);
+                    }
+                });
+            } catch (e) {
+                console.error('Erro ao executar carregarDadosFiltros:', e);
+                alert('Erro ao iniciar carregamento de filtros: ' + e.message);
+            }
+        }
+        
+        // Função para popular tanques no select
+        function popularTanques(projetoIdFiltro) {
+            var selectTanque = $('#tanque_id');
+            if (selectTanque.length === 0) {
+                console.error('Select de tanque não encontrado!');
+                return;
+            }
+            selectTanque.empty();
+            
+            var tanquesParaMostrar = todosTanques;
+            if (projetoIdFiltro) {
+                tanquesParaMostrar = todosTanques.filter(function(tanque) {
+                    return tanque.projeto_id == projetoIdFiltro || !tanque.projeto_id;
+                });
+            }
+            
+            console.log('Populando tanques. Total:', tanquesParaMostrar.length, 'Filtro projeto:', projetoIdFiltro);
+            tanquesParaMostrar.forEach(function(tanque) {
+                var option = $('<option></option>')
+                    .attr('value', tanque.id)
+                    .attr('data-projeto-id', tanque.projeto_id || '')
+                    .text(tanque.nome + (tanque.sistema ? ' (' + tanque.sistema + ')' : ''));
+                selectTanque.append(option);
+            });
+            console.log('Tanques populados:', selectTanque.find('option').length);
+        }
+        
+        // Função para aplicar filtros iniciais
+        function aplicarFiltrosIniciais() {
+            // Aplicar filtros de status (positivos)
+            if (filtrosIniciais.filtro_concretado) {
+                $('#filtro_concretado').prop('checked', true);
+            }
+            if (filtrosIniciais.filtro_produzido) {
+                $('#filtro_produzido').prop('checked', true);
+            }
+            if (filtrosIniciais.filtro_acabado) {
+                $('#filtro_acabado').prop('checked', true);
+            }
+            if (filtrosIniciais.filtro_transportado) {
+                $('#filtro_transportado').prop('checked', true);
+            }
+            
+            // Aplicar filtros de status (negativos)
+            if (filtrosIniciais.filtro_nao_concretado) {
+                $('#filtro_nao_concretado').prop('checked', true);
+            }
+            if (filtrosIniciais.filtro_nao_produzido) {
+                $('#filtro_nao_produzido').prop('checked', true);
+            }
+            if (filtrosIniciais.filtro_nao_acabado) {
+                $('#filtro_nao_acabado').prop('checked', true);
+            }
+            if (filtrosIniciais.filtro_nao_transportado) {
+                $('#filtro_nao_transportado').prop('checked', true);
+            }
+            if (filtrosIniciais.filtro_perca) {
+                $('#filtro_perca').prop('checked', true);
+            }
+            if (filtrosIniciais.filtro_nao_perca) {
+                $('#filtro_nao_perca').prop('checked', true);
+            }
+
+            // Aplicar seleção de tanques se houver
+            if (filtrosIniciais.tanque_ids && filtrosIniciais.tanque_ids.length > 0) {
+                filtrosIniciais.tanque_ids.forEach(function(tanqueId) {
+                    $('#tanque_id option[value="' + tanqueId + '"]').prop('selected', true);
+                });
+            } else if (filtrosIniciais.tanque_id) {
+                $('#tanque_id option[value="' + filtrosIniciais.tanque_id + '"]').prop('selected', true);
+            }
+        }
+        
+        // Obter filtros iniciais (tanque_id agora pode ser array)
+        var tanqueIdFiltro = [];
+        var projetoIdFiltro = '';
+        var filtroConcretado = false;
+        var filtroProduzido = false;
+        var filtroAcabado = false;
+        var filtroTransportado = false;
+        var filtroNaoConcretado = false;
+        var filtroNaoProduzido = false;
+        var filtroNaoAcabado = false;
+        var filtroNaoTransportado = false;
+        var filtroPerca = false;
+        var filtroNaoPerca = false;
+
+        // Inicializar filtros de status a partir dos valores do formulário
+        function atualizarFiltrosStatus() {
+            filtroConcretado = $('#filtro_concretado').is(':checked');
+            filtroProduzido = $('#filtro_produzido').is(':checked');
+            filtroAcabado = $('#filtro_acabado').is(':checked');
+            filtroTransportado = $('#filtro_transportado').is(':checked');
+            filtroPerca = $('#filtro_perca').is(':checked');
+            filtroNaoConcretado = $('#filtro_nao_concretado').is(':checked');
+            filtroNaoProduzido = $('#filtro_nao_produzido').is(':checked');
+            filtroNaoAcabado = $('#filtro_nao_acabado').is(':checked');
+            filtroNaoTransportado = $('#filtro_nao_transportado').is(':checked');
+            filtroNaoPerca = $('#filtro_nao_perca').is(':checked');
+        }
+        
+        // Função para obter tanque_ids como array
+        function getTanqueIds() {
+            var valores = $('#tanque_id').val();
+            var ids = Array.isArray(valores) ? valores : (valores ? [valores] : []);
+            // Garantir que são números
+            ids = ids.map(function(id) {
+                return parseInt(id, 10);
+            }).filter(function(id) {
+                return !isNaN(id) && id > 0;
+            });
+            console.log('Tanque IDs obtidos:', ids);
+            return ids;
+        }
+        
+        // Função para carregar estatísticas (mantida para uso futuro, cards removidos)
+        function carregarEstatisticas() {
+            // Cards de estatísticas foram removidos, função mantida para uso futuro se necessário
+            // A API ainda está disponível em '{{ url_for("peca.api_pecas_estatisticas") }}'
+        }
+        
+        // Função para atualizar variáveis de filtro
+        function atualizarVariaveisFiltro() {
+            tanqueIdFiltro = getTanqueIds();
+            projetoIdFiltro = $('#projeto_id').val() || '';
+            atualizarFiltrosStatus();
+        }
+        
+        // Função para atualizar a tabela de resumo por tipo (Total, Concretadas, Produzidas, Acabadas, Transportadas, Percas)
+        function atualizarResumoPorTipo(data) {
+            var tbody = $('#resumoPorTipoContainer');
+            var tfoot = $('#resumoPorTipoSubtotais');
+            if (!data || data.length === 0) {
+                tbody.html('<tr><td colspan="7" class="text-center text-muted">Nenhuma peça para exibir</td></tr>');
+                tfoot.html('<tr><td colspan="7" class="text-center text-muted small">—</td></tr>');
+                return;
+            }
+            var porTipo = {};
+            data.forEach(function(row) {
+                var t = (row.tipo && row.tipo.toString().trim()) ? row.tipo : 'Sem tipo';
+                if (!porTipo[t]) {
+                    porTipo[t] = { total: 0, concretadas: 0, produzidas: 0, acabadas: 0, transportadas: 0, percas: 0 };
+                }
+                porTipo[t].total += 1;
+                if (row.concretado) porTipo[t].concretadas += 1;
+                if (row.produzido) porTipo[t].produzidas += 1;
+                if (row.acabada) porTipo[t].acabadas += 1;
+                if (row.transportado) porTipo[t].transportadas += 1;
+                if (row.perca) porTipo[t].percas += 1;
+            });
+            var tiposOrdenados = Object.keys(porTipo).sort();
+            var stTotal = 0, stConcretadas = 0, stProduzidas = 0, stAcabadas = 0, stTransportadas = 0, stPercas = 0;
+            var html = '';
+            tiposOrdenados.forEach(function(tipo) {
+                var o = porTipo[tipo];
+                stTotal += o.total;
+                stConcretadas += o.concretadas;
+                stProduzidas += o.produzidas;
+                stAcabadas += o.acabadas;
+                stTransportadas += o.transportadas;
+                stPercas += o.percas;
+                html += '<tr>' +
+                    '<td class="fw-bold">' + tipo + '</td>' +
+                    '<td class="text-center">' + o.total + '</td>' +
+                    '<td class="text-center">' + o.concretadas + '</td>' +
+                    '<td class="text-center">' + o.produzidas + '</td>' +
+                    '<td class="text-center">' + o.acabadas + '</td>' +
+                    '<td class="text-center">' + o.transportadas + '</td>' +
+                    '<td class="text-center">' + o.percas + '</td>' +
+                    '</tr>';
+            });
+            tbody.html(html || '<tr><td colspan="7" class="text-center text-muted">Nenhum tipo encontrado</td></tr>');
+            // Linha de subtotais
+            var footHtml = '<tr>' +
+                '<td>Subtotal</td>' +
+                '<td class="text-center">' + stTotal + '</td>' +
+                '<td class="text-center">' + stConcretadas + '</td>' +
+                '<td class="text-center">' + stProduzidas + '</td>' +
+                '<td class="text-center">' + stAcabadas + '</td>' +
+                '<td class="text-center">' + stTransportadas + '</td>' +
+                '<td class="text-center">' + stPercas + '</td>' +
+                '</tr>';
+            tfoot.html(footHtml);
+        }
+        
+        // Função para inicializar DataTable
+        function inicializarDataTable() {
+            // Atualizar variáveis de filtro dos selects
+            atualizarVariaveisFiltro();
+            
+            // Carregar estatísticas iniciais
+            carregarEstatisticas();
+            
+            var TITULOS_PECAS = ['Nº Seq.', 'Tanque', 'Projeto', 'Tipo', 'Nome', 'Status', 'Data de Concretagem', 'Data de Cadastro', 'Ações'];
+            // Inicializar DataTable com AJAX (atribuir à variável table do escopo externo)
+            table = $('#tabelaPecas').DataTable(FT.dtOpcoes({
+                serverSide: false,
+                ajax: {
+                    url: '{{ url_for("peca.api_pecas") }}',
+                    type: 'GET',
+                    traditional: true, // Necessário para enviar arrays corretamente
+                    data: function(d) {
+                        // Ler filtros diretamente do formulário em cada requisição
+                        var tanqueIds = getTanqueIds();
+                        if (tanqueIds.length > 0) {
+                            d['tanque_ids[]'] = tanqueIds;
+                        }
+                        var projId = $('#projeto_id').val();
+                        if (projId) {
+                            d.projeto_id = projId;
+                        }
+                        // Filtros positivos
+                        if ($('#filtro_concretado').is(':checked')) {
+                            d.filtro_concretado = '1';
+                        }
+                        if ($('#filtro_produzido').is(':checked')) {
+                            d.filtro_produzido = '1';
+                        }
+                        if ($('#filtro_acabado').is(':checked')) {
+                            d.filtro_acabado = '1';
+                        }
+                        if ($('#filtro_transportado').is(':checked')) {
+                            d.filtro_transportado = '1';
+                        }
+                        // Filtros negativos
+                        if ($('#filtro_nao_concretado').is(':checked')) {
+                            d.filtro_nao_concretado = '1';
+                        }
+                        if ($('#filtro_nao_produzido').is(':checked')) {
+                            d.filtro_nao_produzido = '1';
+                        }
+                        if ($('#filtro_nao_acabado').is(':checked')) {
+                            d.filtro_nao_acabado = '1';
+                        }
+                        if ($('#filtro_nao_transportado').is(':checked')) {
+                            d.filtro_nao_transportado = '1';
+                        }
+                        if ($('#filtro_perca').is(':checked')) {
+                            d.filtro_perca = '1';
+                        }
+                        if ($('#filtro_nao_perca').is(':checked')) {
+                            d.filtro_nao_perca = '1';
+                        }
+                    },
+                    dataSrc: function(json) {
+                        // Atualizar badge de total
+                        $('#badgeTotalPecas').text(json.recordsFiltered + ' peça(s)');
+                        // Atualizar resumo por tipo
+                        atualizarResumoPorTipo(json.data || []);
+                        // Atualizar estatísticas após carregar dados
+                        setTimeout(carregarEstatisticas, 100);
+                        return json.data;
+                    },
+                    error: function(xhr, error, thrown) {
+                        console.error('Erro ao carregar dados:', error);
+                        alert('Erro ao carregar dados da tabela. Tente recarregar a página.');
+                    }
+                },
+                order: [[1, 'asc'], [0, 'asc']],
+                pageLength: 100,
+                lengthMenu: [[10, 25, 50, 100, 500, -1], [10, 25, 50, 100, 500, "Todos"]],
+                columns: [
+                    { 
+                        data: 'numero_sequencial',
+                        render: function(data, type, row) {
+                            return '<span class="badge bg-primary">' + data + '</span>';
+                        }
+                    },
+                    { 
+                        data: 'tanque_nome',
+                        render: function(data, type, row) {
+                            var sistema = row.tanque_sistema ? ' (' + row.tanque_sistema + ')' : '';
+                            return '<a href="/tanques/visualizar/' + row.tanque_id + '" class="text-decoration-none">' + 
+                                data + sistema + '</a>';
+                        }
+                    },
+                    { data: 'projeto_nome' },
+                    { data: 'tipo' },
+                    { data: 'nome' },
+                    { 
+                        data: 'status',
+                        orderable: false,
+                        render: function(data, type, row) {
+                            return data; // Já vem formatado do servidor
+                        }
+                    },
+                    {
+                        data: 'data_concretagem',
+                        render: function(data, type, row) {
+                            if (type === 'sort' || type === 'type') {
+                                return row.data_concretagem_sort != null && row.data_concretagem_sort !== ''
+                                    ? row.data_concretagem_sort
+                                    : '';
+                            }
+                            if (!data) {
+                                return '<span class="text-muted">—</span>';
+                            }
+                            return data;
+                        }
+                    },
+                    {
+                        data: 'data_cadastro',
+                        render: function(data, type, row) {
+                            if (type === 'sort' || type === 'type') {
+                                return row.data_cadastro_sort != null && row.data_cadastro_sort !== ''
+                                    ? row.data_cadastro_sort
+                                    : '';
+                            }
+                            return data || '';
+                        }
+                    },
+                    { 
+                        data: 'acoes',
+                        orderable: false,
+                        render: function(data, type, row) {
+                            return data; // Já vem formatado do servidor
+                        }
+                    }
+                ],
+                columnDefs: [
+                    { orderable: false, targets: [5, 8] }, // Desabilitar ordenação nas colunas de status e ações
+                    { className: 'text-center', targets: [0, 6] } // Centralizar número sequencial e data de concretagem
+                ],
+                drawCallback: function(settings) {
+                    // Adicionar eventos aos botões de exclusão após desenhar a tabela
+                    $(document).off('click', '.btn-excluir-peca').on('click', '.btn-excluir-peca', function() {
+                        var pecaId = $(this).data('peca-id');
+                        var pecaNome = $(this).data('peca-nome');
+                        var tanqueNome = $(this).data('tanque-nome');
+                        var numeroSeq = $(this).data('numero-seq');
+
+                        $('#excluirModalTexto').html(
+                            'Tem certeza que deseja excluir a peça <strong>' + pecaNome + '</strong> ' +
+                            '(Nº ' + numeroSeq + ') do tanque <strong>' + tanqueNome + '</strong>?'
+                        );
+                        $('#excluirModalForm').attr('action', '/pecas/excluir/' + pecaId);
+                        $('#excluirModalGenerico').modal('show');
+                    });
+                }
+            }));
+            FT.dtColunas.inicializar(table, 'tabelaPecas', TITULOS_PECAS);
+        }
+            
+            
+    // Atualizar estatísticas quando a busca for realizada
+        $('#tabelaPecas').on('search.dt', function() {
+            setTimeout(carregarEstatisticas, 300);
+        });
+        
+        // Recarregar tabela quando clicar em Filtrar
+        $('#filtroForm').on('submit', function(e) {
+            e.preventDefault();
+            atualizarVariaveisFiltro();
+            table.ajax.reload(null, false); // false = manter na mesma página
+            setTimeout(carregarEstatisticas, 500);
+        });
+        
+        // Recarregar tabela quando os checkboxes de status mudarem
+        $('#filtro_concretado, #filtro_produzido, #filtro_acabado, #filtro_transportado, #filtro_perca, #filtro_nao_concretado, #filtro_nao_produzido, #filtro_nao_acabado, #filtro_nao_transportado, #filtro_nao_perca').on('change', function() {
+            atualizarVariaveisFiltro();
+            if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
+                table.ajax.reload(null, false);
+                setTimeout(carregarEstatisticas, 500);
+            }
+        });
+
+        // Evento quando o projeto é alterado
+        $('#projeto_id').on('change', function() {
+            var projetoId = $(this).val();
+            popularTanques(projetoId);
+            atualizarVariaveisFiltro();
+            if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
+                table.ajax.reload(null, false);
+                setTimeout(carregarEstatisticas, 500);
+            }
+        });
+        
+        // Evento quando o tanque é alterado
+        $('#tanque_id').on('change', function() {
+            atualizarVariaveisFiltro();
+            if ($.fn.DataTable.isDataTable('#tabelaPecas')) {
+                table.ajax.reload(null, false);
+                setTimeout(carregarEstatisticas, 500);
+            }
+        });
+
+        // Exportar para Excel (usa os mesmos filtros da listagem)
+        $('#btnExportarExcel').on('click', function() {
+            var params = [];
+            var projId = $('#projeto_id').val();
+            if (projId) {
+                params.push('projeto_id=' + encodeURIComponent(projId));
+            }
+            var tanqueIds = getTanqueIds();
+            if (tanqueIds.length > 0) {
+                tanqueIds.forEach(function(id) {
+                    params.push('tanque_ids[]=' + encodeURIComponent(id));
+                });
+            }
+            $('#filtro_concretado').is(':checked') && params.push('filtro_concretado=1');
+            $('#filtro_produzido').is(':checked') && params.push('filtro_produzido=1');
+            $('#filtro_acabado').is(':checked') && params.push('filtro_acabado=1');
+            $('#filtro_transportado').is(':checked') && params.push('filtro_transportado=1');
+            $('#filtro_nao_concretado').is(':checked') && params.push('filtro_nao_concretado=1');
+            $('#filtro_nao_produzido').is(':checked') && params.push('filtro_nao_produzido=1');
+            $('#filtro_nao_acabado').is(':checked') && params.push('filtro_nao_acabado=1');
+            $('#filtro_nao_transportado').is(':checked') && params.push('filtro_nao_transportado=1');
+            $('#filtro_perca').is(':checked') && params.push('filtro_perca=1');
+            $('#filtro_nao_perca').is(':checked') && params.push('filtro_nao_perca=1');
+            var queryString = params.join('&');
+            var url = '{{ url_for("peca.exportar_excel") }}' + (queryString ? '?' + queryString : '');
+            window.location.href = url;
+        });
+
+// Carregar dados de filtros ao inicializar
+        console.log('Inicializando página, carregando dados de filtros...');
+        carregarDadosFiltros();
+
+        // ========== SCRIPTS DO MODAL DE VINCULAÇÃO ==========
+        var timeoutBusca;
+        var produtosCarregados = [];
+        var apiUrlTanques = '{{ url_for("peca.api_tanques_por_projeto") }}';
+        var apiUrlProdutos = '{{ url_for("peca.api_produtos_compostos") }}';
+        var apiUrlSalvar = '{{ url_for("peca.vinculacao_produto_composto") }}';
+        var vinculacoesListaCache = null;
+        var timeoutPesquisaVinculacoes = null;
+
+        function filtrarVinculacoesPorTermo(lista, termo) {
+            if (!lista || !lista.length) {
+                return [];
+            }
+            var t = (termo || '').trim().toLowerCase();
+            if (!t) {
+                return lista.slice();
+            }
+            var partes = t.split(/\s+/).filter(Boolean);
+            return lista.filter(function(v) {
+                var hay = [
+                    v.grupo_nome || '',
+                    v.tipo_peca || '',
+                    v.produto_composto_nome || '',
+                    v.tanque_nome || '',
+                    v.tanque_sistema || '',
+                    v.projeto_nome || ''
+                ].join(' ').toLowerCase();
+                return partes.every(function(p) {
+                    return hay.indexOf(p) !== -1;
+                });
+            });
+        }
+
+        function renderizarCorpoTabelaVinculacoes(vinculacoes) {
+            var tbody = $('#tbodyVinculacoes');
+            tbody.empty();
+            if (!vinculacoes || !vinculacoes.length) {
+                var temCache = vinculacoesListaCache && vinculacoesListaCache.length > 0;
+                var temPesquisa = ($('#pesquisaVinculacoes').val() || '').trim().length > 0;
+                var msg = (temCache && temPesquisa)
+                    ? 'Nenhuma vinculação corresponde à pesquisa.'
+                    : 'Nenhuma vinculação encontrada';
+                tbody.append(
+                    $('<tr></tr>').append(
+                        $('<td></td>')
+                            .attr('colspan', 6)
+                            .addClass('text-center text-muted')
+                            .text(msg)
+                    )
+                );
+                return;
+            }
+
+            var gruposPorGrupoTanque = {};
+
+            vinculacoes.forEach(function(v) {
+                var grupoTanqueId = v.grupo_id || 'sem_grupo';
+                var grupoTanqueNome = v.grupo_nome || 'Sem grupo';
+
+                if (!gruposPorGrupoTanque[grupoTanqueId]) {
+                    gruposPorGrupoTanque[grupoTanqueId] = {
+                        grupo_id: v.grupo_id,
+                        grupo_nome: grupoTanqueNome,
+                        grupo_cor: v.grupo_cor || '#6c757d',
+                        grupo_icone: v.grupo_icone || 'fas fa-layer-group',
+                        tipos_produtos: {}
+                    };
+                }
+
+                var chaveTipoProduto = (v.tipo_peca || 'Sem tipo') + '|' + (v.produto_composto_id || '0') + '|' + (v.produto_composto_nome || 'Sem produto');
+
+                if (!gruposPorGrupoTanque[grupoTanqueId].tipos_produtos[chaveTipoProduto]) {
+                    gruposPorGrupoTanque[grupoTanqueId].tipos_produtos[chaveTipoProduto] = {
+                        tipo_peca: v.tipo_peca || 'Sem tipo',
+                        produto_composto_id: v.produto_composto_id,
+                        produto_composto_nome: v.produto_composto_nome || 'Sem produto',
+                        vinculacoes: []
+                    };
+                }
+
+                gruposPorGrupoTanque[grupoTanqueId].tipos_produtos[chaveTipoProduto].vinculacoes.push(v);
+            });
+
+            var gruposTanqueOrdenados = Object.keys(gruposPorGrupoTanque).sort(function(a, b) {
+                var grupoA = gruposPorGrupoTanque[a];
+                var grupoB = gruposPorGrupoTanque[b];
+                if (a === 'sem_grupo') return 1;
+                if (b === 'sem_grupo') return -1;
+                return grupoA.grupo_nome.localeCompare(grupoB.grupo_nome);
+            });
+
+            gruposTanqueOrdenados.forEach(function(grupoTanqueId) {
+                var grupoTanque = gruposPorGrupoTanque[grupoTanqueId];
+
+                var grupoHeaderRow = $('<tr></tr>').addClass('table-grupo-tanque-header');
+                var estiloCor = grupoTanque.grupo_cor ? 'color: ' + grupoTanque.grupo_cor + ';' : '';
+
+                grupoHeaderRow.append(
+                    $('<td></td>')
+                        .attr('colspan', 6)
+                        .addClass('fw-bold p-2')
+                        .css('background-color', grupoTanque.grupo_cor ? grupoTanque.grupo_cor + '20' : '#f8f9fa')
+                        .html(
+                            '<i class="' + (grupoTanque.grupo_icone || 'fas fa-layer-group') + '" style="' + estiloCor + '"></i> ' +
+                            '<strong style="' + estiloCor + '">' + grupoTanque.grupo_nome + '</strong>' +
+                            ' <span class="badge bg-secondary">' +
+                            Object.keys(grupoTanque.tipos_produtos).length + ' tipo(s) de peça</span>'
+                        )
+                );
+                tbody.append(grupoHeaderRow);
+
+                var tiposProdutosOrdenados = Object.keys(grupoTanque.tipos_produtos).sort(function(a, b) {
+                    var tipoA = grupoTanque.tipos_produtos[a];
+                    var tipoB = grupoTanque.tipos_produtos[b];
+                    if (tipoA.tipo_peca !== tipoB.tipo_peca) {
+                        return tipoA.tipo_peca.localeCompare(tipoB.tipo_peca);
+                    }
+                    return tipoA.produto_composto_nome.localeCompare(tipoB.produto_composto_nome);
+                });
+
+                tiposProdutosOrdenados.forEach(function(chaveTipoProduto) {
+                    var tipoProduto = grupoTanque.tipos_produtos[chaveTipoProduto];
+
+                    var headerRow = $('<tr></tr>').addClass('table-group-header bg-light fw-bold');
+
+                    var colTipo = $('<td></td>')
+                        .html('<i class="fas fa-tag"></i> <strong>Tipo:</strong> ' + tipoProduto.tipo_peca);
+
+                    var colProduto = $('<td></td>')
+                        .html('<i class="fas fa-box"></i> <strong>Produto:</strong> ' + tipoProduto.produto_composto_nome);
+
+                    var colTanques = $('<td></td>')
+                        .html('<i class="fas fa-layer-group"></i> <strong>' + tipoProduto.vinculacoes.length + ' tanque(s)</strong>');
+
+                    var colData = $('<td></td>').text('');
+                    var colAcoes = $('<td></td>').text('');
+
+                    headerRow.append(colTipo).append(colProduto).append(colTanques).append(colData).append(colAcoes);
+                    tbody.append(headerRow);
+
+                    var tanquesPorProjeto = {};
+                    tipoProduto.vinculacoes.forEach(function(v) {
+                        var projetoKey = v.projeto_nome || 'Sem projeto';
+                        if (!tanquesPorProjeto[projetoKey]) {
+                            tanquesPorProjeto[projetoKey] = [];
+                        }
+                        tanquesPorProjeto[projetoKey].push(v);
+                    });
+
+                    var projetosOrdenados = Object.keys(tanquesPorProjeto).sort();
+
+                    projetosOrdenados.forEach(function(projetoNome) {
+                        var vinculacoesProjeto = tanquesPorProjeto[projetoNome];
+
+                        if (projetosOrdenados.length > 1) {
+                            var subHeaderRow = $('<tr></tr>').addClass('table-sub-header bg-light-subtle');
+                            subHeaderRow.append(
+                                $('<td></td>').html('<i class="fas fa-folder"></i> ' + projetoNome).attr('colspan', 6)
+                            );
+                            tbody.append(subHeaderRow);
+                        }
+
+                        vinculacoesProjeto.sort(function(a, b) {
+                            return (a.tanque_nome || '').localeCompare(b.tanque_nome || '');
+                        });
+
+                        vinculacoesProjeto.forEach(function(v) {
+                            var row = $('<tr></tr>').addClass('table-group-item');
+
+                            if (projetosOrdenados.length === 1) {
+                                row.append($('<td></td>').text(v.projeto_nome || '-'));
+                            } else {
+                                row.append($('<td></td>').text(''));
+                            }
+
+                            row.append($('<td></td>').html(
+                                (v.tanque_nome || 'N/A') +
+                                (v.tanque_sistema ? ' <span class="badge bg-secondary">' + v.tanque_sistema + '</span>' : '')
+                            ));
+
+                            row.append($('<td></td>').addClass('text-muted').html('<small><i class="fas fa-arrow-left"></i></small>'));
+                            row.append($('<td></td>').addClass('text-muted').html('<small><i class="fas fa-arrow-left"></i></small>'));
+                            row.append($('<td></td>').text(v.criado_em || '-'));
+
+                            var btnGroup = $('<div></div>').addClass('btn-group').attr('role', 'group');
+
+                            var btnEditar = $('<button></button>')
+                                .addClass('btn btn-sm btn-warning')
+                                .attr('type', 'button')
+                                .attr('data-vinculacao-id', v.id)
+                                .html('<i class="fas fa-edit"></i>')
+                                .attr('title', 'Editar vinculação')
+                                .on('click', function() {
+                                    editarVinculacao(v.id);
+                                });
+
+                            var btnExcluir = $('<button></button>')
+                                .addClass('btn btn-sm btn-danger')
+                                .attr('type', 'button')
+                                .attr('data-vinculacao-id', v.id)
+                                .html('<i class="fas fa-trash"></i>')
+                                .attr('title', 'Excluir vinculação')
+                                .on('click', function() {
+                                    excluirVinculacao(v.id, v.tanque_nome, v.produto_composto_nome);
+                                });
+
+                            btnGroup.append(btnEditar).append(btnExcluir);
+                            row.append($('<td></td>').append(btnGroup));
+                            tbody.append(row);
+                        });
+                    });
+
+                    var separatorRow = $('<tr></tr>');
+                    separatorRow.append($('<td></td>').attr('colspan', 6).addClass('p-0').html('<hr class="my-1">'));
+                    tbody.append(separatorRow);
+                });
+
+                var grupoSeparatorRow = $('<tr></tr>');
+                grupoSeparatorRow.append($('<td></td>').attr('colspan', 6).addClass('p-0').html('<hr class="my-3 border-2">'));
+                tbody.append(grupoSeparatorRow);
+            });
+        }
+
+        function aplicarFiltroERenderizarVinculacoes() {
+            if (vinculacoesListaCache === null) {
+                return;
+            }
+            var termo = ($('#pesquisaVinculacoes').val() || '').trim();
+            var filtrada = filtrarVinculacoesPorTermo(vinculacoesListaCache, termo);
+            renderizarCorpoTabelaVinculacoes(filtrada);
+        }
+
+        $(document).on('input', '#pesquisaVinculacoes', function() {
+            clearTimeout(timeoutPesquisaVinculacoes);
+            timeoutPesquisaVinculacoes = setTimeout(function() {
+                aplicarFiltroERenderizarVinculacoes();
+            }, 200);
+        });
+
+        function coletarTiposPecaModal(modal) {
+            var tipos = [];
+            modal.find('.tipo-peca-checkbox:checked').each(function() {
+                tipos.push($(this).val());
+            });
+            var extra = modal.find('#tiposPecaExtra').val();
+            if (extra) {
+                extra.split(',').forEach(function(s) {
+                    var t = s.trim();
+                    if (t && tipos.indexOf(t) === -1) {
+                        tipos.push(t);
+                    }
+                });
+            }
+            return tipos;
+        }
+
+        function aplicarTipoSelecaoEdicao(tipoStr) {
+            var modal = $('#modalVinculacaoProdutoComposto');
+            modal.find('#tiposPecaExtra').val('');
+            var found = false;
+            modal.find('.tipo-peca-checkbox').each(function() {
+                var ok = ($(this).val() === tipoStr);
+                $(this).prop('checked', ok);
+                if (ok) {
+                    found = true;
+                }
+            });
+            if (!found && tipoStr) {
+                modal.find('#tiposPecaExtra').val(tipoStr);
+            }
+        }
+
+        // Função para carregar grupos de tanques (onReady: após montar a lista de grupos)
+        function carregarGruposTanques(onReady) {
+            var modal = $('#modalVinculacaoProdutoComposto');
+            var containerGrupos = modal.find('#containerGrupos');
+            var btnSelecionarTodos = modal.find('#btnSelecionarTodosGrupos');
+            var btnDesselecionarTodos = modal.find('#btnDesselecionarTodosGrupos');
+            
+            console.log('Carregando grupos de tanques...');
+            
+            containerGrupos.html('<div class="text-muted text-center"><i class="fas fa-spinner fa-spin"></i> Carregando grupos...</div>');
+            btnSelecionarTodos.hide();
+            btnDesselecionarTodos.hide();
+            modal.find('#tiposPecaExtra').prop('disabled', true).val('');
+            modal.find('#btnCarregarTiposPeca').prop('disabled', true);
+            modal.find('#listaTiposCheckboxes').empty().addClass('d-none');
+            modal.find('#placeholderTiposPeca').removeClass('d-none').text('Selecione um ou mais grupos para listar os tipos sugeridos.');
+            
+            $.ajax({
+                url: '{{ url_for("peca.api_grupos_tanques") }}',
+                method: 'GET',
+                dataType: 'json',
+                success: function(response) {
+                    console.log('Grupos recebidos:', response);
+                    containerGrupos.empty();
+                    
+                    if (response.grupos && response.grupos.length > 0) {
+                        response.grupos.forEach(function(grupo) {
+                            var checkboxDiv = $('<div class="form-check mb-2"></div>');
+                            var checkbox = $('<input>')
+                                .attr('type', 'checkbox')
+                                .attr('class', 'form-check-input grupo-checkbox')
+                                .attr('id', 'grupo_' + grupo.id)
+                                .attr('value', grupo.id)
+                                .attr('name', 'grupo_ids[]');
+                            
+                            var estiloCor = grupo.cor ? 'color: ' + grupo.cor + ';' : '';
+                            var icone = grupo.icone || 'fas fa-layer-group';
+                            
+                            var label = $('<label>')
+                                .attr('class', 'form-check-label')
+                                .attr('for', 'grupo_' + grupo.id)
+                                .html(
+                                    '<i class="' + icone + '" style="' + estiloCor + '"></i> ' +
+                                    '<strong style="' + estiloCor + '">' + grupo.nome + '</strong> ' +
+                                    '<span class="badge bg-secondary">' + grupo.total_tanques + ' tanque(s)</span>'
+                                );
+                            
+                            checkboxDiv.append(checkbox).append(label);
+                            containerGrupos.append(checkboxDiv);
+                        });
+                        console.log('Grupos carregados:', response.grupos.length);
+                        btnSelecionarTodos.show();
+                        btnDesselecionarTodos.show();
+                    } else {
+                        containerGrupos.html('<div class="text-muted text-center">Nenhum grupo de tanques encontrado</div>');
+                    }
+                    if (typeof onReady === 'function') {
+                        onReady();
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Erro ao carregar grupos:', status, error);
+                    containerGrupos.html('<div class="text-danger text-center">Erro ao carregar grupos</div>');
+                    alert('Erro ao carregar grupos de tanques. Tente novamente.');
+                }
+            });
+        }
+
+        function atualizarTiposPecaPorGruposSelecionados(callback) {
+            var modal = $('#modalVinculacaoProdutoComposto');
+            var listaTb = modal.find('#listaTiposCheckboxes');
+            var placeholder = modal.find('#placeholderTiposPeca');
+            var tiposExtra = modal.find('#tiposPecaExtra');
+            var btnTipos = modal.find('#btnCarregarTiposPeca');
+            var gruposSelecionados = modal.find('.grupo-checkbox:checked');
+            
+            if (gruposSelecionados.length === 0) {
+                tiposExtra.prop('disabled', true).val('');
+                btnTipos.prop('disabled', true);
+                listaTb.empty().addClass('d-none');
+                placeholder.removeClass('d-none').text('Selecione um ou mais grupos para listar os tipos sugeridos.');
+                if (typeof callback === 'function') {
+                    callback();
+                }
+                return;
+            }
+            
+            var grupoIds = gruposSelecionados.map(function() {
+                return $(this).val();
+            }).get();
+            
+            console.log('Buscando tipos de peça para grupos:', grupoIds);
+            
+            tiposExtra.prop('disabled', false);
+            btnTipos.prop('disabled', false);
+            placeholder.removeClass('d-none').html('<i class="fas fa-spinner fa-spin"></i> Carregando tipos sugeridos...');
+            listaTb.addClass('d-none').empty();
+            
+            $.ajax({
+                url: '{{ url_for("peca.api_tipos_peca_por_grupos") }}',
+                method: 'GET',
+                data: { 'grupo_ids[]': grupoIds },
+                traditional: true,
+                dataType: 'json',
+                success: function(response) {
+                    console.log('Tipos recebidos:', response);
+                    
+                    var tipos = response.tipos || [];
+                    listaTb.empty();
+                    
+                    if (tipos.length > 0) {
+                        placeholder.addClass('d-none');
+                        listaTb.removeClass('d-none');
+                        tipos.forEach(function(tipo, idx) {
+                            if (!tipo) {
+                                return;
+                            }
+                            var id = 'tipo_peca_cb_' + idx;
+                            var wrap = $('<div class="form-check mb-1"></div>');
+                            var cb = $('<input type="checkbox" class="form-check-input tipo-peca-checkbox">')
+                                .attr('id', id)
+                                .attr('value', tipo);
+                            var lab = $('<label class="form-check-label"></label>').attr('for', id).text(tipo);
+                            wrap.append(cb).append(lab);
+                            listaTb.append(wrap);
+                        });
+                        console.log('Tipos sugeridos carregados:', tipos.length, 'de', response.total_tanques || 0, 'tanque(s)');
+                    } else {
+                        placeholder.removeClass('d-none').text('Nenhum tipo encontrado nos tanques dos grupos; use "Outros tipos" para informar manualmente.');
+                        listaTb.addClass('d-none');
+                    }
+                    if (typeof callback === 'function') {
+                        callback();
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('Erro ao carregar tipos de peças:', status, error);
+                    placeholder.removeClass('d-none').text('Erro ao carregar tipos. Use "Outros tipos" ou tente novamente.');
+                    listaTb.addClass('d-none').empty();
+                    tiposExtra.prop('disabled', false);
+                    btnTipos.prop('disabled', false);
+                    if (typeof callback === 'function') {
+                        callback();
+                    }
+                }
+            });
+        }
+
+        // Botões de selecionar/desselecionar todos os grupos
+        $(document).on('click', '#btnSelecionarTodosGrupos', function() {
+            var modal = $('#modalVinculacaoProdutoComposto');
+            modal.find('.grupo-checkbox').prop('checked', true);
+            atualizarTiposPecaPorGruposSelecionados();
+        });
+        
+        $(document).on('click', '#btnDesselecionarTodosGrupos', function() {
+            var modal = $('#modalVinculacaoProdutoComposto');
+            modal.find('.grupo-checkbox').prop('checked', false);
+            atualizarTiposPecaPorGruposSelecionados();
+        });
+        
+        // Atualizar tipos quando grupos forem selecionados/desselecionados (usando delegação)
+        $(document).on('change', '#modalVinculacaoProdutoComposto .grupo-checkbox', function() {
+            atualizarTiposPecaPorGruposSelecionados();
+        });
+        
+        // Botão para carregar tipos sugeridos manualmente
+        $(document).on('click', '#btnCarregarTiposPeca', function() {
+            atualizarTiposPecaPorGruposSelecionados();
+        });
+
+        // Carrega vinculações da API e aplica filtro da pesquisa (cache em vinculacoesListaCache)
+        function carregarVinculacoes() {
+            var tbody = $('#tbodyVinculacoes');
+            tbody.html('<tr><td colspan="6" class="text-center text-muted"><i class="fas fa-spinner fa-spin"></i> Carregando...</td></tr>');
+            vinculacoesListaCache = null;
+
+            $.ajax({
+                url: '{{ url_for("peca.api_vinculacoes_todas") }}',
+                method: 'GET',
+                dataType: 'json',
+                success: function(response) {
+                    vinculacoesListaCache = response.vinculacoes || [];
+                    aplicarFiltroERenderizarVinculacoes();
+                },
+                error: function(xhr, status, error) {
+                    console.error('Erro ao carregar vinculações:', error);
+                    vinculacoesListaCache = null;
+                    tbody.html(
+                        '<tr><td colspan="6" class="text-center text-danger">' +
+                        '<i class="fas fa-exclamation-triangle"></i> Erro ao carregar vinculações' +
+                        '</td></tr>'
+                    );
+                }
+            });
+        }
+
+        // Função para editar vinculação
+        function editarVinculacao(vinculacaoId) {
+            var modal = $('#modalVinculacaoProdutoComposto');
+            
+            // Carregar dados da vinculação
+            $.ajax({
+                url: '/pecas/api/vinculacao/' + vinculacaoId,
+                method: 'GET',
+                dataType: 'json',
+                success: function(response) {
+                    if (response.success && response.vinculacao) {
+                        var v = response.vinculacao;
+                        
+                        // Preencher formulário com dados da vinculação
+                        modal.find('#vinculacao_id').val(v.id);
+                        modal.find('#tanque_id_edicao').val(v.tanque_id || '');
+                        
+                        // Abrir modal primeiro se não estiver aberto
+                        if (!modal.hasClass('show')) {
+                            modal.modal('show');
+                        }
+                        
+                        // Atualizar título do modal
+                        modal.find('.modal-title').html('<i class="fas fa-edit"></i> Editar Vinculação');
+                        
+                        // Mostrar botão de cancelar edição
+                        modal.find('#btnCancelarEdicao').show();
+                        
+                        // Atualizar texto do botão salvar
+                        modal.find('#btnSalvarVinculacao').html('<i class="fas fa-save"></i> Atualizar Vinculação');
+                        
+                        carregarGruposTanques(function() {
+                            if (v.grupo_id) {
+                                var checkboxGrupo = modal.find('#grupo_' + v.grupo_id);
+                                if (checkboxGrupo.length > 0) {
+                                    checkboxGrupo.prop('checked', true);
+                                }
+                            }
+                            atualizarTiposPecaPorGruposSelecionados(function() {
+                                aplicarTipoSelecaoEdicao(v.tipo_peca);
+                                buscarProdutosCompostos(v.produto_composto_nome, function() {
+                                    selecionarProduto({
+                                        id: v.produto_composto_id,
+                                        nome: v.produto_composto_nome
+                                    });
+                                });
+                            });
+                        });
+                        
+                        // Scroll para o topo do formulário
+                        setTimeout(function() {
+                            modal.find('.modal-body').scrollTop(0);
+                        }, 100);
+                    } else {
+                        alert('Erro ao carregar dados da vinculação');
+                    }
+                },
+                error: function(xhr) {
+                    var response = xhr.responseJSON;
+                    alert('Erro ao carregar vinculação: ' + (response ? response.message : 'Erro desconhecido'));
+                }
+            });
+        }
+        
+        // Função para cancelar edição
+        function cancelarEdicao() {
+            var modal = $('#modalVinculacaoProdutoComposto');
+            
+            // Limpar campo de ID
+            modal.find('#vinculacao_id').val('');
+            modal.find('#tanque_id_edicao').val('');
+            
+            // Restaurar título do modal
+            modal.find('.modal-title').html('<i class="fas fa-link"></i> Vincular Tanque(s) a Produto Composto');
+            
+            // Esconder botão de cancelar edição
+            modal.find('#btnCancelarEdicao').hide();
+            
+            // Restaurar texto do botão salvar
+            modal.find('#btnSalvarVinculacao').html('<i class="fas fa-save"></i> Salvar Vinculação');
+            
+            // Limpar formulário
+            $('#formVinculacaoProdutoComposto')[0].reset();
+            modal.find('.grupo-checkbox').prop('checked', false);
+            modal.find('#containerGrupos').html('<div class="text-muted text-center"><i class="fas fa-spinner fa-spin"></i> Carregando grupos...</div>');
+            modal.find('#btnSelecionarTodosGrupos').hide();
+            modal.find('#btnDesselecionarTodosGrupos').hide();
+            modal.find('#tiposPecaExtra').val('').prop('disabled', true);
+            modal.find('#btnCarregarTiposPeca').prop('disabled', true);
+            modal.find('#listaTiposCheckboxes').empty().addClass('d-none');
+            modal.find('#placeholderTiposPeca').removeClass('d-none').text('Selecione um ou mais grupos para listar os tipos sugeridos.');
+            modal.find('#pesquisaVinculacoes').val('');
+            if (vinculacoesListaCache !== null) {
+                aplicarFiltroERenderizarVinculacoes();
+            }
+            carregarGruposTanques();
+            $('#containerProdutosCompostos').hide();
+            $('#containerProdutoSelecionado').hide();
+            $('#listaProdutosCompostos').empty();
+        }
+        
+        // Função para excluir vinculação
+        function excluirVinculacao(vinculacaoId, tanqueNome, produtoNome) {
+            if (!confirm('Deseja realmente excluir a vinculação entre o tanque "' + tanqueNome + '" e o produto "' + produtoNome + '"?')) {
+                return;
+            }
+            
+            var csrfToken = $('meta[name="csrf-token"]').attr('content');
+            if (!csrfToken) {
+                csrfToken = $('input[name="csrf_token"]').first().val();
+            }
+            
+            $.ajax({
+                url: '/pecas/vinculacao-produto-composto/' + vinculacaoId + '/excluir',
+                method: 'POST',
+                data: {
+                    csrf_token: csrfToken
+                },
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        alert('Vinculação excluída com sucesso!');
+                        carregarVinculacoes(); // Recarregar tabela
+                    } else {
+                        alert('Erro: ' + response.message);
+                    }
+                },
+                error: function(xhr) {
+                    var response = xhr.responseJSON;
+                    alert('Erro ao excluir vinculação: ' + (response ? response.message : 'Erro desconhecido'));
+                }
+            });
+        }
+
+        // Inicializar eventos do modal quando ele for aberto
+        $('#modalVinculacaoProdutoComposto').on('shown.bs.modal', function() {
+            console.log('Modal de vinculação aberto');
+            
+            // Carregar grupos de tanques
+            carregarGruposTanques();
+            
+            // Carregar vinculações existentes
+            carregarVinculacoes();
+
+            // Buscar produtos compostos ao digitar
+            $('#busca_produto_composto').off('input').on('input', function() {
+                var termo = $(this).val().trim();
+                clearTimeout(timeoutBusca);
+                if (termo.length < 2) {
+                    $('#containerProdutosCompostos').hide();
+                    $('#listaProdutosCompostos').empty();
+                    return;
+                }
+                timeoutBusca = setTimeout(function() {
+                    buscarProdutosCompostos(termo);
+                }, 500);
+            });
+
+            // Buscar ao clicar no botão
+            $('#btnBuscarProduto').off('click').on('click', function() {
+                var termo = $('#busca_produto_composto').val().trim();
+                if (termo.length >= 2) {
+                    buscarProdutosCompostos(termo);
+                }
+            });
+
+            // Limpar produto selecionado
+            $('#btnLimparProduto').off('click').on('click', function() {
+                var modal = $('#modalVinculacaoProdutoComposto');
+                modal.find('#produto_composto_id').val('');
+                modal.find('#produtoSelecionadoNome').text('');
+                modal.find('#containerProdutoSelecionado').hide();
+                modal.find('#busca_produto_composto').val('');
+                modal.find('#containerProdutosCompostos').hide();
+            });
+            
+            // Botão cancelar edição
+            $('#btnCancelarEdicao').off('click').on('click', function() {
+                cancelarEdicao();
+            });
+
+            // Salvar vinculação
+            $('#btnSalvarVinculacao').off('click').on('click', function() {
+                var modal = $('#modalVinculacaoProdutoComposto');
+                var form = modal.find('#formVinculacaoProdutoComposto');
+                
+                // Usar seletores específicos do modal
+                var gruposSelecionados = modal.find('.grupo-checkbox:checked');
+                var grupoIds = gruposSelecionados.map(function() {
+                    return $(this).val();
+                }).get();
+                var tiposPeca = coletarTiposPecaModal(modal);
+                var produtoCompostoId = modal.find('#produto_composto_id').val();
+                var vinculacaoId = modal.find('#vinculacao_id').val();
+                var modoEdicao = vinculacaoId && vinculacaoId !== '';
+                
+                console.log('Validação - Grupos:', grupoIds);
+                console.log('Validação - Tipos Peça:', tiposPeca);
+                console.log('Validação - Produto Composto:', produtoCompostoId, typeof produtoCompostoId);
+                
+                var camposFaltando = [];
+                if (!grupoIds || grupoIds.length === 0) {
+                    camposFaltando.push('Grupo(s) de Tanques');
+                }
+                if (!tiposPeca || tiposPeca.length === 0) {
+                    camposFaltando.push('Tipo(s) de Peça');
+                }
+                if (!produtoCompostoId || produtoCompostoId === '' || produtoCompostoId === 'null' || produtoCompostoId === 'undefined') {
+                    camposFaltando.push('Produto Composto');
+                }
+                
+                if (modoEdicao && tiposPeca.length !== 1) {
+                    alert('Na edição, selecione exatamente um tipo de peça (uma opção sugerida ou um único valor em "Outros tipos").');
+                    return;
+                }
+                
+                if (camposFaltando.length > 0) {
+                    alert('Por favor, preencha todos os campos obrigatórios.\n\nCampos faltando: ' + camposFaltando.join(', '));
+                    console.error('Campos faltando:', camposFaltando);
+                    return;
+                }
+                
+                // Obter token CSRF da meta tag (sempre atualizado) ou do formulário
+                var csrfToken = $('meta[name="csrf-token"]').attr('content');
+                if (!csrfToken) {
+                    csrfToken = form.find('input[name="csrf_token"]').val();
+                }
+                
+                if (!csrfToken) {
+                    alert('Erro: Token CSRF não encontrado. Recarregue a página e tente novamente.');
+                    console.error('CSRF token não encontrado');
+                    return;
+                }
+                
+                var formData = {
+                    csrf_token: csrfToken,
+                    produto_composto_id: produtoCompostoId
+                };
+                
+                if (modoEdicao) {
+                    formData.vinculacao_id = vinculacaoId;
+                    formData.tipo_peca = tiposPeca[0];
+                    var tid = modal.find('#tanque_id_edicao').val();
+                    if (tid) {
+                        formData.tanque_id = tid;
+                    }
+                } else {
+                    formData.tipo_peca = tiposPeca;
+                }
+                
+                // Adicionar cada grupo_id como grupo_ids[] (jQuery precisa do formato correto)
+                grupoIds.forEach(function(grupoId) {
+                    formData['grupo_ids[]'] = formData['grupo_ids[]'] || [];
+                    formData['grupo_ids[]'].push(grupoId);
+                });
+                
+                console.log('Dados a serem enviados:', {
+                    csrf_token: '[TOKEN OCULTO]',
+                    vinculacao_id: vinculacaoId || 'N/A',
+                    'grupo_ids[]': grupoIds,
+                    tipos_peca: tiposPeca,
+                    produto_composto_id: produtoCompostoId,
+                    modo_edicao: modoEdicao
+                });
+                
+                // Usar traditional: true para enviar arrays corretamente
+                $.ajax({
+                    url: '{{ url_for("peca.vinculacao_produto_composto") }}',
+                    method: 'POST',
+                    traditional: true,
+                    data: formData,
+                    headers: {
+                        'X-CSRFToken': csrfToken,
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            var mensagem = response.message || 'Vinculação criada com sucesso!';
+                            if (response.vinculacoes_criadas !== undefined) {
+                                mensagem = response.vinculacoes_criadas + ' vinculação(ões) criada(s) com sucesso!';
+                                if (response.vinculacoes_existentes && response.vinculacoes_existentes.length > 0) {
+                                    mensagem += '\n\n' + response.vinculacoes_existentes.length + ' combinação(ões) tanque/tipo já existia(m).';
+                                }
+                            }
+                            alert(mensagem);
+                            // Recarregar tabela de vinculações
+                            carregarVinculacoes();
+                            // Limpar formulário e sair do modo edição
+                            cancelarEdicao();
+                        } else {
+                            alert('Erro: ' + response.message);
+                        }
+                    },
+                    error: function(xhr) {
+                        console.error('Erro ao salvar:', xhr);
+                        var response = xhr.responseJSON;
+                        var errorMsg = 'Erro ao salvar vinculação';
+                        
+                        if (xhr.status === 400 && response && response.message) {
+                            errorMsg = response.message;
+                        } else if (xhr.status === 403) {
+                            errorMsg = 'Erro de autenticação CSRF. Recarregue a página e tente novamente.';
+                        } else if (response && response.message) {
+                            errorMsg = response.message;
+                        }
+                        
+                        alert(errorMsg);
+                    }
+                });
+            });
+        });
+
+        // Função para buscar produtos compostos
+        function buscarProdutosCompostos(termo, callback) {
+            $.ajax({
+                url: '{{ url_for("peca.api_produtos_compostos") }}',
+                method: 'GET',
+                data: { termo: termo },
+                success: function(response) {
+                    produtosCarregados = response.produtos;
+                    exibirProdutosCompostos(response.produtos);
+                    if (callback && typeof callback === 'function') {
+                        callback();
+                    }
+                },
+                error: function() {
+                    alert('Erro ao buscar produtos compostos. Tente novamente.');
+                }
+            });
+        }
+
+        // Função para exibir produtos compostos
+        function exibirProdutosCompostos(produtos) {
+            var modal = $('#modalVinculacaoProdutoComposto');
+            var lista = modal.find('#listaProdutosCompostos');
+            lista.empty();
+            
+            if (produtos.length === 0) {
+                lista.append('<div class="list-group-item text-muted">Nenhum produto encontrado</div>');
+            } else {
+                produtos.forEach(function(produto) {
+                    var item = $('<a href="#" class="list-group-item list-group-item-action"></a>')
+                        .data('produto-id', produto.id)
+                        .html(
+                            '<div class="d-flex w-100 justify-content-between">' +
+                            '<h6 class="mb-1">' + produto.nome + '</h6>' +
+                            '</div>' +
+                            '<p class="mb-1 text-muted small">' + (produto.descricao || 'Sem descrição') + '</p>' +
+                            '<small class="text-muted">' + produto.componentes + ' componente(s)</small>'
+                        )
+                        .on('click', function(e) {
+                            e.preventDefault();
+                            selecionarProduto(produto);
+                        });
+                    lista.append(item);
+                });
+            }
+            
+            modal.find('#containerProdutosCompostos').show();
+        }
+
+        // Função para selecionar um produto
+        function selecionarProduto(produto) {
+            var modal = $('#modalVinculacaoProdutoComposto');
+            var campoProdutoId = modal.find('#produto_composto_id');
+            
+            if (campoProdutoId.length === 0) {
+                console.error('Campo produto_composto_id não encontrado no modal!');
+                alert('Erro: Campo de produto não encontrado. Recarregue a página.');
+                return;
+            }
+            
+            campoProdutoId.val(produto.id);
+            modal.find('#produtoSelecionadoNome').text(produto.nome);
+            modal.find('#containerProdutoSelecionado').show();
+            modal.find('#containerProdutosCompostos').hide();
+            modal.find('#busca_produto_composto').val(produto.nome);
+            
+            console.log('Produto selecionado:', produto.id, produto.nome);
+            console.log('Campo produto_composto_id preenchido com:', campoProdutoId.val());
+        }
+
+        // Limpar formulário ao fechar o modal
+        $('#modalVinculacaoProdutoComposto').on('hidden.bs.modal', function() {
+            cancelarEdicao();
+        });
+
+        // Processar produção
+        $('#btnProcessarProducao').on('click', function() {
+            if (!confirm('Deseja processar a produção de todas as peças concretadas?\n\nIsso irá consumir o estoque baseado nos produtos compostos vinculados.')) {
+                return;
+            }
+            
+            var btn = $(this);
+            btn.prop('disabled', true);
+            btn.html('<i class="fas fa-spinner fa-spin"></i> Processando...');
+            
+            // Obter token CSRF
+            var csrfToken = $('meta[name="csrf-token"]').attr('content');
+            if (!csrfToken) {
+                csrfToken = $('input[name="csrf_token"]').first().val();
+            }
+            
+            $.ajax({
+                url: '{{ url_for("peca.processar_producao") }}',
+                method: 'POST',
+                data: {
+                    csrf_token: csrfToken
+                },
+                headers: {
+                    'X-CSRFToken': csrfToken,
+                    'X-Requested-With': 'XMLHttpRequest'
+                },
+                success: function(response) {
+                    if (response.success) {
+                        var mensagem = response.message;
+                        
+                        // Adicionar detalhes se houver
+                        if (response.pecas_sem_vinculacao && response.pecas_sem_vinculacao.length > 0) {
+                            mensagem += '\n\nPeças sem vinculação:';
+                            response.pecas_sem_vinculacao.slice(0, 5).forEach(function(p) {
+                                mensagem += '\n- ' + p.peca_nome + ' (Tanque: ' + p.tanque + ', Tipo: ' + p.tipo + ')';
+                            });
+                            if (response.pecas_sem_vinculacao.length > 5) {
+                                mensagem += '\n... e mais ' + (response.pecas_sem_vinculacao.length - 5) + ' peça(s)';
+                            }
+                        }
+                        
+                        if (response.pecas_sem_estoque && response.pecas_sem_estoque.length > 0) {
+                            mensagem += '\n\nGrupos com estoque insuficiente:';
+                            response.pecas_sem_estoque.slice(0, 5).forEach(function(g) {
+                                mensagem += '\n- ' + (g.produto_composto || 'Produto desconhecido');
+                                mensagem += ' (' + (g.data || 'Data desconhecida') + ', ' + g.quantidade_pecas + ' peça(s))';
+                                if (g.material) {
+                                    mensagem += '\n  Material: ' + g.material;
+                                    if (g.necessario && g.disponivel) {
+                                        mensagem += ' (necessário: ' + g.necessario + ', disponível: ' + g.disponivel + ')';
+                                    }
+                                }
+                            });
+                            if (response.pecas_sem_estoque.length > 5) {
+                                mensagem += '\n... e mais ' + (response.pecas_sem_estoque.length - 5) + ' grupo(s)';
+                            }
+                        }
+                        
+                        alert(mensagem);
+                        location.reload();
+                    } else {
+                        alert('Erro: ' + response.message);
+                    }
+                },
+                error: function(xhr) {
+                    console.error('Erro ao processar produção:', xhr);
+                    var response = xhr.responseJSON;
+                    var errorMsg = 'Erro ao processar produção';
+                    
+                    if (xhr.status === 400 && response && response.message) {
+                        errorMsg = response.message;
+                    } else if (response && response.message) {
+                        errorMsg = response.message;
+                    }
+                    
+                    alert(errorMsg);
+                },
+                complete: function() {
+                    btn.prop('disabled', false);
+                    btn.html('<i class="fas fa-cogs"></i> Processar Produção');
+                }
+            });
+        });
+    });
+</script>
+{% endblock %}

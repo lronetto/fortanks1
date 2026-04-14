@@ -153,6 +153,7 @@
                             <th>Unidade</th>
                             <th>Quantidade Total</th>
                             <th>Valor Total (R$)</th>
+                            <th>Qtd. NFs</th>
                             <th>Fornecedores</th>
                         </tr>
                         {% else %}
@@ -163,6 +164,7 @@
                             <th>Quantidade Total</th>
                             <th>Unidades NF</th>
                             <th>Valor Total (R$)</th>
+                            <th>Qtd. NFs</th>
                             <th>Fornecedores</th>
                         </tr>
                         {% endif %}
@@ -173,9 +175,11 @@
                                 <th colspan="3">Total Geral (Filtrado)</th>
                                 <th id="footerTotalGeral">-</th>
                                 <th></th>
+                                <th></th>
                             {% else %}
                                 <th colspan="5">Total Geral (Filtrado)</th>
                                 <th id="footerTotalGeral">-</th>
+                                <th></th>
                                 <th></th>
                             {% endif %}
                         </tr>
@@ -342,7 +346,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 { data: 1 },
                 { data: 2 },
                 { data: 3 },
-                { data: 4 }
+                { data: 4 },
+                { data: 5 }
             ]
             : [
                 { data: 0 },
@@ -357,7 +362,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 { data: 3 },
                 { data: 4 },
                 { data: 5 },
-                { data: 6 }
+                { data: 6 },
+                { data: 7 }
             ],
         language: {
             url: '//cdn.datatables.net/plug-ins/1.10.25/i18n/Portuguese-Brasil.json'

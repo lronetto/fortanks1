@@ -19,11 +19,6 @@
                             <small class="text-muted">Código interno ou SKU do material</small>
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label for="edit_codigo_erp" class="form-label">Código ERP</label>
-                            <input type="text" class="form-control" id="edit_codigo_erp" name="edit_codigo_erp">
-                            <small class="text-muted">Código usado no sistema ERP (opcional)</small>
-                        </div>
-                        <div class="col-md-4 mb-3">
                             <label for="edit_categoria" class="form-label">Categoria</label>
                             <select class="form-select" id="edit_categoria" name="edit_categoria" required>
                                 <option value="" disabled>Selecione uma categoria</option>
@@ -40,6 +35,16 @@
                         </div>
                     </div>
                     <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="edit_codigo_alterdata" class="form-label">Código Alterdata</label>
+                            <input type="text" class="form-control" id="edit_codigo_alterdata" name="edit_codigo_alterdata">
+                            <small class="text-muted">Código usado no Alterdata (opcional)</small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="edit_codigo_mega" class="form-label">Código Mega</label>
+                            <input type="text" class="form-control" id="edit_codigo_mega" name="edit_codigo_mega">
+                            <small class="text-muted">Código usado no Mega (opcional)</small>
+                        </div>
                         <div class="col-md-4 mb-3">
                             <label for="edit_mascara" class="form-label">Máscara</label>
                             <input type="text" class="form-control" id="edit_mascara" name="edit_mascara">
@@ -158,6 +163,32 @@ var URL_EDITAR_MATERIAL_AJAX = "{{ url_for('material.editar_material_ajax', id=9
 var URL_IMAGEM_MATERIAL_INLINE = "{{ url_for('material.material_imagem_inline', upload_id=999999999) }}";
 var URL_API_ESTOQUE_MATERIAL = "{{ url_for('estoque.api_estoque_por_material', material_id=999999999) }}";
 document.addEventListener('DOMContentLoaded', function() {
+    function normalizarCodigoInteiro(valor) {
+        const txt = String(valor || '').trim();
+        if (!txt) return '';
+        const normalizado = txt.replace(',', '.');
+        const numero = Number(normalizado);
+        if (!Number.isNaN(numero)) return String(Math.trunc(numero));
+        if (normalizado.includes('.')) return normalizado.split('.', 1)[0];
+        return txt;
+    }
+
+    function aplicarNormalizacaoCodigosEditar() {
+        ['edit_codigo', 'edit_codigo_alterdata', 'edit_codigo_mega', 'edit_mascara'].forEach(function(id) {
+            const campo = document.getElementById(id);
+            if (!campo) return;
+            campo.value = normalizarCodigoInteiro(campo.value);
+        });
+    }
+
+    ['edit_codigo', 'edit_codigo_alterdata', 'edit_codigo_mega', 'edit_mascara'].forEach(function(id) {
+        const campo = document.getElementById(id);
+        if (!campo) return;
+        campo.addEventListener('blur', function() {
+            campo.value = normalizarCodigoInteiro(campo.value);
+        });
+    });
+
     // Configurar o botão de alternar unidade
     const btnAlternarUnidade = document.getElementById('btn-alternar-unidade');
     const unidadeSelect = document.getElementById('edit_unidade');
@@ -186,11 +217,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
         try {
             document.getElementById('edit_id').value = material.id || '';
-            document.getElementById('edit_codigo').value = material.codigo || '';
-            document.getElementById('edit_codigo_erp').value = material.codigo_erp || '';
+            document.getElementById('edit_codigo').value = normalizarCodigoInteiro(material.codigo || '');
+            document.getElementById('edit_codigo_alterdata').value = normalizarCodigoInteiro(material.codigo_alterdata || material.codigo_erp || '');
+            document.getElementById('edit_codigo_mega').value = normalizarCodigoInteiro(material.codigo_mega || '');
             document.getElementById('edit_nome').value = material.nome || '';
             document.getElementById('edit_descricao').value = material.descricao || '';
-            document.getElementById('edit_mascara').value = material.mascara || '';
+            document.getElementById('edit_mascara').value = normalizarCodigoInteiro(material.mascara || '');
             document.getElementById('edit_formula_calculo').value = material.formula_calculo || '';
             const categoriaSelect = document.getElementById('edit_categoria');
             if (categoriaSelect) {
@@ -278,6 +310,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 id: btn.dataset.id,
                 codigo: btn.dataset.codigo || '',
                 codigo_erp: btn.dataset.codigoErp || '',
+                codigo_alterdata: btn.dataset.codigoAlterdata || btn.dataset.codigoErp || '',
+                codigo_mega: btn.dataset.codigoMega || '',
                 nome: btn.dataset.nome || '',
                 descricao: btn.dataset.descricao || '',
                 categoria: btn.dataset.categoria || '',
@@ -376,6 +410,7 @@ document.addEventListener('DOMContentLoaded', function() {
                     return;
                 }
                 const form = document.getElementById('form-editar-material');
+                aplicarNormalizacaoCodigosEditar();
                 const formData = new FormData(form);
                 
                 // Garantir que os campos de quantidade tenham valores padrão se vazios

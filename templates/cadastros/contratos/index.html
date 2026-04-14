@@ -1,0 +1,138 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Contratos - Sistema de Gestão - Pré-moldados{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="ft-page-header">
+        <h1 class="h3 mb-0"><i class="fas fa-file-contract"></i> Contratos</h1>
+        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovoContrato">
+            <i class="fas fa-plus"></i> Novo Contrato
+        </button>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex align-items-center justify-content-between">
+            <h6 class="m-0 fw-bold">Lista de Contratos</h6>
+            <div class="ft-col-toggle-placeholder"></div>
+        </div>
+        <div class="card-body p-md-3 p-2 ft-datatable-wrapper">
+                <table class="table table-bordered table-hover" id="dataTable" width="100%" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Centro de Custo</th>
+                            <th>Cliente</th>
+                            <th>Local</th>
+                            <th>Valor Total</th>
+                            <th>Data Base</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Dados carregados via AJAX -->
+                    </tbody>
+                </table>
+        </div>
+    </div>
+</div>
+
+<!-- Incluir modais -->
+{% include 'cadastros/contratos/modais/novo_contrato.html' %}
+{% include 'cadastros/contratos/modais/editar_contrato.html' %}
+{% include 'cadastros/contratos/modais/modal_resumo_orcado.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    $(document).ready(function () {
+        var TITULOS_CONT = ['ID', 'Nome', 'Centro de Custo', 'Cliente', 'Local', 'Valor Total', 'Data Base', 'Ações'];
+        const table = $('#dataTable').DataTable(FT.dtOpcoes({
+            ajax: {
+                url: '{{ url_for("contrato.api_datatables") }}',
+                type: 'GET',
+                dataSrc: function(json) {
+                    if (json.error) { console.error('Erro ao carregar dados:', json.error); return []; }
+                    return json.data;
+                }
+            },
+            order: [[0, 'desc']],
+            columns: [
+                { data: 'id' },
+                { data: 'nome' },
+                { data: 'centro_custo' },
+                { data: 'cliente' },
+                { data: 'local' },
+                { data: 'valor_total', className: 'text-end' },
+                { data: 'data_base' },
+                { data: 'acoes', orderable: false, searchable: false, className: 'text-center' }
+            ],
+            drawCallback: function() { $('[data-bs-toggle="tooltip"]').tooltip(); }
+        }));
+        FT.dtColunas.inicializar(table, 'dataTable', TITULOS_CONT);
+
+        // Evento para botão de editar
+        $(document).on('click', '.btn-editar-contrato', function() {
+            const contratoId = $(this).data('id');
+            if (typeof abrirModalEditar === 'function') {
+                abrirModalEditar(contratoId);
+            }
+        });
+
+        $(document).on('click', '.btn-resumo-orcado-exec', function() {
+            const contratoId = $(this).data('id');
+            if (typeof abrirModalResumoOrcadoExec === 'function') {
+                abrirModalResumoOrcadoExec(contratoId);
+            }
+        });
+
+        // Evento para botão de excluir
+        $(document).on('click', '.btn-excluir-contrato', function() {
+            const contratoId = $(this).data('id');
+            const contratoNome = $(this).data('nome');
+            
+            if (confirm(`Tem certeza que deseja excluir o contrato "${contratoNome}"?`)) {
+                // Criar formulário para exclusão
+                const form = $('<form>', {
+                    method: 'POST',
+                    action: `{{ url_for('contrato.excluir', id=0) }}`.replace('/0', `/${contratoId}`)
+                });
+                
+                // Adicionar CSRF token
+                const csrfInput = $('<input>', {
+                    type: 'hidden',
+                    name: 'csrf_token',
+                    value: '{{ csrf_token() }}'
+                });
+                form.append(csrfInput);
+                
+                // Enviar via AJAX
+                $.ajax({
+                    url: form.attr('action'),
+                    method: 'POST',
+                    data: form.serialize(),
+                    headers: {
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    success: function(response) {
+                        if (response.success) {
+                            // Recarregar DataTable
+                            table.ajax.reload(null, false);
+                        } else {
+                            alert(response.error || 'Erro ao excluir o contrato.');
+                        }
+                    },
+                    error: function(xhr) {
+                        let errorMsg = 'Erro ao excluir o contrato.';
+                        if (xhr.responseJSON && xhr.responseJSON.error) {
+                            errorMsg = xhr.responseJSON.error;
+                        }
+                        alert(errorMsg);
+                    }
+                });
+            }
+        });
+    });
+</script>
+{% endblock %}

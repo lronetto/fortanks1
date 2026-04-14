@@ -1,0 +1,200 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Planos de Conta - Sistema de Gestão{% endblock %}
+{% block mobile_title %}Planos de Conta{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="ft-page-header">
+        <h1 class="h3 mb-0">Planos de Conta</h1>
+        <div class="btn-group">
+            <a href="{{ url_for('plano_conta.importar') }}" class="btn btn-outline-success btn-sm">
+                <i class="fas fa-file-excel"></i>
+                <span class="d-none d-md-inline ms-1">Importar Excel</span>
+            </a>
+            <a href="{{ url_for('plano_conta.novo') }}" class="btn btn-primary btn-sm">
+                <i class="fas fa-plus"></i>
+                <span class="d-none d-md-inline ms-1">Novo Plano</span>
+            </a>
+        </div>
+    </div>
+
+    <div class="alert-container">
+        {% include "common/alerts.html" %}
+    </div>
+
+    <!-- Filtros -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <h6 class="m-0 fw-bold">Filtros</h6>
+        </div>
+        <div class="card-body">
+            <form id="filtroForm" class="row g-2 align-items-end">
+                <div class="col-md-4">
+                    <label for="filtro-codigo" class="form-label mb-1">Código / Descrição</label>
+                    <input type="text" class="form-control form-control-sm" id="filtro-codigo" placeholder="Pesquisar...">
+                </div>
+                <div class="col-md-3">
+                    <label for="filtro-indice" class="form-label mb-1">Índice</label>
+                    <input type="text" class="form-control form-control-sm" id="filtro-indice" placeholder="Filtrar por índice...">
+                </div>
+                <div class="col-md-2">
+                    <label for="filtro-status" class="form-label mb-1">Status</label>
+                    <select class="form-select form-select-sm" id="filtro-status">
+                        <option value="">Todos</option>
+                        <option value="ativo">Ativo</option>
+                        <option value="inativo">Inativo</option>
+                    </select>
+                </div>
+                <div class="col-md-auto">
+                    <button type="button" id="btn-filtrar" class="btn btn-primary btn-sm">
+                        <i class="fas fa-search"></i> Filtrar
+                    </button>
+                    <button type="button" id="btn-limpar-filtro" class="btn btn-outline-secondary btn-sm ms-1">
+                        <i class="fas fa-eraser"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela -->
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex align-items-center justify-content-between">
+            <h6 class="m-0 fw-bold">Lista de Planos de Conta</h6>
+            <div class="ft-col-toggle-placeholder"></div>
+        </div>
+        <div class="card-body p-md-3 p-2">
+            {% if planos_conta %}
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover w-100" id="tabelaPlanosConta" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>Código</th>
+                            <th>Descrição</th>
+                            <th>Índice</th>
+                            <th>Status</th>
+                            <th>Data de Cadastro</th>
+                            <th class="text-center">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for plano in planos_conta %}
+                        <tr>
+                            <td>{{ plano.codigo }}</td>
+                            <td>{{ plano.descricao }}</td>
+                            <td>{{ plano.indice or '—' }}</td>
+                            <td>
+                                {% if plano.ativo %}
+                                <span class="badge bg-success">Ativo</span>
+                                {% else %}
+                                <span class="badge bg-danger">Inativo</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ plano.criado_em.strftime('%d/%m/%Y %H:%M') }}</td>
+                            <td class="text-center">
+                                <div class="ft-acoes-dropdown dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                                            data-bs-toggle="dropdown" aria-expanded="false" title="Ações">
+                                        <i class="fas fa-ellipsis-v"></i>
+                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li>
+                                            <a class="dropdown-item" href="{{ url_for('plano_conta.visualizar', id=plano.id) }}">
+                                                <i class="fas fa-eye text-info"></i> Visualizar
+                                            </a>
+                                        </li>
+                                        <li>
+                                            <a class="dropdown-item" href="{{ url_for('plano_conta.editar', id=plano.id) }}">
+                                                <i class="fas fa-edit text-primary"></i> Editar
+                                            </a>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <button type="button" class="dropdown-item btn-excluir"
+                                                    data-id="{{ plano.id }}" data-codigo="{{ plano.codigo | e }}"
+                                                    data-bs-toggle="modal" data-bs-target="#modalExcluir">
+                                                <i class="fas fa-trash text-danger"></i> Excluir
+                                            </button>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <div class="alert alert-info">Nenhum plano de conta cadastrado.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Modal de Confirmação de Exclusão -->
+<div class="modal fade" id="modalExcluir" tabindex="-1" aria-labelledby="modalExcluirLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header bg-danger text-white">
+                <h5 class="modal-title" id="modalExcluirLabel">Confirmar Exclusão</h5>
+                <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <div class="modal-body">
+                <p>Tem certeza que deseja excluir o plano de conta <strong id="plano-codigo"></strong>?</p>
+                <p class="text-muted small">Esta ação não poderá ser desfeita.</p>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                <form id="formExcluir" action="" method="POST">
+                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                    <button type="submit" class="btn btn-danger">Excluir</button>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function () {
+    var TITULOS_PC = ['Código', 'Descrição', 'Índice', 'Status', 'Data de Cadastro', 'Ações'];
+    var dt = $('#tabelaPlanosConta').DataTable(FT.dtOpcoes({
+        serverSide: false,
+        order: [[0, 'asc']]
+    }));
+
+    FT.dtColunas.inicializar(dt, 'tabelaPlanosConta', TITULOS_PC);
+
+    $('.btn-excluir').on('click', function () {
+        var id     = $(this).data('id');
+        var codigo = $(this).data('codigo');
+        $('#plano-codigo').text(codigo);
+        $('#formExcluir').attr('action', '/plano-conta/excluir/' + id);
+    });
+
+    $('#btn-filtrar').on('click', filtrar);
+    $('#btn-limpar-filtro').on('click', function () {
+        $('#filtro-codigo, #filtro-indice').val('');
+        $('#filtro-status').val('');
+        filtrar();
+    });
+
+    function filtrar() {
+        $.fn.dataTable.ext.search = [];
+        dt.search($('#filtro-codigo').val());
+        $.fn.dataTable.ext.search.push(function (settings, data) {
+            var indice = $('#filtro-indice').val().toLowerCase();
+            var status = $('#filtro-status').val();
+            if (indice && data[2].toLowerCase().indexOf(indice) === -1) return false;
+            if (status === 'ativo'   && !data[3].includes('Ativo'))   return false;
+            if (status === 'inativo' && !data[3].includes('Inativo')) return false;
+            return true;
+        });
+        dt.draw();
+        $.fn.dataTable.ext.search = [];
+    }
+});
+</script>
+{% endblock %}

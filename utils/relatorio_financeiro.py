@@ -12,7 +12,6 @@ from models.centro_custo import CentroCusto
 from models.contrato import Contrato
 from models.nota_fiscal import CFOPS_VENDA,CFOPS_COMPRA
 from models.arquivei import Arquivei
-import time
 from dateutil.relativedelta import relativedelta
 from decimal import Decimal
 

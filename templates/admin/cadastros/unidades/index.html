@@ -1,0 +1,301 @@
+{% extends "common/base.html" %}
+
+{% block title %}Unidades de Medida - Sistema de Gestão{% endblock %}
+{% block mobile_title %}Unidades{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="ft-page-header">
+        <h1 class="h3 mb-0">Unidades de Medida</h1>
+        <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalCriarUnidade">
+            <i class="fas fa-plus"></i>
+            <span class="d-none d-md-inline ms-1">Nova Unidade</span>
+        </button>
+    </div>
+
+    <div class="alert-container">
+        {% include "common/alerts.html" %}
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3 d-flex align-items-center justify-content-between">
+            <h6 class="m-0 fw-bold">Lista de Unidades</h6>
+            <div class="ft-col-toggle-placeholder"></div>
+        </div>
+        <div class="card-body p-md-3 p-2 ft-datatable-wrapper">
+            <table id="tabelaUnidades" class="table table-bordered table-hover w-100" cellspacing="0">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Descrição</th>
+                            <th>Padrão</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Dados carregados via AJAX -->
+                    </tbody>
+                </table>
+        </div>
+    </div>
+</div>
+
+{% include 'admin/cadastros/unidades/modais/criar.html' %}
+{% include 'admin/cadastros/unidades/modais/editar.html' %}
+{% include 'admin/cadastros/unidades/modais/excluir.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(document).ready(function() {
+    let table;
+
+    var TITULOS_UNID = ['ID', 'Nome', 'Descrição', 'Padrão', 'Status', 'Ações'];
+
+    function inicializarDataTable() {
+        table = $('#tabelaUnidades').DataTable(FT.dtOpcoes({
+            ajax: {
+                url: '{{ url_for("unidade.api_datatables") }}',
+                type: 'GET',
+                dataSrc: function (json) {
+                    if (json.error) { console.error('Erro ao carregar dados:', json.error); return []; }
+                    return json.data;
+                }
+            },
+            order: [[1, 'asc']],
+            columns: [
+                { data: 'id',       name: 'id',       className: 'text-center' },
+                { data: 'nome',     name: 'nome' },
+                { data: 'descricao',name: 'descricao', render: function (d) { return d || '—'; } },
+                {
+                    data: 'padrao', name: 'padrao', className: 'text-center',
+                    render: function (d) {
+                        return d ? '<span class="badge bg-success">Sim</span>' : '<span class="badge bg-secondary">Não</span>';
+                    }
+                },
+                {
+                    data: 'ativo', name: 'ativo', className: 'text-center',
+                    render: function (d) { return FT.renderStatus(d ? 'Ativo' : 'Inativo'); }
+                },
+                {
+                    data: null, name: 'acoes', orderable: false, searchable: false, className: 'text-center',
+                    render: function (data, type, row) {
+                        return FT.renderAcoesDropdown([
+                            {
+                                label: 'Editar', icon: 'fa-edit', iconCor: 'primary', classe: 'btn-editar-unidade',
+                                attrs: 'data-id="' + row.id + '" data-bs-toggle="modal" data-bs-target="#modalEditarUnidade"'
+                            },
+                            { divider: true },
+                            {
+                                label: 'Excluir', icon: 'fa-trash', iconCor: 'danger', classe: 'btn-excluir-unidade',
+                                attrs: 'data-id="' + row.id + '" data-nome="' + FT.escAttr(row.nome) + '" '
+                                    + 'data-bs-toggle="modal" data-bs-target="#modalExcluirUnidade"'
+                            },
+                        ]);
+                    }
+                }
+            ]
+        }));
+    }
+    
+    // Função para abrir modal de criação
+    $('#modalCriarUnidade').on('show.bs.modal', function() {
+        $('#formCriarUnidade')[0].reset();
+        $('#formCriarUnidade').removeClass('was-validated');
+    });
+    
+    // Submissão do formulário de criação
+    $('#formCriarUnidade').on('submit', function(e) {
+        e.preventDefault();
+        
+        if (!this.checkValidity()) {
+            e.stopPropagation();
+            $(this).addClass('was-validated');
+            return;
+        }
+        
+        const formData = new FormData(this);
+        const btnSubmit = $(this).find('button[type="submit"]');
+        const textoOriginal = btnSubmit.html();
+        
+        btnSubmit.prop('disabled', true);
+        btnSubmit.html('<i class="fas fa-spinner fa-spin"></i> Salvando...');
+        
+        fetch('{{ url_for("unidade.api_criar") }}', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('modalCriarUnidade'));
+                if (modal) modal.hide();
+                
+                // Mostrar mensagem de sucesso
+                FT.alerta(data.message || 'Operação realizada com sucesso.', 'success');
+                
+                // Recarregar tabela
+                if (table) {
+                    table.ajax.reload(null, false);
+                }
+            } else {
+                FT.alerta(data.message || 'Erro na operação.', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao criar unidade:', error);
+            FT.alerta('Erro ao criar unidade.', 'danger');
+        })
+        .finally(() => {
+            btnSubmit.prop('disabled', false);
+            btnSubmit.html(textoOriginal);
+        });
+    });
+    
+    // Função para abrir modal de edição
+    window.abrirModalEdicao = function(id) {
+        fetch('{{ url_for("unidade.api_buscar", id=0) }}'.replace('0', id))
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    $('#unidade_id_editar').val(data.data.id);
+                    $('#nome_editar').val(data.data.nome);
+                    $('#descricao_editar').val(data.data.descricao || '');
+                    $('#ativo_editar').prop('checked', data.data.ativo);
+                    $('#padrao_editar').prop('checked', data.data.padrao);
+                    $('#formEditarUnidade').removeClass('was-validated');
+                } else {
+                    FT.alerta(data.message || 'Erro ao carregar dados.', 'danger');
+                }
+            })
+            .catch(error => {
+                console.error('Erro ao buscar unidade:', error);
+                FT.alerta('Erro ao carregar dados da unidade.', 'danger');
+            });
+    };
+    
+    // Submissão do formulário de edição
+    $('#formEditarUnidade').on('submit', function(e) {
+        e.preventDefault();
+        
+        if (!this.checkValidity()) {
+            e.stopPropagation();
+            $(this).addClass('was-validated');
+            return;
+        }
+        
+        const id = $('#unidade_id_editar').val();
+        const formData = new FormData(this);
+        const btnSubmit = $(this).find('button[type="submit"]');
+        const textoOriginal = btnSubmit.html();
+        
+        btnSubmit.prop('disabled', true);
+        btnSubmit.html('<i class="fas fa-spinner fa-spin"></i> Salvando...');
+        
+        fetch('{{ url_for("unidade.api_editar", id=0) }}'.replace('0', id), {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('modalEditarUnidade'));
+                if (modal) modal.hide();
+                
+                // Mostrar mensagem de sucesso
+                FT.alerta(data.message || 'Operação realizada com sucesso.', 'success');
+                
+                // Recarregar tabela
+                if (table) {
+                    table.ajax.reload(null, false);
+                }
+            } else {
+                FT.alerta(data.message || 'Erro na operação.', 'danger');
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao editar unidade:', error);
+            FT.alerta('Erro ao editar unidade.', 'danger');
+        })
+        .finally(() => {
+            btnSubmit.prop('disabled', false);
+            btnSubmit.html(textoOriginal);
+        });
+    });
+    
+    // Função para abrir modal de exclusão
+    window.abrirModalExclusao = function(id, nome) {
+        $('#nomeUnidadeExcluir').text(nome);
+        $('#formExcluirUnidade').attr('action', '{{ url_for("unidade.api_excluir", id=0) }}'.replace('0', id));
+    };
+    
+    // Submissão do formulário de exclusão
+    $('#formExcluirUnidade').on('submit', function(e) {
+        e.preventDefault();
+        
+        const action = $(this).attr('action');
+        const formData = new FormData(this);
+        const btnSubmit = $(this).find('button[type="submit"]');
+        const textoOriginal = btnSubmit.html();
+        
+        btnSubmit.prop('disabled', true);
+        btnSubmit.html('<i class="fas fa-spinner fa-spin"></i> Excluindo...');
+        
+        fetch(action, {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                const modal = bootstrap.Modal.getInstance(document.getElementById('modalExcluirUnidade'));
+                if (modal) modal.hide();
+                
+                // Mostrar mensagem de sucesso
+                FT.alerta(data.message || 'Operação realizada com sucesso.', 'success');
+                
+                // Recarregar tabela
+                if (table) {
+                    table.ajax.reload(null, false);
+                }
+            } else {
+                FT.alerta(data.message || 'Erro na operação.', 'danger');
+                btnSubmit.prop('disabled', false);
+                btnSubmit.html(textoOriginal);
+            }
+        })
+        .catch(error => {
+            console.error('Erro ao excluir unidade:', error);
+            FT.alerta('Erro ao excluir unidade.', 'danger');
+            btnSubmit.prop('disabled', false);
+            btnSubmit.html(textoOriginal);
+        });
+    });
+    
+    // Abrir modal de edição via dropdown
+    $(document).on('click', '.btn-editar-unidade', function () {
+        abrirModalEdicao($(this).data('id'));
+    });
+
+    // Abrir modal de exclusão via dropdown
+    $(document).on('click', '.btn-excluir-unidade', function () {
+        var id   = $(this).data('id');
+        var nome = $(this).data('nome') || '';
+        window.abrirModalExclusao(id, nome);
+    });
+
+    // Inicializar tabela
+    inicializarDataTable();
+    FT.dtColunas.inicializar(table, 'tabelaUnidades', TITULOS_UNID);
+    
+    // Recarregar tabela após fechar modais
+    $('#modalCriarUnidade, #modalEditarUnidade, #modalExcluirUnidade').on('hidden.bs.modal', function() {
+        // Resetar formulários
+        $(this).find('form')[0]?.reset();
+        $(this).find('form').removeClass('was-validated');
+    });
+});
+</script>
+{% endblock %}

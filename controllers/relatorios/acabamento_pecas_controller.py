@@ -231,7 +231,7 @@ def index():
     contratos = Contrato.query.filter(Contrato.ativo == True).order_by(Contrato.nome).all()
     
     return render_template(
-        'relatorios/acabamento_pecas/index.html',
+        'relatorios/acabamento_cadastros/pecas/index.html',
         dados_semana=dados_semana,
         labels_semana=labels_semana,
         dados_por_pista=dados_por_pista,
@@ -446,7 +446,7 @@ def exportar_pdf():
     total_metros_placas = sum(item.get('metros_placas', 0) for item in dados)
     
     html = render_template(
-        'relatorios/acabamento_pecas/pdf.html',
+        'relatorios/acabamento_cadastros/pecas/pdf.html',
         dados=dados,
         dados_mes=dados_mes,
         dados_semana=dados_semana,

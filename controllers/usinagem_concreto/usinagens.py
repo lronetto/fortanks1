@@ -599,7 +599,7 @@ def listar_usinagens():
     tracos_data = [{'id': t.id, 'nome': t.nome} for t in tracos]
 
     return render_template(
-        'usinagem_concreto/usinagens/index.html', 
+        'operacional/usinagem_concreto/usinagens/index.html', 
         now=datetime.now().strftime('%Y-%m-%dT%H:%M'),
         tracos=tracos, 
         tracos_json=tracos_data,
@@ -649,7 +649,7 @@ def nova_usinagem():
                         'error': error_msg
                     }), 400
                 flash(error_msg, 'error')
-                return render_template('usinagem_concreto/usinagens/nova.html', 
+                return render_template('operacional/usinagem_concreto/usinagens/nova.html', 
                                      tracos=tracos,
                                      now=datetime.now().strftime('%Y-%m-%dT%H:%M'))
 
@@ -661,7 +661,7 @@ def nova_usinagem():
                         'error': 'Já existe uma usinagem com esta série.'
                     }), 400
                 flash('Já existe uma usinagem com esta série.', 'error')
-                return render_template('usinagem_concreto/usinagens/nova.html', tracos=tracos)
+                return render_template('operacional/usinagem_concreto/usinagens/nova.html', tracos=tracos)
 
             # Converter e validar dados
             try:
@@ -673,7 +673,7 @@ def nova_usinagem():
                         'error': 'Formato de data/hora inválido. Use o formato: AAAA-MM-DDTHH:MM'
                     }), 400
                 flash('Formato de data/hora inválido.', 'error')
-                return render_template('usinagem_concreto/usinagens/nova.html', 
+                return render_template('operacional/usinagem_concreto/usinagens/nova.html', 
                                      tracos=tracos,
                                      now=datetime.now().strftime('%Y-%m-%dT%H:%M'))
             
@@ -688,7 +688,7 @@ def nova_usinagem():
                         'error': 'Volume inválido. Deve ser um número maior que zero.'
                     }), 400
                 flash('Volume inválido.', 'error')
-                return render_template('usinagem_concreto/usinagens/nova.html', 
+                return render_template('operacional/usinagem_concreto/usinagens/nova.html', 
                                      tracos=tracos,
                                      now=datetime.now().strftime('%Y-%m-%dT%H:%M'))
             
@@ -701,7 +701,7 @@ def nova_usinagem():
                         'error': 'Traço inválido.'
                     }), 400
                 flash('Traço inválido.', 'error')
-                return render_template('usinagem_concreto/usinagens/nova.html', 
+                return render_template('operacional/usinagem_concreto/usinagens/nova.html', 
                                      tracos=tracos,
                                      now=datetime.now().strftime('%Y-%m-%dT%H:%M'))
             
@@ -714,7 +714,7 @@ def nova_usinagem():
                         'error': 'Produto composto selecionado não é um traço válido.'
                     }), 400
                 flash('Produto composto selecionado não é um traço válido.', 'error')
-                return render_template('usinagem_concreto/usinagens/nova.html', tracos=tracos)
+                return render_template('operacional/usinagem_concreto/usinagens/nova.html', tracos=tracos)
 
             # Processar dados_adicionais (JSON)
             dados_adicionais = None
@@ -775,11 +775,11 @@ def nova_usinagem():
                 }), 500
             
             flash(f'Erro ao cadastrar usinagem: {str(e)}', 'danger')
-            return render_template('usinagem_concreto/usinagens/nova.html', 
+            return render_template('operacional/usinagem_concreto/usinagens/nova.html', 
                                    tracos=tracos, 
                                  now=datetime.now().strftime('%Y-%m-%dT%H:%M'))
     
-    return render_template('usinagem_concreto/usinagens/nova.html', 
+    return render_template('operacional/usinagem_concreto/usinagens/nova.html', 
                            tracos=tracos, 
                          now=datetime.now().strftime('%Y-%m-%dT%H:%M'))
 
@@ -807,12 +807,12 @@ def visualizar_usinagem(id):
                 rompimento.idade_hours = rompimento.idade.total_seconds() / 3600
                 rompimento.idade_str = f"{rompimento.idade_hours} horas" if rompimento.idade.days == 0 else f"{rompimento.idade.days} dias"
             usinagem.rompimentos.append(rompimento)
-        return render_template('usinagem_concreto/usinagens/partials/visualizar_usinagem_content.html',
+        return render_template('operacional/usinagem_concreto/usinagens/partials/visualizar_usinagem_content.html',
                              usinagem=usinagem,
                              materiais_calculados=materiais_calculados)
     
     # Se não for AJAX, retorna a página completa
-    return render_template('usinagem_concreto/usinagens/visualizar.html',
+    return render_template('operacional/usinagem_concreto/usinagens/visualizar.html',
                           usinagem=usinagem,
                           materiais_calculados=materiais_calculados)
 
@@ -1148,7 +1148,7 @@ def listar_rompimentos_usinagem(id):
     """Lista todos os rompimentos de corpo de prova de uma usinagem específica"""
     usinagem = ConcretoUsinagens.query.get_or_404(id)
 
-    return render_template('usinagem_concreto/rompimentos/por_usinagem.html',
+    return render_template('operacional/usinagem_concreto/rompimentos/por_usinagem.html',
                           usinagem=usinagem)
 
 

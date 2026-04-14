@@ -1,0 +1,3 @@
+from controllers.materiais.material_controller import material_bp
+from controllers.materiais.grupo_material_controller import grupo_material_bp
+

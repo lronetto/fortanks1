@@ -16,11 +16,6 @@
                             <small class="text-muted">Código interno ou SKU do material</small>
                         </div>
                         <div class="col-md-4 mb-3">
-                            <label for="codigo_erp" class="form-label">Código ERP</label>
-                            <input type="text" class="form-control" id="codigo_erp" name="codigo_erp">
-                            <small class="text-muted">Código usado no sistema ERP (opcional)</small>
-                        </div>
-                        <div class="col-md-4 mb-3">
                             <label for="categoria" class="form-label">Categoria</label>
                             <select class="form-select" id="categoria" name="categoria" required>
                                 <option value="" selected disabled>Selecione uma categoria</option>
@@ -36,6 +31,16 @@
                         </div>
                     </div>
                     <div class="row">
+                        <div class="col-md-4 mb-3">
+                            <label for="codigo_alterdata" class="form-label">Código Alterdata</label>
+                            <input type="text" class="form-control" id="codigo_alterdata" name="codigo_alterdata">
+                            <small class="text-muted">Código usado no Alterdata (opcional)</small>
+                        </div>
+                        <div class="col-md-4 mb-3">
+                            <label for="codigo_mega" class="form-label">Código Mega</label>
+                            <input type="text" class="form-control" id="codigo_mega" name="codigo_mega">
+                            <small class="text-muted">Código usado no Mega (opcional)</small>
+                        </div>
                         <div class="col-md-4 mb-3">
                             <label for="mascara" class="form-label">Máscara</label>
                             <input type="text" class="form-control" id="mascara" name="mascara">
@@ -140,6 +145,32 @@
 {% block scripts %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
+    function normalizarCodigoInteiro(valor) {
+        const txt = String(valor || '').trim();
+        if (!txt) return '';
+        const normalizado = txt.replace(',', '.');
+        const numero = Number(normalizado);
+        if (!Number.isNaN(numero)) return String(Math.trunc(numero));
+        if (normalizado.includes('.')) return normalizado.split('.', 1)[0];
+        return txt;
+    }
+
+    function aplicarNormalizacaoCodigosNovo() {
+        ['codigo', 'codigo_alterdata', 'codigo_mega', 'mascara'].forEach(function(id) {
+            const campo = document.getElementById(id);
+            if (!campo) return;
+            campo.value = normalizarCodigoInteiro(campo.value);
+        });
+    }
+
+    ['codigo', 'codigo_alterdata', 'codigo_mega', 'mascara'].forEach(function(id) {
+        const campo = document.getElementById(id);
+        if (!campo) return;
+        campo.addEventListener('blur', function() {
+            campo.value = normalizarCodigoInteiro(campo.value);
+        });
+    });
+
     // Botão para alternar para input de texto de unidade no modal de novo material
     $('#btn-alternar-unidade-novo').click(function() {
         $('#unidade').hide();
@@ -225,6 +256,7 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Validação do formulário de novo material
     $('#form-novo-material').submit(function(e) {
+        aplicarNormalizacaoCodigosNovo();
         const nome = $('#nome').val().trim();
         const categoria = $('#categoria').val();
         if (!nome) {

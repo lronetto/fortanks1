@@ -259,7 +259,7 @@ def enviar_relatorios_multiplos_projetos(contrato_ids, destinatarios=None, assun
     Envia relatórios para múltiplos projetos.
     
     Args:
-        contrato_ids (list): Lista de IDs de contratos/projetos
+        contrato_ids (list): Lista de IDs de cadastros/contratos/projetos
         destinatarios (list, optional): Lista de emails destinatários
         assunto_padrao (str, optional): Assunto padrão (será complementado com nome do projeto)
     

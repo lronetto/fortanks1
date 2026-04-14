@@ -1,6 +1,7 @@
 from functools import wraps
-from flask import flash, redirect, url_for, abort
+from flask import flash, redirect, url_for, abort, request, jsonify, current_app, g
 from flask_login import current_user
+import jwt as pyjwt
 
 def role_required(roles):
     """
@@ -45,4 +46,52 @@ def role_required(roles):
         
         return wrapper
     
-    return decorator 
+    return decorator
+
+
+def jwt_required(f):
+    """
+    Decorador para proteger rotas da API mobile com JWT.
+    Popula g.usuario_atual com a instância do Usuario autenticado.
+    """
+    @wraps(f)
+    def wrapper(*args, **kwargs):
+        import logging
+        _logger = logging.getLogger('jwt_required')
+
+        auth_header = request.headers.get('Authorization', '')
+        if not auth_header.startswith('Bearer '):
+            _logger.warning("Token não fornecido. Authorization header: %r", auth_header[:50] if auth_header else '(vazio)')
+            return jsonify({'error': 'Token não fornecido.'}), 401
+
+        token = auth_header.split(' ', 1)[1]
+        try:
+            import warnings
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                payload = pyjwt.decode(
+                    token,
+                    current_app.config['JWT_SECRET_KEY'],
+                    algorithms=['HS256'],
+                )
+        except pyjwt.ExpiredSignatureError:
+            _logger.warning("Token expirado.")
+            return jsonify({'error': 'Token expirado.'}), 401
+        except pyjwt.InvalidTokenError as e:
+            _logger.warning("Token inválido: %s", e)
+            return jsonify({'error': 'Token inválido.'}), 401
+
+        if payload.get('type') != 'access':
+            _logger.warning("Tipo de token inválido: %s", payload.get('type'))
+            return jsonify({'error': 'Tipo de token inválido.'}), 401
+
+        from models.usuario import Usuario
+        usuario = Usuario.query.get(int(payload.get('sub')))
+        if not usuario:
+            _logger.warning("Usuário não encontrado: sub=%s", payload.get('sub'))
+            return jsonify({'error': 'Usuário não encontrado.'}), 401
+
+        g.usuario_atual = usuario
+        return f(*args, **kwargs)
+
+    return wrapper

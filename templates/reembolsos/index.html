@@ -47,17 +47,20 @@
                                 </button>
                             </td>
                             <td>
-                                <a href="{{ url_for('reembolso.editar', reembolso_id=r.id) }}" 
-                                   class="btn btn-sm btn-warning {{ 'disabled' if enviado else '' }}" 
-                                   {{ 'onclick="return false;"' if enviado else '' }}
-                                   title="{{ 'Reembolso enviado, não pode ser editado' if enviado else 'Editar' }}">
-                                    <i class="fas fa-edit"></i>
-                                </a>
-                                <a href="{{ url_for('reembolso.exportar_pdf', id=r.id) }}" class="btn btn-sm btn-danger" target="_blank"><i class="fas fa-file-pdf"></i></a>
-                                <form method="POST" action="{{ url_for('reembolso.apagar', reembolso_id=r.id) }}" style="display:inline;" onsubmit="return confirm('Tem certeza que deseja apagar este reembolso? Esta ação não pode ser desfeita.');">
-                                    <input type="hidden" name="csrf_token" value="{{ form.csrf_token._value() }}">
-                                    <button type="submit" class="btn btn-sm btn-outline-danger" title="Apagar"><i class="fas fa-trash"></i></button>
-                                </form>
+                                <div class="ft-acoes-dropdown dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" title="Ações"><i class="fas fa-ellipsis-v"></i></button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li><a class="dropdown-item {% if enviado %}disabled{% endif %}" href="{{ url_for('reembolso.editar', reembolso_id=r.id) }}" {% if enviado %}aria-disabled="true"{% endif %}><i class="fas fa-edit text-warning"></i> Editar{% if enviado %} (enviado){% endif %}</a></li>
+                                        <li><a class="dropdown-item" href="{{ url_for('reembolso.exportar_pdf', id=r.id) }}" target="_blank"><i class="fas fa-file-pdf text-danger"></i> Exportar PDF</a></li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <form method="POST" action="{{ url_for('reembolso.apagar', reembolso_id=r.id) }}" class="d-inline" onsubmit="return confirm('Tem certeza que deseja apagar este reembolso?');">
+                                                <input type="hidden" name="csrf_token" value="{{ form.csrf_token._value() }}">
+                                                <button type="submit" class="dropdown-item text-danger"><i class="fas fa-trash text-danger"></i> Apagar</button>
+                                            </form>
+                                        </li>
+                                    </ul>
+                                </div>
                             </td>
                         </tr>
                         {% else %}

@@ -478,3 +478,67 @@ main {
     border: 1px solid var(--bs-border-color, #dee2e6);
     border-radius: 0.375rem;
 }
+
+/* ============================================================
+   ft-table — Padrão centralizado de tabelas e menus de ações
+   ============================================================ */
+
+/* Dropdown de ações (.ft-acoes-dropdown) */
+.ft-acoes-dropdown .dropdown-toggle::after { display: none; }
+.ft-acoes-dropdown .dropdown-menu { min-width: 180px; }
+.ft-acoes-dropdown .dropdown-item { padding: .5rem .75rem; }
+.ft-acoes-dropdown .dropdown-item i { width: 1.25em; text-align: center; }
+
+@media (max-width: 767.98px) {
+    .ft-acoes-dropdown .btn { min-height: 38px; min-width: 38px; }
+    .ft-datatable-wrapper .dataTables_length,
+    .ft-datatable-wrapper .dataTables_filter { text-align: center !important; }
+    .ft-datatable-wrapper .dataTables_filter input { width: 100%; max-width: 100%; }
+    .ft-datatable-wrapper td,
+    .ft-datatable-wrapper th { padding: .4rem .5rem; font-size: .875rem; }
+}
+
+/* Barra de agrupamento de tabela (.ft-group-bar) */
+.ft-group-bar {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: .25rem .75rem;
+    padding: .5rem 0;
+}
+
+/* Linha de grupo DataTables RowGroup */
+table.dataTable tr.dtrg-group td {
+    font-weight: 600;
+    font-size: .9rem;
+    background-color: #e9ecef;
+}
+
+[data-bs-theme="dark"] table.dataTable tr.dtrg-group td {
+    background-color: #495057;
+}
+
+/* Controle do dtr-inline centralizado verticalmente */
+table.dataTable.dtr-inline.collapsed > tbody > tr > td.dtr-control::before,
+table.dataTable.dtr-inline.collapsed > tbody > tr > th.dtr-control::before {
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+/* Miniaturas de imagem em tabelas */
+.ft-thumb {
+    width: 44px;
+    height: 44px;
+    object-fit: cover;
+    cursor: zoom-in;
+}
+
+/* Cabeçalho de página padrão */
+.ft-page-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: .5rem;
+    margin-bottom: 1.25rem;
+}
