@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(find /c/Users/lrone/code/sfortanks/templates -maxdepth 2 -name \"index.html\" -exec wc -l {} \\\\;)",
-      "Bash(xargs ls:*)"
+      "Bash(xargs ls:*)",
+      "Bash(plink -pw '8225Le@28' sfortanks@192.168.8.10 \"ls /home/sfortanks/sfortanks/.venv/bin/ 2>/dev/null || ls /home/sfortanks/.venv/bin/ 2>/dev/null || which python3\")"
     ]
   }
 }

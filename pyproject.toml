@@ -48,6 +48,7 @@ dependencies = [
     "jupyter-client==8.8.0",
     "jupyter-core==5.9.1",
     "jupyterlab-pygments==0.3.0",
+    "jwt>=1.4.0",
     "lxml>=6.0.2",
     "markupsafe==3.0.3",
     "matplotlib-inline==0.2.1",
@@ -101,3 +102,13 @@ dependencies = [
     "xmltodict>=1.0.4",
     "yarg==0.1.9",
 ]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+addopts = "-q"
