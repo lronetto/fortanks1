@@ -1,1 +1,0 @@
-from controllers.cadastro_operacional.produto_composto_controller import *

@@ -1,9 +1,6 @@
 from datetime import datetime
 from flask import Blueprint, request, render_template, redirect, url_for, jsonify, flash, Response, send_file, current_app
-from io import BytesIO
 from sqlalchemy.orm import defer
-from werkzeug.exceptions import abort
-from werkzeug.utils import secure_filename
 from models.estoque import Estoque,EstoqueMovimentacoes
 from flask_login import login_required, current_user
 from models.produto_composto import ProdutoComposto, ProdutoCompostoItem
@@ -13,109 +10,29 @@ from models.material import Materiais
 from models.database import db
 import logging
 import base64
-import re
 import json
-from PIL import Image
-import io
 import os
-import tempfile
-import pandas as pd
 from sqlalchemy import or_, func, and_
 from sqlalchemy.orm import joinedload
 from decimal import Decimal
 from collections import defaultdict
 from utils.material_imagem_upload import parse_dados_json
+from utils.datatable_helper import DataTableParams
+
+from controllers.cadastro_operacional.services.produto_composto_componentes_service import (
+    expandir_componentes_produto_composto,
+)
+from controllers.cadastro_operacional.services.produto_composto_excel_service import (
+    exportar_produtos_compostos_para_excel,
+    importar_produtos_compostos_de_excel,
+    salvar_upload_excel_temporario,
+)
+from controllers.cadastro_operacional.services.produto_composto_imagem_service import comprimir_imagem_base64
 
 logger = logging.getLogger(__name__)
 
 produto_composto_bp = Blueprint('produto_composto', __name__, url_prefix='/produto-composto')
 
-
-def _resolver_estoque_id_para_componente(estoque_id_raw):
-    """
-    Resolve o identificador vindo do Select2:
-    - "123" / 123  -> estoque_id (int) existente
-    - "material:45" -> cria/busca Estoque(tipo_item='material') e retorna estoque_id (int)
-    """
-    if estoque_id_raw is None:
-        raise ValueError("estoque_id não informado")
-
-    # Pode vir como string (ex: "material:123") ou número
-    estoque_id_txt = str(estoque_id_raw).strip()
-    if estoque_id_txt.startswith("material:"):
-        material_id_txt = estoque_id_txt.split("material:", 1)[1].strip()
-        if not material_id_txt.isdigit():
-            raise ValueError("material_id inválido no estoque_id")
-        material_id = int(material_id_txt)
-
-        material = Materiais.query.get_or_404(material_id)
-        estoque = Estoque.query.filter_by(material_id=material.id, tipo_item='material').first()
-        if not estoque:
-            estoque = Estoque(
-                material_id=material.id,
-                tipo_item='material',
-                quantidade=0,
-                localizacao='Estoque Matriz',
-                usuario_id=getattr(current_user, "id", None),
-            )
-            db.session.add(estoque)
-            db.session.flush()
-        return estoque.id
-
-    # fallback: id numérico de Estoque
-    if not estoque_id_txt.isdigit():
-        raise ValueError("estoque_id inválido")
-    return int(estoque_id_txt)
-
-def comprimir_imagem_base64(imagem_base64, max_size=(400, 300), quality=70):
-    """
-    Comprime uma imagem em Base64, reduzindo seu tamanho de forma mais agressiva
-    """
-    try:
-        # Verificar se a string contém o formato data:image/...
-        if not imagem_base64 or not imagem_base64.startswith('data:image/'):
-            logger.error("Formato de imagem inválido")
-            return imagem_base64, "image/jpeg"
-        
-        # Decodificar Base64 para bytes
-        header, encoded = imagem_base64.split(',', 1)
-        mime_type = header.split(';')[0].split(':')[1]
-        
-        logger.info(f"Tipo MIME original: {mime_type}")
-        
-        # Decodificar para imagem
-        dados_imagem = base64.b64decode(encoded)
-        img = Image.open(io.BytesIO(dados_imagem))
-        
-        logger.info(f"Dimensões originais: {img.size}")
-        logger.info(f"Modo da imagem: {img.mode}")
-        
-        # Converter para RGB se necessário (PNG com transparência)
-        if img.mode in ('RGBA', 'LA', 'P'):
-            img = img.convert('RGB')
-            logger.info("Imagem convertida para RGB")
-        
-        # Redimensionar se necessário (tamanho menor)
-        img.thumbnail(max_size, Image.Resampling.LANCZOS)
-        logger.info(f"Dimensões após redimensionamento: {img.size}")
-        
-        # Comprimir e converter para Base64 (qualidade menor)
-        buffer = io.BytesIO()
-        img.save(buffer, format='JPEG', quality=quality, optimize=True)
-        buffer.seek(0)
-        
-        # Converter de volta para Base64
-        dados_comprimidos = buffer.getvalue()
-        base64_comprimido = base64.b64encode(dados_comprimidos).decode('utf-8')
-        
-        logger.info(f"Tamanho dos dados comprimidos: {len(dados_comprimidos)} bytes")
-        
-        return f"data:image/jpeg;base64,{base64_comprimido}", "image/jpeg"
-        
-    except Exception as e:
-        logger.error(f"Erro ao comprimir imagem: {str(e)}")
-        # Se falhar, retorna a imagem original e um mime_type padrão
-        return imagem_base64, "image/jpeg"
 
 @produto_composto_bp.route('/get_componentes/<int:id>/<int:quantidade>')
 @login_required
@@ -388,14 +305,9 @@ def _map_estoque_por_produto_composto(ids):
 @login_required
 def api_datatables():
     """JSON para DataTables (server-side): listagem de produtos compostos."""
+    dt = DataTableParams()
     try:
-        draw = int(request.args.get('draw', 1))
-        start = int(request.args.get('start', 0))
-        length = int(request.args.get('length', 25))
-        search_value = (request.args.get('search[value]', '') or '').strip()
-        order_column_index = int(request.args.get('order[0][column]', 3))
-        order_dir = request.args.get('order[0][dir]', 'asc')
-
+        search_value = dt.search
         query = ProdutoComposto.query
 
         if search_value:
@@ -418,22 +330,22 @@ def api_datatables():
             1: ProdutoComposto.id,
             3: ProdutoComposto.nome,
         }
-        if order_column_index in column_map:
-            col = column_map[order_column_index]
-            if order_dir == 'desc':
+        if dt.order_col in column_map:
+            col = column_map[dt.order_col]
+            if dt.order_dir == 'desc':
                 query = query.order_by(col.desc())
             else:
                 query = query.order_by(col.asc())
         else:
             query = query.order_by(ProdutoComposto.nome.asc())
 
-        if length == -1:
-            remaining = max(0, records_filtered - start)
+        if dt.length == -1:
+            remaining = max(0, records_filtered - dt.start)
             cap = min(remaining, 5000)
-            items = query.offset(start).limit(cap).all() if cap else []
+            items = query.offset(dt.start).limit(cap).all() if cap else []
         else:
-            lim = max(1, min(length, 500))
-            items = query.offset(start).limit(lim).all()
+            lim = max(1, min(dt.length, 500))
+            items = query.offset(dt.start).limit(lim).all()
 
         estoque_por = _map_estoque_por_produto_composto([p.id for p in items])
 
@@ -445,16 +357,11 @@ def api_datatables():
                 'estoque': estoque_por.get(p.id, 0.0),
             })
 
-        return jsonify({
-            'draw': draw,
-            'recordsTotal': total_records,
-            'recordsFiltered': records_filtered,
-            'data': data,
-        }), 200
+        return dt.resposta(data, total_records, records_filtered)
     except Exception as e:
         logger.error(f'Erro api_datatables produto composto: {e}', exc_info=True)
         return jsonify({
-            'draw': int(request.args.get('draw', 1)),
+            'draw': dt.draw,
             'recordsTotal': 0,
             'recordsFiltered': 0,
             'data': [],
@@ -949,132 +856,6 @@ def api_itens_estoque():
     results.sort(key=lambda x: x['text_sort'])
     return jsonify({'results': results})
 
-def _sanitizar_nome_aba(nome):
-    """
-    Sanitiza o nome para ser usado como nome de aba no Excel.
-    Remove caracteres inválidos e limita o tamanho.
-    """
-    # Remover apóstrofos no início e fim
-    nome = nome.strip().strip("'").strip('"')
-    
-    # Remover caracteres inválidos para nomes de abas do Excel: [ ] * ? : / \
-    nome = re.sub(r'[\[\]:*?/\\]', '', nome)
-    
-    # Limitar a 31 caracteres (limite do Excel)
-    if len(nome) > 31:
-        nome = nome[:28] + '...'
-    
-    # Se ficou vazio após sanitização, usar nome padrão
-    if not nome or nome.strip() == '':
-        nome = 'Produto'
-    
-    return nome
-
-def _expandir_componentes_produto_composto(produto_id, quantidade_base=1.0, caminho_atual=None, data_movimento=None):
-    """
-    Função recursiva para expandir todos os componentes de um produto composto
-    até chegar apenas em materiais, considerando produtos compostos aninhados.
-    Usa caminho_atual para evitar loops infinitos (mesmo produto na mesma cadeia).
-    Considera datas de início e término dos componentes se data_movimento for fornecida.
-    """
-    if caminho_atual is None:
-        caminho_atual = []
-    
-    # Evitar loops infinitos - se o produto já está no caminho atual, há um ciclo
-    if produto_id in caminho_atual:
-        logger.warning(f"Loop detectado no produto composto {produto_id}. Caminho: {caminho_atual}")
-        return []
-    
-    # Adicionar ao caminho atual
-    novo_caminho = caminho_atual + [produto_id]
-    
-    produto = ProdutoComposto.query.get(produto_id)
-    if not produto:
-        return []
-    
-    # Normalizar data_movimento para date se necessário
-    from datetime import date as date_type
-    if data_movimento is None:
-        data_movimento = None
-    elif isinstance(data_movimento, datetime):
-        data_movimento = data_movimento.date()
-    elif isinstance(data_movimento, str):
-        try:
-            data_movimento = datetime.strptime(data_movimento, '%Y-%m-%d').date()
-        except (ValueError, TypeError):
-            data_movimento = None
-    elif not isinstance(data_movimento, date_type):
-        data_movimento = None
-    
-    componentes_materiais = []
-    
-    for componente in produto.componentes:
-        if not componente.estoque:
-            continue
-        
-        # Verificar datas de início e término do componente
-        if componente.dados_adicionais and data_movimento:
-            try:
-                dados_adicionais = json.loads(componente.dados_adicionais)
-                datainicio = dados_adicionais.get('data_inicio')
-                if datainicio:
-                    # Tentar parse da data
-                    if isinstance(datainicio, str):
-                        datainicio = datetime.strptime(datainicio, '%Y-%m-%d').date()
-                    elif isinstance(datainicio, datetime):
-                        datainicio = datainicio.date()
-                    elif isinstance(datainicio, date_type):
-                        pass  # Já é date
-                    else:
-                        datainicio = None
-                    
-                    # Comparar apenas se datainicio foi parseado com sucesso
-                    if datainicio and data_movimento and datainicio > data_movimento:
-                        continue  # Componente ainda não está ativo nesta data
-                
-                datatermino = dados_adicionais.get('data_termino')
-                if datatermino:
-                    # Tentar parse da data
-                    if isinstance(datatermino, str):
-                        datatermino = datetime.strptime(datatermino, '%Y-%m-%d').date()
-                    elif isinstance(datatermino, datetime):
-                        datatermino = datatermino.date()
-                    elif isinstance(datatermino, date_type):
-                        pass  # Já é date
-                    else:
-                        datatermino = None
-                    
-                    # Comparar apenas se datatermino foi parseado com sucesso
-                    if datatermino and data_movimento and datatermino <= data_movimento:
-                        continue  # Componente já não está mais ativo nesta data
-            except (ValueError, TypeError) as e:
-                # Se houver erro no parse, logar e continuar processando o componente
-                logger.warning(f"Erro ao processar datas do componente {componente.id}: {str(e)}")
-                pass  # Continuar processando o componente mesmo com erro nas datas
-            
-        quantidade_componente = float(componente.quantidade) * quantidade_base
-        
-        if componente.estoque.tipo_item == 'material' and componente.estoque.material:
-            # É um material direto
-            componentes_materiais.append({
-                'material_id': componente.estoque.material.id,
-                'material_nome': componente.estoque.material.nome,
-                'quantidade': quantidade_componente,
-                'unidade': componente.estoque.material.unidade_obj.nome if (componente.estoque.material.unidade_obj and hasattr(componente.estoque.material.unidade_obj, 'nome')) else ''
-            })
-        elif componente.estoque.tipo_item == 'produto_composto' and componente.estoque.ProdComp_id:
-            # É um produto composto aninhado - processar recursivamente
-            produto_composto_id = componente.estoque.ProdComp_id
-            componentes_aninhados = _expandir_componentes_produto_composto(
-                produto_composto_id, 
-                quantidade_componente,
-                novo_caminho,  # Passar o caminho atual para detectar loops
-                data_movimento  # Passar a data para os componentes aninhados
-            )
-            componentes_materiais.extend(componentes_aninhados)
-    
-    return componentes_materiais
-
 @produto_composto_bp.route('/api/historico-custo/<int:id>')
 @login_required
 def api_historico_custo(id):
@@ -1089,7 +870,7 @@ def api_historico_custo(id):
         data_fim = request.args.get('data_fim', type=str)
         
         # Expandir todos os componentes recursivamente (incluindo produtos compostos aninhados)
-        componentes_materiais_raw = _expandir_componentes_produto_composto(produto.id)
+        componentes_materiais_raw = expandir_componentes_produto_composto(produto.id)
         
         # Agrupar materiais por material_id e somar quantidades
         componentes_agrupados = {}
@@ -1242,7 +1023,7 @@ def api_historico_custo(id):
                 continue
             
             # Expandir componentes considerando a data atual (filtra por data_inicio e data_termino)
-            componentes_materiais_data = _expandir_componentes_produto_composto(
+            componentes_materiais_data = expandir_componentes_produto_composto(
                 produto.id, 
                 quantidade_base=1.0, 
                 caminho_atual=None, 
@@ -1375,130 +1156,28 @@ def exportar_excel():
     Cada produto terá sua própria aba com seus materiais/componentes
     """
     try:
-        produto_ids = request.form.getlist('produto_ids')
-        
+        produto_ids = request.form.getlist("produto_ids")
         if not produto_ids:
-            flash('Nenhum produto selecionado para exportar.', 'warning')
-            return redirect(url_for('produto_composto.index'))
-        
-        # Converter IDs para inteiros
-        produto_ids = [int(id) for id in produto_ids if id.isdigit()]
-        
+            flash("Nenhum produto selecionado para exportar.", "warning")
+            return redirect(url_for("produto_composto.index"))
+
+        produto_ids = [int(pid) for pid in produto_ids if str(pid).isdigit()]
         if not produto_ids:
-            flash('IDs de produtos inválidos.', 'danger')
-            return redirect(url_for('produto_composto.index'))
-        
-        # Buscar produtos
+            flash("IDs de produtos inválidos.", "danger")
+            return redirect(url_for("produto_composto.index"))
+
         produtos = ProdutoComposto.query.filter(ProdutoComposto.id.in_(produto_ids)).all()
-        
         if not produtos:
-            flash('Nenhum produto encontrado.', 'warning')
-            return redirect(url_for('produto_composto.index'))
-        
-        # Criar arquivo Excel em memória
-        output = BytesIO()
-        
-        with pd.ExcelWriter(output, engine='xlsxwriter') as writer:
-            for produto in produtos:
-                # Preparar dados dos componentes
-                dados_componentes = []
-                for componente in produto.componentes:
-                    estoque = componente.estoque
-                    if not estoque:
-                        continue
+            flash("Nenhum produto encontrado.", "warning")
+            return redirect(url_for("produto_composto.index"))
 
-                    qtd_componente = float(componente.quantidade or 0)
-                    if estoque.material_id and estoque.material:
-                        material = estoque.material
-                        extras = parse_dados_json(material.dados_adicionais)
-                        dados_componentes.append({
-                            'ID Sfortanks': estoque.id,
-                            'Tipo': 'Material',
-                            'Nome': material.nome,
-                            'Código Alterdata': extras.get("codigo_alterdata") or '',
-                            'Quantidade': qtd_componente,
-                            'Unidade': material.unidade_obj.nome if (material.unidade_obj and hasattr(material.unidade_obj, 'nome')) else '',
-                        })
-                        continue
-
-                    if estoque.tipo_item == 'produto_composto' and estoque.ProdComp_id and estoque.produto_composto:
-                        # Linha do componente (produto composto) + expansão até materiais (alinhados abaixo)
-                        dados_componentes.append({
-                            'ID Sfortanks': estoque.id,
-                            'Tipo': 'Produto Composto',
-                            'Nome': estoque.produto_composto.nome,
-                            'Código Alterdata': '',
-                            'Quantidade': qtd_componente,
-                            'Unidade': '',
-                        })
-
-                        materiais_expandidos = _expandir_componentes_produto_composto(
-                            estoque.ProdComp_id,
-                            quantidade_base=qtd_componente,
-                            caminho_atual=[produto.id],
-                            data_movimento=None,
-                        )
-                        for mat in materiais_expandidos:
-                            material_obj = Materiais.query.get(mat['material_id'])
-                            extras = parse_dados_json(material_obj.dados_adicionais) if material_obj else {}
-                            dados_componentes.append({
-                                'ID Sfortanks': f"material:{mat['material_id']}",
-                                'Tipo': '↳ Material',
-                                'Nome': f"    {mat['material_nome']}",
-                                'Código Alterdata': (extras.get("codigo_alterdata") if material_obj else ''),
-                                'Quantidade': float(mat['quantidade'] or 0),
-                                'Unidade': mat.get('unidade') or '',
-                            })
-                        continue
-
-                    # Fallback
-                    dados_componentes.append({
-                        'ID Sfortanks': estoque.id,
-                        'Tipo': 'Desconhecido',
-                        'Nome': 'Desconhecido',
-                        'Código Alterdata': '',
-                        'Quantidade': qtd_componente,
-                        'Unidade': '',
-                    })
-                
-                # Ordenar componentes pelo nome do material/produto
-                dados_componentes.sort(key=lambda x: (x.get('Nome') or '').lower())
-                
-                # Criar DataFrame
-                if dados_componentes:
-                    df = pd.DataFrame(dados_componentes)
-                else:
-                    # Se não houver componentes, criar DataFrame vazio com colunas
-                    df = pd.DataFrame(columns=['ID Sfortanks', 'Tipo', 'Nome', 'Código Alterdata', 'Quantidade', 'Unidade'])
-                
-                # Sanitizar nome da aba (remover caracteres inválidos)
-                nome_aba = _sanitizar_nome_aba(produto.nome)
-                
-                # Escrever na aba
-                df.to_excel(writer, sheet_name=nome_aba, index=False)
-                
-                # Ajustar largura das colunas
-                worksheet = writer.sheets[nome_aba]
-                worksheet.set_column('A:A', 14)  # ID Sfortanks
-                worksheet.set_column('B:B', 18)  # Tipo
-                worksheet.set_column('C:C', 44)  # Nome (com indentação)
-                worksheet.set_column('D:D', 18)  # Código Alterdata
-                worksheet.set_column('E:E', 12)  # Quantidade
-                worksheet.set_column('F:F', 10)  # Unidade
-        
-        output.seek(0)
-        
-        # Nome do arquivo com data
-        data_export = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'produtos_compostos_{data_export}.xlsx'
-        
+        output, filename = exportar_produtos_compostos_para_excel(produtos)
         return send_file(
             output,
             download_name=filename,
             as_attachment=True,
-            mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         )
-        
     except Exception as e:
         logger.error(f"Erro ao exportar produtos compostos: {str(e)}", exc_info=True)
         flash(f'Erro ao exportar: {str(e)}', 'danger')
@@ -1512,203 +1191,27 @@ def importar_excel():
     Cada aba do Excel representa um produto composto
     """
     try:
-        if 'arquivo_excel' not in request.files:
-            return jsonify({'success': False, 'message': 'Nenhum arquivo enviado'}), 400
-        
-        arquivo = request.files['arquivo_excel']
-        
-        if arquivo.filename == '':
-            return jsonify({'success': False, 'message': 'Nenhum arquivo selecionado'}), 400
-        
-        if not arquivo.filename.endswith(('.xlsx', '.xls')):
-            return jsonify({'success': False, 'message': 'Apenas arquivos Excel (.xlsx ou .xls) são permitidos'}), 400
-        
-        sobrescrever = request.form.get('sobrescrever') == '1'
-        
-        # Salvar arquivo temporariamente
-        temp_dir = tempfile.gettempdir()
-        filename = secure_filename(arquivo.filename)
-        temp_path = os.path.join(temp_dir, f'import_produtos_{datetime.now().strftime("%Y%m%d_%H%M%S")}_{filename}')
-        arquivo.save(temp_path)
-        
+        if "arquivo_excel" not in request.files:
+            return jsonify({"success": False, "message": "Nenhum arquivo enviado"}), 400
+
+        arquivo = request.files["arquivo_excel"]
+        if not getattr(arquivo, "filename", ""):
+            return jsonify({"success": False, "message": "Nenhum arquivo selecionado"}), 400
+
+        if not arquivo.filename.endswith((".xlsx", ".xls")):
+            return jsonify({"success": False, "message": "Apenas arquivos Excel (.xlsx ou .xls) são permitidos"}), 400
+
+        sobrescrever = request.form.get("sobrescrever") == "1"
+        temp_path = salvar_upload_excel_temporario(arquivo)
         try:
-            # Ler todas as abas do Excel
-            excel_file = pd.ExcelFile(temp_path)
-            
-            contador_criados = 0
-            contador_atualizados = 0
-            contador_erros = 0
-            erros_detalhes = []
-            
-            for nome_aba in excel_file.sheet_names:
-                try:
-                    # Ler dados da aba
-                    df = pd.read_excel(excel_file, sheet_name=nome_aba)
-                    
-                    # Verificar colunas necessárias
-                    colunas_necessarias = ['Nome', 'Quantidade']
-                    colunas_opcionais = ['ID Estoque', 'Material/Produto', 'Código', 'Unidade', 'Observação']
-                    
-                    # Tentar mapear colunas (case-insensitive)
-                    colunas_df = [col.lower() for col in df.columns]
-                    
-                    # Mapear colunas
-                    col_nome = None
-                    col_quantidade = None
-                    col_id_estoque = None
-                    col_material_produto = None
-                    
-                    for col in df.columns:
-                        col_lower = col.lower()
-                        if 'nome' in col_lower and not col_nome:
-                            col_nome = col
-                        elif 'quantidade' in col_lower and not col_quantidade:
-                            col_quantidade = col
-                        elif 'id' in col_lower and 'estoque' in col_lower and not col_id_estoque:
-                            col_id_estoque = col
-                        elif ('material' in col_lower or 'produto' in col_lower) and not col_material_produto:
-                            col_material_produto = col
-                    
-                    # Se não encontrou coluna de nome, usar o nome da aba
-                    nome_produto = nome_aba.strip()
-                    if col_nome and not df[col_nome].empty:
-                        # Pegar o primeiro nome não vazio
-                        nomes_validos = df[col_nome].dropna()
-                        if not nomes_validos.empty:
-                            nome_produto = str(nomes_validos.iloc[0]).strip()
-                    
-                    if not nome_produto:
-                        erros_detalhes.append(f"Aba '{nome_aba}': Nome do produto não encontrado")
-                        contador_erros += 1
-                        continue
-                    
-                    # Buscar ou criar produto
-                    produto = ProdutoComposto.query.filter_by(nome=nome_produto).first()
-                    
-                    if produto and sobrescrever:
-                        # Remover componentes existentes
-                        for componente in produto.componentes:
-                            db.session.delete(componente)
-                        db.session.flush()
-                    elif not produto:
-                        # Criar novo produto
-                        produto = ProdutoComposto(
-                            nome=nome_produto,
-                            status='Ativo'
-                        )
-                        db.session.add(produto)
-                        db.session.flush()
-                        
-                        # Criar estoque para o produto
-                        estoque_produto = Estoque(
-                            produto_composto=produto,
-                            quantidade=0,
-                            tipo_item='produto_composto',
-                            localizacao='Estoque Matriz',
-                        )
-                        db.session.add(estoque_produto)
-                        db.session.flush()
-                        contador_criados += 1
-                    else:
-                        contador_atualizados += 1
-                    
-                    # Processar componentes
-                    if col_quantidade:
-                        for index, row in df.iterrows():
-                            try:
-                                quantidade = float(row[col_quantidade]) if pd.notna(row[col_quantidade]) else None
-                                
-                                if quantidade is None or quantidade <= 0:
-                                    continue
-                                
-                                estoque_id = None
-                                
-                                # Tentar obter estoque_id
-                                if col_id_estoque and col_id_estoque in df.columns:
-                                    estoque_id_val = row[col_id_estoque]
-                                    if pd.notna(estoque_id_val):
-                                        try:
-                                            estoque_id = int(estoque_id_val)
-                                        except:
-                                            pass
-                                
-                                # Se não tem estoque_id, tentar buscar por nome
-                                if not estoque_id and col_material_produto and col_material_produto in df.columns:
-                                    nome_item = str(row[col_material_produto]).strip() if pd.notna(row[col_material_produto]) else None
-                                    
-                                    if nome_item:
-                                        # Buscar por material
-                                        material = Materiais.query.filter_by(nome=nome_item).first()
-                                        if material:
-                                            estoque = Estoque.query.filter_by(material_id=material.id, tipo_item='material').first()
-                                            if estoque:
-                                                estoque_id = estoque.id
-                                        
-                                        # Se não encontrou, buscar por produto composto
-                                        if not estoque_id:
-                                            produto_comp = ProdutoComposto.query.filter_by(nome=nome_item).first()
-                                            if produto_comp:
-                                                estoque = Estoque.query.filter_by(ProdComp_id=produto_comp.id, tipo_item='produto_composto').first()
-                                                if estoque:
-                                                    estoque_id = estoque.id
-                                
-                                if not estoque_id:
-                                    erros_detalhes.append(f"Aba '{nome_aba}', linha {index+2}: Não foi possível identificar o estoque/material")
-                                    continue
-                                
-                                estoque = Estoque.query.get(estoque_id)
-                                if not estoque:
-                                    erros_detalhes.append(f"Aba '{nome_aba}', linha {index+2}: Estoque ID {estoque_id} não encontrado")
-                                    continue
-                                
-                                # Adicionar componente
-                                observacao = None
-                                if 'Observação' in df.columns or 'observacao' in df.columns:
-                                    col_obs = 'Observação' if 'Observação' in df.columns else 'observacao'
-                                    if pd.notna(row[col_obs]):
-                                        observacao = str(row[col_obs]).strip()
-                                
-                                produto.adicionar_item(estoque, quantidade)
-                                
-                                if observacao:
-                                    # Atualizar observação do componente
-                                    componente = ProdutoCompostoItem.query.filter_by(
-                                        produto_id=produto.id,
-                                        estoque_id=estoque_id
-                                    ).first()
-                                    if componente:
-                                        componente.observacao = observacao
-                                
-                            except Exception as e:
-                                erros_detalhes.append(f"Aba '{nome_aba}', linha {index+2}: {str(e)}")
-                                contador_erros += 1
-                                continue
-                    
-                    db.session.commit()
-                    
-                except Exception as e:
-                    logger.error(f"Erro ao processar aba '{nome_aba}': {str(e)}", exc_info=True)
-                    erros_detalhes.append(f"Aba '{nome_aba}': {str(e)}")
-                    contador_erros += 1
-                    db.session.rollback()
-                    continue
-            
-            return jsonify({
-                'success': True,
-                'criados': contador_criados,
-                'atualizados': contador_atualizados,
-                'erros': contador_erros,
-                'erros_detalhes': erros_detalhes[:10]  # Limitar a 10 erros
-            })
-            
+            result = importar_produtos_compostos_de_excel(temp_path, sobrescrever=sobrescrever)
+            return jsonify(result)
         finally:
-            # Remover arquivo temporário
             if os.path.exists(temp_path):
                 try:
                     os.remove(temp_path)
-                except:
+                except Exception:
                     pass
-        
     except Exception as e:
         logger.error(f"Erro ao importar produtos compostos: {str(e)}", exc_info=True)
         db.session.rollback()

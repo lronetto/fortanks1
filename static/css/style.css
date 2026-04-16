@@ -31,15 +31,16 @@
     --radius-lg:               0.75rem;
 
     /* Sidebar — Design System Industrial */
-    --sb-bg:           #0d1b2a;
+    --sb-bg:           #1c227a;
     --sb-bg-hover:     #162638;
     --sb-bg-active:    rgba(37, 99, 235, 0.15);
     --sb-accent:       #3b82f6;
-    --sb-accent-dim:   rgba(59, 130, 246, 0.35);
-    --sb-text:         #8aafc8;
+    --sb-accent-dim:   rgba(103, 112, 242, 0.35);
+    --sb-text:         #fdfdfd;
     --sb-text-bright:  #dbeafe;
     --sb-text-muted:   #3d5a70;
     --sb-border:       rgba(255, 255, 255, 0.06);
+    --sb-header-bg:    rgba(0, 0, 0, 0.22);
     --sb-easing:       cubic-bezier(0.4, 0, 0.2, 1);
 
     /* Semântica de status */
@@ -94,6 +95,18 @@
     --badge-muted-bg:  #e2e8f0;
     --badge-muted-text:#475569;
 
+    /* Sidebar no tema claro */
+    --sb-bg:            --bg-page;
+    --sb-bg-hover:     #162638;
+    --sb-bg-active:    rgba(37, 99, 235, 0.15);
+    --sb-accent:       #3b82f6;
+    --sb-accent-dim:   rgba(239, 239, 241, 0.35);
+    --sb-text:         #06237a;
+    --sb-text-bright:  #dbeafe;
+    --sb-text-muted:   #033564;
+    --sb-border:       rgba(255, 255, 255, 0.08);
+    --sb-header-bg:    --sb-bg;
+
     /* Bootstrap overrides */
     --bs-body-bg:      #f0f4f8;
     --bs-body-color:   #1e293b;
@@ -140,6 +153,18 @@
 
     --badge-muted-bg:  #263347;
     --badge-muted-text:#94a3b8;
+
+    /* Sidebar no tema escuro */
+    --sb-bg:           #0b1220;
+    --sb-bg-hover:     #111d33;
+    --sb-bg-active:    rgba(59, 130, 246, 0.22);
+    --sb-accent:       #60a5fa;
+    --sb-accent-dim:   rgba(96, 165, 250, 0.35);
+    --sb-text:         #dbeafe;
+    --sb-text-bright:  #eff6ff;
+    --sb-text-muted:   #8aa0bd;
+    --sb-border:       rgba(148, 163, 184, 0.2);
+    --sb-header-bg:    --sb-bg;
 
     /* Bootstrap overrides */
     --bs-body-bg:      #0f172a;
@@ -213,7 +238,7 @@ body {
     border-bottom: 1px solid var(--sb-border);
     flex-shrink: 0;
     gap: 0.5rem;
-    background: rgba(0, 0, 0, 0.22);
+    background: var(--sb-header-bg);
 }
 
 .sidebar .sidebar-header .logo {
@@ -224,15 +249,14 @@ body {
 }
 
 .sidebar .sidebar-header .logo img {
-    height: 32px;
+    height: 45px;
     width: auto;
+    align-items: center;
     object-fit: contain;
     flex-shrink: 0;
+    color: var(--sb-text);
     transition: height var(--transition-speed) var(--sb-easing);
-}
-
-.sidebar.active .sidebar-header .logo img {
-    height: 26px;
+    filter: brightness(1.2) contrast(1.1);
 }
 
 #sidebarClose {

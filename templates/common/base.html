@@ -22,25 +22,7 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
-    <!-- Sobrescreve tokens Bootstrap com a paleta Fortanks (antes do style.css) -->
-    <style>
-        :root {
-            --bs-primary:         #2563eb;
-            --bs-primary-rgb:     37, 99, 235;
-            --bs-success:         #059669;
-            --bs-success-rgb:     5, 150, 105;
-            --bs-danger:          #dc2626;
-            --bs-danger-rgb:      220, 38, 38;
-            --bs-warning:         #d97706;
-            --bs-warning-rgb:     217, 119, 6;
-            --bs-info:            #0891b2;
-            --bs-info-rgb:        8, 145, 178;
-            --bs-secondary:       #64748b;
-            --bs-secondary-rgb:   100, 116, 139;
-            --bs-link-color:      #2563eb;
-            --bs-link-hover-color:#1d4ed8;
-        }
-    </style>
+   
     {% block extra_css %}{% endblock %}
 
    

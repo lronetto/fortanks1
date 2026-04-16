@@ -1,6 +1,6 @@
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from flask import flash
 from sqlalchemy import Integer, and_, case, exists, func, not_, or_, select
@@ -397,14 +397,14 @@ def api_get_dados_notas_fiscais(request):
 
     if data_emissao_inicio:
         try:
-            data_inicio = datetime.strptime(data_emissao_inicio, "%Y-%m-%d")
+            data_inicio = datetime.strptime(data_emissao_inicio[:10], "%Y-%m-%d")
             query = query.filter(NotaFiscal.data_emissao >= data_inicio)
         except Exception:
             flash("Data de início inválida.", "warning")
     if data_emissao_fim:
         try:
-            data_fim = datetime.strptime(data_emissao_fim, "%Y-%m-%d")
-            query = query.filter(NotaFiscal.data_emissao <= data_fim)
+            data_fim_exclusiva = datetime.strptime(data_emissao_fim[:10], "%Y-%m-%d") + timedelta(days=1)
+            query = query.filter(NotaFiscal.data_emissao < data_fim_exclusiva)
         except Exception:
             flash("Data final inválida.", "warning")
 

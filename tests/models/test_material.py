@@ -91,15 +91,17 @@ def test_imagem_upload_id_retorna_int_quando_valido():
 
 def test_repr_exibe_codigo_ou_sem_codigo():
     material_sem_codigo = Materiais()
+    material_sem_codigo.id = 1
     material_sem_codigo.nome = "Cimento"
     material_sem_codigo.codigo = None
 
     material_com_codigo = Materiais()
+    material_com_codigo.id = 2
     material_com_codigo.nome = "Brita"
     material_com_codigo.codigo = "MAT-01"
 
-    assert repr(material_sem_codigo) == "<Material Sem código - Cimento>"
-    assert repr(material_com_codigo) == "<Material MAT-01 - Brita>"
+    assert repr(material_sem_codigo) == "<Material 1 - Cimento>"
+    assert repr(material_com_codigo) == "<Material 2 - Brita>"
 
 
 def test_get_unidade_nome_prioriza_unidade_obj():

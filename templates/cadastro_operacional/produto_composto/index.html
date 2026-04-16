@@ -39,9 +39,11 @@
         </div>
     </div>
 
-    <div class="card shadow mb-4">
+    <div class="card shadow mb-4" data-ft-colvis="tabela-produtos-compostos">
         <div class="card-header py-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
-            <h6 class="m-0 fw-bold">Lista de Produtos</h6>
+            <span class="card-title-text">
+                <i class="fas fa-list me-2"></i>Lista de Produtos
+            </span>
             <div class="d-flex align-items-center gap-2">
                 <div class="input-group input-group-sm">
                     <input type="text" class="form-control" id="filtro-nome" placeholder="Filtrar por nome ou ID...">
@@ -60,7 +62,7 @@
                     </small>
                 </div>
             </div>
-            <div class="table-responsive">
+            <div class="ft-datatable-wrapper">
                 <table class="table table-bordered" id="tabela-produtos-compostos" width="100%" cellspacing="0">
                     <thead>
                         <tr>
@@ -215,19 +217,44 @@
                         }
                         var nome = escAttr(row.nome);
                         var est = row.estoque != null ? row.estoque : 0;
-                        return (
-                            '<button class="btn btn-success btn-circle btn-sm btn-produzir" data-id="' + row.id +
-                            '" data-nome="' + nome + '" data-estoque="' + est +
-                            '" title="Produzir"><i class="fas fa-industry"></i></button> ' +
-                            '<button class="btn btn-primary btn-circle btn-sm btn-historico-custo" data-id="' + row.id +
-                            '" data-nome="' + nome + '" title="Histórico de Custo"><i class="fas fa-chart-line"></i></button> ' +
-                            '<button class="btn btn-info btn-circle btn-sm btn-editar" data-id="' + row.id +
-                            '" data-nome="' + nome + '" title="Editar"><i class="fas fa-edit"></i></button> ' +
-                            '<button class="btn btn-warning btn-circle btn-sm btn-duplicar" data-id="' + row.id +
-                            '" data-nome="' + nome + '" title="Duplicar"><i class="fas fa-copy"></i></button> ' +
-                            '<button class="btn btn-danger btn-circle btn-sm btn-excluir" data-id="' + row.id +
-                            '" data-nome="' + nome + '" title="Excluir"><i class="fas fa-trash"></i></button>'
-                        );
+                        return FT.renderAcoesDropdown([
+                            {
+                                label: 'Produzir',
+                                icon: 'fa-industry',
+                                iconCor: 'success',
+                                classe: 'btn-produzir',
+                                attrs: 'data-id="' + row.id + '" data-nome="' + nome + '" data-estoque="' + est + '"'
+                            },
+                            {
+                                label: 'Histórico de Custo',
+                                icon: 'fa-chart-line',
+                                iconCor: 'info',
+                                classe: 'btn-historico-custo',
+                                attrs: 'data-id="' + row.id + '" data-nome="' + nome + '"'
+                            },
+                            {
+                                label: 'Editar',
+                                icon: 'fa-edit',
+                                iconCor: 'primary',
+                                classe: 'btn-editar',
+                                attrs: 'data-id="' + row.id + '" data-nome="' + nome + '"'
+                            },
+                            {
+                                label: 'Duplicar',
+                                icon: 'fa-copy',
+                                iconCor: 'warning',
+                                classe: 'btn-duplicar',
+                                attrs: 'data-id="' + row.id + '" data-nome="' + nome + '"'
+                            },
+                            { divider: true },
+                            {
+                                label: 'Excluir',
+                                icon: 'fa-trash',
+                                iconCor: 'danger',
+                                classe: 'btn-excluir text-danger',
+                                attrs: 'data-id="' + row.id + '" data-nome="' + nome + '"'
+                            }
+                        ]);
                     }
                 }
             ],
