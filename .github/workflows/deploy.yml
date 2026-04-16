@@ -23,4 +23,6 @@ jobs:
           script: |
             cd /home/sfortanks/sfortanks
             git pull origin main
-            sudo systemctl restart sfortanks.service 
+            uv sync
+            sudo systemctl restart sfortanks.service
+            sudo systemctl restart sfortanks-scheduler.service
