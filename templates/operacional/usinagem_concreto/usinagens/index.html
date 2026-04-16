@@ -2,46 +2,60 @@
 
 {% block title %}Usinagens de Concreto{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/operacional.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/notas_fiscais.css') }}">
+{% endblock %}
+
 {% block content %}
 <input type="hidden" id="csrf_token_global" value="{{ csrf_token() }}">
 <div class="container-fluid">
-    <div class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-4">
-        <h1 class="h3 mb-0 text-gray-800">Usinagens de Concreto</h1>
-        <div class="d-flex flex-wrap gap-2">
-        <button type="button" class="btn btn-warning" id="btnProducaoPendentes">
-            <i class="fas fa-cogs"></i> Produção de Pendentes
-        </button>
-        {% if current_user.is_admin %}
-        <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalDesfazerProducoesUsinagens" title="Remover data_producao em dados_adicionais das usinagens visíveis — apenas administrador">
-            <i class="fas fa-undo-alt"></i> <span class="d-none d-sm-inline">Desfazer produções</span><span class="d-inline d-sm-none">Desfazer</span>
-        </button>
-        {% endif %}
-        <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportarUsinagens">
-            <i class="fas fa-file-excel"></i> Importar Usinagens
-        </button>
-        <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovaUsinagem">
-            <i class="fas fa-plus"></i> Nova Usinagem
-        </button>
+    <!-- Cabeçalho -->
+    <div class="nf-page-header d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div>
+            <h1 class="nf-page-title">
+                <i class="fas fa-industry me-2" style="font-size:1.3rem; color: var(--nf-amber);"></i>Usinagens de Concreto
+            </h1>
+            <p class="nf-page-subtitle">Gerencie as usinagens, rompimentos e produção de concreto.</p>
+        </div>
+        <div class="nf-btn-bar">
+            <button type="button" class="btn btn-warning" id="btnProducaoPendentes">
+                <i class="fas fa-cogs me-1"></i> Produção de Pendentes
+            </button>
+            {% if current_user.is_admin %}
+            <button type="button" class="btn btn-outline-danger" data-bs-toggle="modal" data-bs-target="#modalDesfazerProducoesUsinagens" title="Remover data_producao em dados_adicionais das usinagens visíveis — apenas administrador">
+                <i class="fas fa-undo-alt me-1"></i> Desfazer produções
+            </button>
+            {% endif %}
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportarUsinagens">
+                <i class="fas fa-file-excel me-1"></i> Importar Usinagens
+            </button>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovaUsinagem">
+                <i class="fas fa-plus me-1"></i> Nova Usinagem
+            </button>
         </div>
     </div>
 
-    <div class="card shadow mb-4">
-        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-            <h6 class="m-0 fw-bold">Usinagens Cadastradas</h6>
-            <div class="ft-col-toggle-placeholder"></div>
+    <!-- Filtros -->
+    <div class="card nf-filter-card mb-4">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <span class="card-title-text"><i class="fas fa-filter me-2"></i>Filtros</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnToggleFiltrosUsinagens" data-bs-toggle="collapse" data-bs-target="#collapseFiltrosUsinagens" aria-expanded="true" aria-controls="collapseFiltrosUsinagens">
+                <i class="fas fa-eye-slash"></i> Ocultar
+            </button>
         </div>
-            <!-- Início do Formulário de Filtro de Data -->
-            <div class="mb-3 mt-3 p-3 border rounded">
+        <div class="collapse show" id="collapseFiltrosUsinagens">
+            <div class="card-body">
                 <form method="GET" action="{{ url_for('usinagem_concreto.listar_usinagens') }}" class="row g-3 align-items-end">
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label for="filtro_data_inicial" class="form-label">Data Inicial</label>
                         <input type="date" class="form-control" id="filtro_data_inicial" name="data_inicial" value="{{ filtro_data_inicial or '' }}">
                     </div>
-                    <div class="col-md-4">
+                    <div class="col-md-3">
                         <label for="filtro_data_final" class="form-label">Data Final</label>
                         <input type="date" class="form-control" id="filtro_data_final" name="data_final" value="{{ filtro_data_final or '' }}">
                     </div>
-                    <div class="col-md-auto">
+                    <div class="col-md-3">
                         <label for="filtro_produzido" class="form-label">Produzido?</label>
                         <select class="form-select" id="filtro_produzido" name="produzido">
                             <option value="" {% if not filtro_produzido %}selected{% endif %}>Todos</option>
@@ -49,20 +63,24 @@
                             <option value="nao" {% if filtro_produzido == 'nao' %}selected{% endif %}>Não produzida</option>
                         </select>
                     </div>
-                    <div class="col-md-auto">
+                    <div class="col-md-3 d-flex gap-2">
                         <button type="submit" class="btn btn-primary">
-                            <i class="fas fa-filter"></i> Filtrar
+                            <i class="fas fa-filter me-1"></i> Filtrar
                         </button>
-                    </div>
-                    <div class="col-md-auto">
-                        <a href="{{ url_for('usinagem_concreto.listar_usinagens') }}" class="btn btn-secondary">
-                            <i class="fas fa-times-circle"></i> Limpar Filtros
+                        <a href="{{ url_for('usinagem_concreto.listar_usinagens') }}" class="btn btn-outline-secondary">
+                            <i class="fas fa-times-circle me-1"></i> Limpar
                         </a>
                     </div>
                 </form>
             </div>
-            <!-- Fim do Formulário de Filtro de Data -->
-        
+        </div>
+    </div>
+
+    <div class="card nf-table-card mb-4" data-ft-colvis="dataTable">
+        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
+            <span class="card-title-text"><i class="fas fa-list me-2"></i>Usinagens Cadastradas</span>
+            <div class="ft-col-toggle-placeholder"></div>
+        </div>
         <div class="card-body">
             <div class="ft-datatable-wrapper">
                 <table class="table table-bordered table-striped table-hover" id="dataTable" width="100%" cellspacing="0">

@@ -72,7 +72,7 @@
                         <div class="card">
                             <div class="card-body">
                                 <div class="d-flex align-items-center" id="preview-grupo">
-                                    <i class="fas fa-layer-group fa-2x me-3" style="color: #007bff;"></i>
+                                    <i class="fas fa-layer-group fa-2x me-3"></i>
                                     <div>
                                         <h5 class="mb-0">Nome do Grupo</h5>
                                         <small class="text-muted">Código do Grupo</small>
@@ -109,9 +109,9 @@ document.addEventListener('DOMContentLoaded', function() {
         try {
             // Informações básicas
             document.getElementById('view_nome').textContent = grupo.nome || '-';
-            document.getElementById('view_status').innerHTML = grupo.ativo === 'true' || grupo.ativo === true ? 
-                '<span class="badge badge-success">Ativo</span>' : 
-                '<span class="badge badge-secondary">Inativo</span>';
+            document.getElementById('view_status').innerHTML = grupo.ativo === 'true' || grupo.ativo === true ?
+                '<span class="badge bg-success">Ativo</span>' :
+                '<span class="badge bg-secondary">Inativo</span>';
             document.getElementById('view_total_materiais').textContent = grupo.total_materiais || '0';
             
             // Identificação visual

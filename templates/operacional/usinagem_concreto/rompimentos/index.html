@@ -2,6 +2,10 @@
 
 {% block title %}Rompimentos de Corpo de Prova{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/operacional.css') }}">
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid px-4">
     <h1 class="mt-4">Rompimentos de Corpo de Prova</h1>
@@ -441,13 +445,4 @@
             }, 500);
         });
     });
-</script>
-<style>
-    .grupo-serie-header:hover {
-        background-color: #dee2e6 !important;
-    }
-    .rompimento-grupo {
-        background-color: #f8f9fa;
-    }
-</style>
-{% endblock %} 
+</script>{% endblock %} 

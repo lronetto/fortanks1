@@ -2,6 +2,10 @@
 
 {% block title %}Contagem de Inventário{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/estoque.css') }}">
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid py-4">
     <div class="d-sm-flex justify-content-between mb-4">
@@ -326,32 +330,7 @@
 </div>
 {% endblock %}
 
-{% block styles %}
-<style>
-    /* Destaque para linhas não contadas */
-    .item-row.nao-contado {
-        background-color: #fff3cd !important;
-    }
-    
-    .item-row.nao-contado:hover {
-        background-color: #ffeaa7 !important;
-    }
-    
-    /* Destaque para linhas contadas (opcional - para contraste) */
-    .item-row.contado {
-        background-color: #ffffff;
-    }
-    
-    .item-row.contado:hover {
-        background-color: #f8f9fa;
-    }
-    
-    /* Destaque para linhas com divergência */
-    .item-row.divergente {
-        border-left: 4px solid #dc3545;
-    }
-</style>
-{% endblock %}
+{% block styles %}{% endblock %}
 
 {% block scripts %}
 <script>

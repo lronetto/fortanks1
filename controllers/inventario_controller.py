@@ -9,6 +9,7 @@ from models.unidade import Unidades
 from sqlalchemy import or_, func, select, distinct
 from decimal import Decimal
 import logging
+from utils.material_imagem_upload import parse_dados_json
 
 # Configuração do logger
 logger = logging.getLogger(__name__)
@@ -858,7 +859,7 @@ def api_buscar_itens():
         # Consulta para itens de material
         query = db.session.query(
             Estoque.id,
-            Materiais.codigo,
+            Materiais.dados_adicionais,
             Materiais.nome,
             Estoque.tipo_item,
             Estoque.localizacao,
@@ -868,7 +869,7 @@ def api_buscar_itens():
         join(Unidades, Materiais.unidade_id == Unidades.id).filter(
             or_(
                 Materiais.nome.ilike(termo),
-                Materiais.codigo.ilike(termo),
+                Materiais.dados_adicionais.ilike(termo),
                 Estoque.localizacao.ilike(termo)
             )
         ).order_by(Materiais.nome.asc())
@@ -879,9 +880,10 @@ def api_buscar_itens():
         
         itens = []
         for r in resultados:
+            extras = parse_dados_json(r[1])
             itens.append({
                 'id': r[0],
-                'codigo': r[1],
+                'codigo': extras.get("codigo_sox") or '',
                 'nome': r[2],
                 'tipo': r[3],
                 'localizacao': r[4],
@@ -985,7 +987,11 @@ def adicionar_item_inventario(inventario_id):
                 'diferenca': float(item_inventario.diferenca) if item_inventario.diferenca else None,
                 'observacoes': item_inventario.observacoes or '',
                 'tipo_item': estoque.tipo_item,
-                'codigo': estoque.material.codigo if estoque.material else (estoque.epi.material.codigo if estoque.epi and estoque.epi.material else 'N/A'),
+                'codigo': (
+                    (parse_dados_json(estoque.material.dados_adicionais).get("codigo_sox") if estoque.material else None)
+                    or (parse_dados_json(estoque.epi.material.dados_adicionais).get("codigo_sox") if estoque.epi and estoque.epi.material else None)
+                    or 'N/A'
+                ),
                 'nome': estoque.material.nome if estoque.material else (estoque.epi.material.nome if estoque.epi and estoque.epi.material else 'Item sem descrição'),
                 'localizacao': estoque.localizacao or 'Não especificado',
                 'unidade': estoque.material.unidade_obj.nome if estoque.material else ''
@@ -1045,7 +1051,11 @@ def excluir_item_inventario(inventario_id, item_id):
         # Obter informações do item antes de excluir para feedback
         item_info = {
             'id': item.id,
-            'codigo': item.estoque.material.codigo if item.estoque.material else (item.estoque.epi.material.codigo if item.estoque.epi and item.estoque.epi.material else 'N/A'),
+            'codigo': (
+                (parse_dados_json(item.estoque.material.dados_adicionais).get("codigo_sox") if item.estoque.material else None)
+                or (parse_dados_json(item.estoque.epi.material.dados_adicionais).get("codigo_sox") if item.estoque.epi and item.estoque.epi.material else None)
+                or 'N/A'
+            ),
             'nome': item.estoque.material.nome if item.estoque.material else (item.estoque.epi.material.nome if item.estoque.epi and item.estoque.epi.material else 'Item sem descrição')
         }
         

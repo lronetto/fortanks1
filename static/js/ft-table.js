@@ -296,6 +296,14 @@
          */
         inicializar: function (dt, tableId, titulos) {
             FT.dtColunas.aplicar(dt, tableId);
+            // Colunas não-toggleáveis (título vazio) são sempre forçadas visíveis,
+            // ignorando qualquer estado salvo no localStorage.
+            if (titulos) {
+                dt.columns().every(function (idx) {
+                    if (!titulos[idx]) { this.visible(true, false); }
+                });
+                dt.columns.adjust();
+            }
             var $container = $(dt.table().container());
             var placeholder = $container.closest('.card').find('.ft-col-toggle-placeholder')[0]
                 || $('[data-ft-colvis="' + tableId + '"]').find('.ft-col-toggle-placeholder')[0];

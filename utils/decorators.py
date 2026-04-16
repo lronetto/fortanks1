@@ -1,6 +1,6 @@
 from functools import wraps
 from flask import flash, redirect, url_for, abort, request, jsonify, current_app, g
-from flask_login import current_user
+from flask_login import current_user, login_required
 import jwt as pyjwt
 
 def role_required(roles):
@@ -47,6 +47,64 @@ def role_required(roles):
         return wrapper
     
     return decorator
+
+
+def require_departamento(dept_ids):
+    """
+    Decorator para rotas que exigem que o usuário pertença a um departamento específico.
+
+    Uso:
+        @bp.route('/api/dados')
+        @login_required
+        @require_departamento([4])
+        def dados():
+            ...
+
+    Args:
+        dept_ids: Lista de IDs de departamento permitidos.
+    """
+    def decorator(f):
+        @wraps(f)
+        def wrapper(*args, **kwargs):
+            if not (
+                current_user.colaborador
+                and current_user.colaborador.departamento_id in dept_ids
+            ):
+                return jsonify({'success': False, 'error': 'Acesso não autorizado para este recurso.'}), 403
+            return f(*args, **kwargs)
+        return wrapper
+    return decorator
+
+
+def criar_verificacao_permissao(nivel: str = 'gerente'):
+    """
+    Fábrica que retorna a função verificar_permissao pronta para uso em before_request.
+
+    Elimina o bloco repetido de 6 linhas nos blueprints.
+
+    Uso no blueprint:
+        from utils.decorators import criar_verificacao_permissao
+        bp.before_request(login_required(criar_verificacao_permissao('gerente')))
+
+    Args:
+        nivel: 'gerente' → is_gerente_ou_superior | 'admin' → is_admin
+
+    Retorna:
+        Função verificar_permissao configurada para o nível especificado.
+    """
+    MENSAGEM = 'Acesso restrito. Você não tem permissão para acessar esta área.'
+
+    def verificar_permissao():
+        if nivel == 'admin':
+            if not current_user.is_admin:
+                flash(MENSAGEM, 'danger')
+                return redirect(url_for('dashboard.index'))
+        else:  # 'gerente' (padrão)
+            if not current_user.is_gerente_ou_superior:
+                flash(MENSAGEM, 'danger')
+                return redirect(url_for('dashboard.index'))
+
+    return verificar_permissao
 
 
 def jwt_required(f):

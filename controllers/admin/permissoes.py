@@ -120,8 +120,8 @@ def permissoes_modulo_novo():
             logger.error(f"Erro de validação ao criar módulo: {str(e)}")
             flash('Erro de validação: ordem deve ser um número', 'error')
         except Exception as e:
-            logger.error(f"Erro ao criar módulo: {str(e)}")
-            flash(f'Erro ao criar módulo: {str(e)}', 'error')
+            logger.error(f"Erro ao criar módulo: {str(e)}", exc_info=True)
+            flash('Erro ao criar módulo. Tente novamente.', 'error')
     
     return render_template('admin/permissoes/modulo_form.html', titulo='Novo Módulo')
 
@@ -167,8 +167,8 @@ def permissoes_modulo_editar(id):
                 logger.error(f"Erro de validação ao atualizar módulo: {str(e)}")
                 flash('Erro de validação: ordem deve ser um número', 'error')
             except Exception as e:
-                logger.error(f"Erro ao atualizar módulo: {str(e)}")
-                flash(f'Erro ao atualizar módulo: {str(e)}', 'error')
+                logger.error(f"Erro ao atualizar módulo: {str(e)}", exc_info=True)
+                flash('Erro ao atualizar módulo. Tente novamente.', 'error')
         
         return render_template('admin/permissoes/modulo_form.html', titulo='Editar Módulo', modulo=modulo)
     except Exception as e:
@@ -414,8 +414,8 @@ def permissoes_nova():
             
             return redirect(url_for('admin.permissoes_listar'))
         except Exception as e:
-            logger.error(f"Erro ao criar permissão: {str(e)}")
-            flash(f'Erro ao criar permissão: {str(e)}', 'error')
+            logger.error(f"Erro ao criar permissão: {str(e)}", exc_info=True)
+            flash('Erro ao criar permissão. Tente novamente.', 'error')
     
     return render_template('admin/permissoes/permissao_form.html', 
                          titulo='Nova Permissão',
@@ -669,8 +669,8 @@ def permissoes_editar(id):
                 
                 return redirect(url_for('admin.permissoes_listar'))
             except Exception as e:
-                logger.error(f"Erro ao atualizar permissão: {str(e)}")
-                flash(f'Erro ao atualizar permissão: {str(e)}', 'error')
+                logger.error(f"Erro ao atualizar permissão: {str(e)}", exc_info=True)
+                flash('Erro ao atualizar permissão. Tente novamente.', 'error')
         
         return render_template('admin/permissoes/permissao_form.html', 
                              titulo='Editar Permissão',

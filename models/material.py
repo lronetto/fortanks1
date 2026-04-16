@@ -2,7 +2,6 @@ import json
 from datetime import datetime
 from models.database import db
 from sqlalchemy.orm import relationship
-from models.nota_fiscal import NotaFiscal, NotaFiscalItem
 
 class Materiais(db.Model):
 
@@ -12,16 +11,14 @@ class Materiais(db.Model):
     __tablename__ = 'Materiais'
     
     id = db.Column(db.Integer, primary_key=True)
-    codigo = db.Column(db.String(50), unique=True, nullable=True)
     nome = db.Column(db.String(100), nullable=False)
     descricao = db.Column(db.Text, nullable=True)
-    codigo_erp = db.Column(db.String(50), nullable=True)
     ativo = db.Column(db.Boolean, default=True)
     plano_conta = db.Column(db.String(30), nullable=True)
     plano_conta_id = db.Column(db.Integer, db.ForeignKey('planos_conta.id'), nullable=True)
     plano_conta_obj = relationship('PlanoConta', back_populates='materiais',foreign_keys=[plano_conta_id])
     ncm = db.Column(db.String(15), nullable=True)
-    mascara = db.Column(db.String(20), nullable=True)
+    mascara = db.Column(db.Integer, nullable=True)
     
     # Referência à tabela de unidades
     unidade_id = db.Column(db.Integer, db.ForeignKey('Unidades.id'), nullable=True)
@@ -89,8 +86,7 @@ class Materiais(db.Model):
         """
         Representação em string do material
         """
-        codigo_display = self.codigo or "Sem código"
-        return f'<Material {codigo_display} - {self.nome}>'
+        return f'<Material {self.id} - {self.nome}>'
     
     def get_unidade_nome(self):
         """
@@ -116,10 +112,9 @@ class Materiais(db.Model):
         """
         Retorna o valor unitário do material
         """
-        item_nf = NotaFiscalItem.query.filter_by(material_id=self.id).join(NotaFiscal).order_by(NotaFiscal.data_emissao.desc()).first()
-        if item_nf:
-            return item_nf.valor_unitario/item_nf.fator_conversao_aplicado
-        return 0
+        from models.nota_fiscal.services.material_precos import obter_valor_unitario_material
+
+        return obter_valor_unitario_material(self.id)
     
     def calcular_quantidade(self, quantidade_total, placas_normais, placas_fecho, quantidade_bainhas, altura_total=None, sistema=None):
         """
@@ -287,3 +282,6 @@ materiais_grupos = db.Table('MateriaisGruposItens',
     db.Column('data_associacao', db.DateTime, default=datetime.now),
     db.PrimaryKeyConstraint('id'),
 )
+
+# Alias de compatibilidade para código legado.
+Material = Materiais

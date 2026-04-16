@@ -1,34 +1,51 @@
-<div class="table-responsive">
-    <table class="table table-bordered" id="tabelaTransferencias" width="100%" cellspacing="0">
+{{- /* Estilos carregados via notas_fiscais.css pela página pai */ -}}
+<div class="ft-datatable-wrapper">
+    <table class="table table-bordered nf-datatable" id="tabelaTransferencias" width="100%" cellspacing="0">
         <thead>
             <tr>
                 <th>Data</th>
                 <th>Nome do Item</th>
-                <th>Código do Item</th>
-                <th>Número NF</th>
-                <th>CNPJ Emitente</th>
-                <th>CNPJ Destinatário</th>
-                <th>Tipo da Nota</th>
-                <th>Quantidade</th>
+                <th>Código</th>
+                <th>Nº NF</th>
+                <th>Emitente</th>
+                <th>Destinatário</th>
+                <th>Tipo</th>
+                <th>Qtd</th>
                 <th>Valor</th>
             </tr>
         </thead>
         <tbody>
             {% for transf in transferencias %}
             <tr>
-                <td>{{ transf.data.strftime('%d/%m/%Y') if transf.data else '' }}</td>
+                <td style="white-space:nowrap">{{ transf.data.strftime('%d/%m/%Y') if transf.data else '—' }}</td>
                 <td>{{ transf.nome_item }}</td>
-                <td>{{ transf.codigo_item }}</td>
-                <td>{{ transf.numero_nf }}</td>
-                <td>{{ transf.cnpj_emitente }} ({{ transf.nome_emitente }})</td>
-                <td>{{ transf.cnpj_destinatario }} ({{ transf.nome_destinatario }})</td>
-                <td>{% if transf.tipo_nota == 0 %}Entrada{% elif transf.tipo_nota == 1 %}Saída{% else %}{{ transf.tipo_nota }}{% endif %}</td>
-                <td>{{ '%.2f'|format(transf.quantidade) }}</td>
-                <td>R$ {{ '%.2f'|format(transf.valor) }}</td>
+                <td><span style="font-family:'JetBrains Mono',monospace; font-size:0.8rem;">{{ transf.codigo_item }}</span></td>
+                <td><span style="font-family:'JetBrains Mono',monospace; font-size:0.8rem;">{{ transf.numero_nf }}</span></td>
+                <td>
+                    <span style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#64748b;">{{ transf.cnpj_emitente }}</span>
+                    <br><small>{{ transf.nome_emitente }}</small>
+                </td>
+                <td>
+                    <span style="font-family:'JetBrains Mono',monospace; font-size:0.75rem; color:#64748b;">{{ transf.cnpj_destinatario }}</span>
+                    <br><small>{{ transf.nome_destinatario }}</small>
+                </td>
+                <td>
+                    {% if transf.tipo_nota == 0 %}
+                        <span class="badge-entrada">Entrada</span>
+                    {% elif transf.tipo_nota == 1 %}
+                        <span class="badge-saida">Saída</span>
+                    {% else %}
+                        {{ transf.tipo_nota }}
+                    {% endif %}
+                </td>
+                <td style="text-align:right; font-variant-numeric:tabular-nums;">{{ '%.2f'|format(transf.quantidade) }}</td>
+                <td style="text-align:right; font-variant-numeric:tabular-nums; white-space:nowrap;">R$ {{ '%.2f'|format(transf.valor) }}</td>
             </tr>
             {% else %}
             <tr>
-                <td colspan="8" class="text-center">Nenhuma transferência encontrada para os filtros selecionados.</td>
+                <td colspan="9" class="text-center text-muted py-4">
+                    <i class="fas fa-inbox me-2"></i>Nenhuma transferência encontrada para os filtros selecionados.
+                </td>
             </tr>
             {% endfor %}
         </tbody>

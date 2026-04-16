@@ -1,24 +1,20 @@
-<div class="card shadow mb-4">
-    <div class="card-body">
-        <div class="row">
-            <div class="col-md-6">
-                <div class="d-flex align-items-center">
-                    <i class="fas fa-file-invoice fa-2x text-primary me-3"></i>
-                    <div>
-                        <h6 class="mb-0 text-muted">Total de Notas Fiscais</h6>
-                        <h4 class="mb-0 text-primary" id="total_resultados">{{ total_resultados }}</h4>
-                    </div>
-                </div>
-            </div>
-            <div class="col-md-6">
-                <div class="d-flex align-items-center">
-                    <i class="fas fa-dollar-sign fa-2x text-success me-3"></i>
-                    <div>
-                        <h6 class="mb-0 text-muted">Valor Total</h6>
-                        <h4 class="mb-0 text-success" id="valor_total">{{ valor_total }}</h4>
-                    </div>
-                </div>
-            </div>
+<div class="d-flex gap-3 mb-4 flex-wrap">
+    <div class="nf-stat flex-fill" style="min-width:180px">
+        <div class="nf-stat-icon primary">
+            <i class="fas fa-file-invoice"></i>
+        </div>
+        <div>
+            <div class="nf-stat-label">Total de Notas</div>
+            <div class="nf-stat-value" id="total_resultados">{{ total_resultados }}</div>
+        </div>
+    </div>
+    <div class="nf-stat flex-fill" style="min-width:180px">
+        <div class="nf-stat-icon success">
+            <i class="fas fa-dollar-sign"></i>
+        </div>
+        <div>
+            <div class="nf-stat-label">Valor Total</div>
+            <div class="nf-stat-value" id="valor_total">{{ valor_total }}</div>
         </div>
     </div>
 </div>
@@ -91,71 +87,78 @@
                 </td>
                 <td>R$ {{ "%.2f"|format(nf.NotaFiscal.valor_total) if nf.NotaFiscal.valor_total is not none else '0.00' }}</td>
                 <td>
-                    <!-- Lógica de status atual -->
+                    <!-- Status -->
                     {% if nf.NotaFiscal.status_processamento == 'cancelada' %}
-                        <span class="badge bg-danger">Cancelada</span>
+                        <span class="badge-nf badge-nf-cancelada"><i class="fas fa-ban"></i> Cancelada</span>
                     {% else %}
-                        {# Verificar se o método existe antes de chamar #}
-                        {% set percentual = -1 %} {# Valor padrão caso método não exista #}
+                        {% set percentual = -1 %}
                         {% if nf.NotaFiscal.percentual_importacao is defined %}
                             {% set percentual = nf.NotaFiscal.percentual_importacao() %}
                         {% endif %}
-                        <span class="badge {% if percentual == 0 %}bg-danger{% elif percentual == 100 %}bg-success{% elif percentual > 0 %}bg-warning{% else %}bg-secondary{% endif %}">
-                            {% if percentual == 0 %}
-                                Pend
-                            {% elif percentual == 100 %}
-                                Impo
-                            {% elif percentual > 0 %}
-                                Parc ({{ "%.0f"|format(percentual) }}%)
-                            {% else %}
-                                N/A {# Ou status Indefinido #}
-                            {% endif %}
-                        </span>
-                        
-                        {# Verificar se tem documentos anexados #}
-                        {% if nf.upload > 0  %}
+                        {% if percentual == 0 %}
+                            <span class="badge-nf badge-nf-pendente"><i class="fas fa-clock"></i> Pendente</span>
+                        {% elif percentual == 100 %}
+                            <span class="badge-nf badge-nf-importada"><i class="fas fa-check"></i> Importada</span>
+                        {% elif percentual > 0 %}
+                            <span class="badge-nf badge-nf-parcial"><i class="fas fa-spinner"></i> Parcial {{ "%.0f"|format(percentual) }}%</span>
+                        {% else %}
+                            <span class="badge-nf badge-nf-na">—</span>
+                        {% endif %}
+
+                        {% if nf.upload > 0 %}
                             {% if nf.upload_protocolo == 1 %}
-                                <span class="badge bg-info ms-1" title="protocolo">
-                                    <i class="fas fa-paperclip" style="color: green;"></i>
-                                </span>
-                            {% endif %}
-                            {% if nf.upload_arquivei == 1 %}
-                                <span class="badge bg-info ms-1" title="arquivei">
+                                <span class="badge badge-attach bg-success bg-opacity-10 text-success ms-1" title="Protocolo anexado">
                                     <i class="fas fa-paperclip"></i>
                                 </span>
                             {% endif %}
+                            {% if nf.upload_arquivei == 1 %}
+                                <span class="badge badge-attach bg-primary bg-opacity-10 text-primary ms-1" title="Arquivei anexado">
+                                    <i class="fas fa-cloud"></i>
+                                </span>
+                            {% endif %}
                             {% if nf.upload_reembolso == 1 %}
-                                <span class="badge bg-info ms-1" title="reembolso">
-                                    <i class="fas fa-paperclip" style="color: red;"></i>
+                                <span class="badge badge-attach bg-danger bg-opacity-10 text-danger ms-1" title="Reembolso anexado">
+                                    <i class="fas fa-receipt"></i>
                                 </span>
                             {% endif %}
                         {% endif %}
-
-                    {% if nf.pagamento == 1 %}
-                            <span class="badge bg-success ms-1" title="Pago">
-                                <i class="fas fa-check"></i>
+                        {% if nf.pagamento == 1 %}
+                            <span class="badge badge-attach bg-success bg-opacity-10 text-success ms-1" title="Pago">
+                                <i class="fas fa-check-circle"></i>
                             </span>
                         {% endif %}
                     {% endif %}
                 </td>
                 <td>
-                    <div class="btn-group">
-                        <button type="button" class="btn btn-sm btn-primary visualizar-itens" 
-                                data-id="{{ nf.id }}" title="Visualizar Itens">
-                            <i class="fas fa-list"></i>
+                    <div class="ft-acoes-dropdown dropdown">
+                        <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                                data-bs-toggle="dropdown" aria-expanded="false" title="Ações">
+                            <i class="fas fa-ellipsis-v"></i>
                         </button>
-                        <button type="button" class="btn btn-sm btn-success importar-itens" 
-                                data-id="{{ nf.id }}" title="Importar para Estoque">
-                            <i class="fas fa-file-import"></i>
-                        </button>
-                        <button type="button" class="btn btn-sm btn-warning vincular-material" 
-                                data-id="{{ nf.id }}" title="Vincular Material">
-                            <i class="fas fa-link"></i>
-                        </button>
-                        <button type="button" class="btn btn-sm btn-danger excluir-nota" 
-                                data-id="{{ nf.id }}" data-numero="{{ nf.numero_nf }}" title="Excluir">
-                            <i class="fas fa-trash"></i>
-                        </button>
+                        <ul class="dropdown-menu dropdown-menu-end">
+                            <li>
+                                <button type="button" class="dropdown-item visualizar-itens" data-id="{{ nf.id }}">
+                                    <i class="fas fa-list text-info me-2"></i> Ver Itens
+                                </button>
+                            </li>
+                            <li>
+                                <button type="button" class="dropdown-item importar-itens" data-id="{{ nf.id }}">
+                                    <i class="fas fa-file-import text-success me-2"></i> Importar para Estoque
+                                </button>
+                            </li>
+                            <li>
+                                <button type="button" class="dropdown-item vincular-material" data-id="{{ nf.id }}">
+                                    <i class="fas fa-link text-warning me-2"></i> Vincular Material
+                                </button>
+                            </li>
+                            <li><hr class="dropdown-divider"></li>
+                            <li>
+                                <button type="button" class="dropdown-item text-danger excluir-nota"
+                                        data-id="{{ nf.id }}" data-numero="{{ nf.numero_nf }}">
+                                    <i class="fas fa-trash text-danger me-2"></i> Excluir
+                                </button>
+                            </li>
+                        </ul>
                     </div>
                 </td>
             </tr>

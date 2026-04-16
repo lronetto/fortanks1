@@ -434,49 +434,6 @@
 <!-- Chart.js para gráficos -->
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-<style>
-/* Garantir que o Select2 apareça acima do modal */
-.select2-container--open {
-    z-index: 9999 !important;
-}
-
-.select2-dropdown {
-    z-index: 9999 !important;
-}
-
-#modalMateriaisGrupo .select2-container {
-    z-index: 9999 !important;
-}
-
-#modalMateriaisGrupo .select2-dropdown {
-    z-index: 9999 !important;
-}
-
-/* Garantir que o Select2 no modal de edição apareça corretamente */
-#modalEditarGrupo .select2-container {
-    z-index: 9999 !important;
-}
-
-#modalEditarGrupo .select2-dropdown {
-    z-index: 9999 !important;
-}
-
-/* Garantir que os itens da lista sejam clicáveis */
-.select2-results__option {
-    cursor: pointer !important;
-    padding: 8px 12px !important;
-}
-
-.select2-results__option:hover {
-    background-color: #f0f0f0 !important;
-}
-
-.select2-results__option--highlighted {
-    background-color: #007bff !important;
-    color: white !important;
-}
-</style>
-
 <script>
 // URLs base para as rotas
 const URL_INVENTARIO_CONTAGEM_TEMPLATE = "{{ url_for('inventario.inventario_contagem', id=0) }}";

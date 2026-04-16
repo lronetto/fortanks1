@@ -11,7 +11,7 @@ import io
 
 from flask import Blueprint, current_app, flash, jsonify, render_template, request, send_file, url_for
 from flask_login import current_user, login_required
-from sqlalchemy import cast, func, or_, union_all
+from sqlalchemy import and_, cast, func, or_, union_all
 from sqlalchemy.orm import joinedload
 from sqlalchemy.sql import null
 from sqlalchemy.types import Integer, String
@@ -24,6 +24,7 @@ from models.material import Materiais
 from models.unidade import get_conversao_unidade, normalizar_unidade, comparar_unidades
 from models.tanque import TanquesPecas, TanquesProdutoComposto, Tanques, TanquesGrupos
 from models.produto_composto import ProdutoComposto
+from utils.material_imagem_upload import parse_dados_json
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +38,7 @@ def index():
     """
     Página principal com tabela comparativa de estoques
     """
-    return render_template('estoque_terceiro/index.html')
+    return render_template('estoque_terceiro/comparativo_terceiro/index.html')
 
 
 @estoque_terceiro_bp.route('/comparativo-datas')
@@ -46,7 +47,16 @@ def comparativo_datas():
     """
     Comparativo lado a lado entre duas datas de estoque de terceiros (importações).
     """
-    return render_template('estoque_terceiro/comparativo_datas.html')
+    return render_template('estoque_terceiro/comparativo_datas/index.html')
+
+
+@estoque_terceiro_bp.route('/lista')
+@login_required
+def lista():
+    """
+    Página de consulta do estoque de terceiros com filtros simples.
+    """
+    return render_template('estoque_terceiro/estoque_terceiro/index.html')
 
 
 def _tipos_filtro_estoque_terceiro():
@@ -133,22 +143,23 @@ def api_comparativo_entre_datas():
         codigos = {k[0] for k in todas_chaves if k[0]}
         nomes_sistema = {}
         if codigos:
-            lista_codigos = list(codigos)
-            for m in (
-                db.session.query(Materiais.codigo_erp, Materiais.nome)
-                .filter(
-                    Materiais.codigo_erp.isnot(None),
-                    Materiais.codigo_erp != '',
-                    cast(Materiais.codigo_erp, Integer).in_(lista_codigos),
-                )
+            lista_codigos = set(int(c) for c in codigos if c)
+            # `codigo_alterdata` agora fica em `Materiais.dados_adicionais` (JSON em TEXT).
+            # Fazemos o match em Python para evitar dependência de JSON functions no MySQL/SQLite.
+            rows = (
+                db.session.query(Materiais.nome, Materiais.dados_adicionais)
+                .filter(Materiais.dados_adicionais.isnot(None), Materiais.dados_adicionais != "")
                 .all()
-            ):
+            )
+            for nome, dados in rows:
+                extras = parse_dados_json(dados)
+                v = extras.get("codigo_alterdata")
                 try:
-                    c = int(float(str(m.codigo_erp).strip()))
-                    if c not in nomes_sistema:
-                        nomes_sistema[c] = (m.nome or '').strip()
+                    c = int(float(str(v).strip())) if v not in (None, "") else None
                 except (TypeError, ValueError):
-                    continue
+                    c = None
+                if c and c in lista_codigos and c not in nomes_sistema:
+                    nomes_sistema[c] = (nome or "").strip()
 
         vazio = {
             'nome_terceiro': '',
@@ -578,14 +589,25 @@ def api_comparativo():
         # Collation única para evitar "Illegal mix of collations" no UNION
         collation = 'utf8mb4_unicode_ci'
         
-        # Comparação codigo_erp: Materiais é String(50), EstoqueTerceiro é Integer — comparar como int
-        join_codigo_erp = cast(Materiais.codigo_erp, Integer) == EstoqueTerceiro.codigo_erp
+        # Comparação por código Alterdata: fica em `Materiais.dados_adicionais` (JSON em TEXT).
+        dados_adicionais_json = func.if_(
+            func.json_valid(Materiais.dados_adicionais),
+            Materiais.dados_adicionais,
+            '{}'
+        )
+        codigo_alterdata_texto = func.nullif(
+            func.json_unquote(func.json_extract(dados_adicionais_json, '$.codigo_alterdata')),
+            ''
+        )
+        codigo_alterdata_int = cast(codigo_alterdata_texto, Integer)
+        join_codigo_erp = (codigo_alterdata_int == EstoqueTerceiro.codigo_erp)
+                      
 
-        # Query 1: materiais que têm codigo_erp e estoque terceiro (match sistema + terceiro)
+        # Query 1: materiais que têm código Alterdata e estoque terceiro (match sistema + terceiro)
         q_matched = db.session.query(
             Materiais.id.label('material_id'),
             Materiais.nome.collate(collation).label('material_nome'),
-            cast(Materiais.codigo_erp, String(50)).label('codigo_erp'),
+            cast(codigo_alterdata_int, String(50)).label('codigo_erp'),
             EstoqueTerceiro.quantidade.label('estoque_terceiro'),
             cast(EstoqueTerceiro.tipo, String(50)).label('tipo'),
             EstoqueTerceiro.unidade.collate(collation).label('unidade'),
@@ -593,8 +615,7 @@ def api_comparativo():
             EstoqueTerceiro.ValorTotal.label('valor_total'),
             EstoqueTerceiro.data.label('data_estoque_terceiro')
         ).outerjoin(EstoqueTerceiro, join_codigo_erp).filter(
-            Materiais.codigo_erp.isnot(None),
-            Materiais.codigo_erp != '',
+            codigo_alterdata_texto.isnot(None),
             EstoqueTerceiro.tipo.in_(tipos_selecionados),
             EstoqueTerceiro.quantidade > 0
         )
@@ -602,10 +623,10 @@ def api_comparativo():
             q_matched = q_matched.filter(EstoqueTerceiro.data == data_filtro_date)
         
         # Query 2: registros que existem no terceiro mas não no sistema (codigo_erp sem material cadastrado)
-        codigos_no_sistema = db.session.query(cast(Materiais.codigo_erp, Integer)).filter(
-            Materiais.codigo_erp.isnot(None),
-            Materiais.codigo_erp != ''
-        ).distinct()
+        codigos_no_sistema_codigo_alterdata = db.session.query(codigo_alterdata_int).filter(
+            codigo_alterdata_texto.isnot(None)
+        )
+        codigos_no_sistema = codigos_no_sistema_codigo_alterdata.distinct()
         # Nome do material do terceiro (se existir), senão codigo_erp (cast int para string no coalesce)
         nome_terceiro = func.coalesce(
             EstoqueTerceiro.nome.collate(collation),
@@ -774,6 +795,7 @@ def api_comparativo():
                 logger.info(f'Conversão aplicada: Material {registro.material_id}, {unidade_terceiro} -> {unidade_sistema}, fator: {fator_conversao}')
             else:
                 logger.warning(f'Não foi possível converter unidades: Material {registro.material_id}, Sistema: {unidade_sistema}, Terceiro: {unidade_terceiro}')
+                logger.warning(f'material_id: {registro.material_id}, terceiro: {registro.codigo_erp}, ')
                 fator_conversao = 1.0
                 unidade_convertida = False
             # Converter estoque terceiro para unidade do sistema se necessário
@@ -920,6 +942,89 @@ def api_datas_disponiveis():
         logger.error(f'Erro ao buscar datas disponíveis: {str(e)}', exc_info=True)
         return jsonify({
             'success': False,
+            'message': str(e)
+        }), 500
+
+
+@estoque_terceiro_bp.route('/api/lista', methods=['GET'])
+@login_required
+def api_lista():
+    """
+    API específica da tela "Estoque de Terceiros" (lista simples com filtros).
+    Filtros:
+      - nome: busca parcial em EstoqueTerceiro.nome
+      - tipos: CSV de inteiros (ex: 10,15,18)
+      - data_filtro: YYYY-MM-DD
+    """
+    try:
+        nome = (request.args.get('nome') or '').strip()
+        tipos_raw = (request.args.get('tipos') or '').strip()
+        data_filtro = (request.args.get('data_filtro') or '').strip()
+
+        tipos = []
+        if tipos_raw:
+            for parte in tipos_raw.split(','):
+                parte_limpa = (parte or '').strip()
+                if parte_limpa.isdigit():
+                    tipos.append(int(parte_limpa))
+
+        data_filtro_date = None
+        if data_filtro:
+            try:
+                data_filtro_date = datetime.strptime(data_filtro, '%Y-%m-%d').date()
+            except ValueError:
+                return jsonify({
+                    'success': False,
+                    'message': 'Data inválida. Use o formato YYYY-MM-DD.'
+                }), 400
+
+        q = db.session.query(EstoqueTerceiro)
+
+        if data_filtro_date:
+            q = q.filter(EstoqueTerceiro.data == data_filtro_date)
+        if tipos:
+            q = q.filter(EstoqueTerceiro.tipo.in_(tipos))
+        if nome:
+            q = q.filter(EstoqueTerceiro.nome.ilike(f'%{nome}%'))
+
+        rows = q.order_by(
+            EstoqueTerceiro.data.desc(),
+            EstoqueTerceiro.tipo.asc(),
+            EstoqueTerceiro.nome.asc(),
+            EstoqueTerceiro.codigo_erp.asc()
+        ).all()
+
+        data = []
+        for row in rows:
+            qtd = float(row.quantidade or 0)
+            valor_unit = float(row.ValorUnitario or 0)
+            valor_total = float(row.ValorTotal) if row.ValorTotal is not None else (qtd * valor_unit)
+            data.append({
+                'id': row.id,
+                'codigo_erp': str(row.codigo_erp) if row.codigo_erp is not None else '',
+                'material_nome': (row.nome or '').strip(),
+                'tipo': str(row.tipo) if row.tipo is not None else '',
+                'data_estoque_terceiro': row.data.isoformat() if row.data else '',
+                'unidade_terceiro': (row.unidade or '').strip(),
+                'quantidade_terceiro': qtd,
+                'valor_unitario_original': valor_unit,
+                'valor_terceiro': valor_total,
+            })
+
+        return jsonify({
+            'success': True,
+            'recordsTotal': len(data),
+            'recordsFiltered': len(data),
+            'data': data
+        }), 200
+
+    except Exception as e:
+        logger.error(f'Erro ao buscar lista de estoque terceiro: {str(e)}', exc_info=True)
+        return jsonify({
+            'success': False,
+            'recordsTotal': 0,
+            'recordsFiltered': 0,
+            'data': [],
             'message': str(e)
         }), 500
 

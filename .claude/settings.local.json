@@ -3,7 +3,19 @@
     "allow": [
       "Bash(find /c/Users/lrone/code/sfortanks/templates -maxdepth 2 -name \"index.html\" -exec wc -l {} \\\\;)",
       "Bash(xargs ls:*)",
-      "Bash(plink -pw '8225Le@28' sfortanks@192.168.8.10 \"ls /home/sfortanks/sfortanks/.venv/bin/ 2>/dev/null || ls /home/sfortanks/.venv/bin/ 2>/dev/null || which python3\")"
+      "Bash(plink -pw '8225Le@28' sfortanks@192.168.8.10 \"ls /home/sfortanks/sfortanks/.venv/bin/ 2>/dev/null || ls /home/sfortanks/.venv/bin/ 2>/dev/null || which python3\")",
+      "Bash(python3 *)",
+      "Bash(python -c ' *)",
+      "Bash(python *)",
+      "Bash(grep -r \"toLocaleString\\\\|formatarMoeda\\\\|R\\\\$\" \"C:\\\\Users\\\\lrone\\\\code\\\\sfortanks/static\" --include=\"*.js\")",
+      "Bash(grep -r \"render_template\" /c/Users/lrone/code/sfortanks/controllers/*.py)",
+      "Bash(wc -l /c/Users/lrone/code/sfortanks/controllers/*.py)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://127.0.0.1:5000/)",
+      "Bash(venv/Scripts/python app.py)",
+      "Bash(FLASK_APP=app.py FLASK_ENV=development .venv/Scripts/flask run --host=127.0.0.1 --port=5000)",
+      "Bash(FLASK_APP=app.py FLASK_ENV=development venv/Scripts/flask run --host=127.0.0.1 --port=5000)",
+      "Bash(venv/Scripts/python -m flask run --host=127.0.0.1 --port=5000)",
+      "Bash(FLASK_APP=app.py venv/Scripts/python -m flask run --host=127.0.0.1 --port=5000)"
     ]
   }
 }

@@ -5,20 +5,17 @@ import requests
 import re
 import json
 import traceback
+import logging
+
+logger = logging.getLogger(__name__)
 
 from models.database import db
 from models.cliente import Cliente
 from models.endereco import Endereco
+from utils.decorators import criar_verificacao_permissao
 
 cliente_bp = Blueprint('cliente', __name__)
-
-# Middleware para verificar se o usuário tem permissão
-@cliente_bp.before_request
-@login_required
-def verificar_permissao():
-    if not current_user.is_gerente_ou_superior:
-        flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
-        return redirect(url_for('dashboard.index'))
+cliente_bp.before_request(login_required(criar_verificacao_permissao('gerente')))
 
 @cliente_bp.route('/')
 @login_required
@@ -104,7 +101,8 @@ def novo():
             return redirect(url_for('cliente.index'))
         except Exception as e:
             db.session.rollback()
-            flash(f'Erro ao cadastrar cliente: {str(e)}', 'danger')
+            logger.error(f'Erro ao cadastrar cliente: {str(e)}', exc_info=True)
+            flash('Erro ao cadastrar cliente. Tente novamente.', 'danger')
             
     return render_template('cadastros/clientes/novo.html')
 
@@ -215,7 +213,8 @@ def editar(id):
             return redirect(url_for('cliente.visualizar', id=cliente.id))
         except Exception as e:
             db.session.rollback()
-            flash(f'Erro ao atualizar cliente: {str(e)}', 'danger')
+            logger.error(f'Erro ao atualizar cliente: {str(e)}', exc_info=True)
+            flash('Erro ao atualizar cliente. Tente novamente.', 'danger')
     
     return render_template('cadastros/clientes/editar.html', cliente=cliente, endereco=endereco_principal)
 
@@ -233,7 +232,8 @@ def excluir(id):
         cliente.delete()
         flash(f'Cliente "{nome}" excluído com sucesso!', 'success')
     except Exception as e:
-        flash(f'Erro ao excluir cliente: {str(e)}', 'danger')
+        logger.error(f'Erro ao excluir cliente: {str(e)}', exc_info=True)
+        flash('Erro ao excluir cliente. Tente novamente.', 'danger')
     
     return redirect(url_for('cliente.index'))
 
@@ -289,7 +289,8 @@ def novo_endereco(cliente_id):
             return redirect(url_for('cliente.visualizar', id=cliente_id))
         except Exception as e:
             db.session.rollback()
-            flash(f'Erro ao adicionar endereço: {str(e)}', 'danger')
+            logger.error(f'Erro ao adicionar endereço: {str(e)}', exc_info=True)
+            flash('Erro ao adicionar endereço. Tente novamente.', 'danger')
     
     return render_template('cadastros/clientes/novo_endereco.html', cliente=cliente)
 
@@ -342,7 +343,8 @@ def editar_endereco(endereco_id):
             return redirect(url_for('cliente.visualizar', id=endereco.cliente_id))
         except Exception as e:
             db.session.rollback()
-            flash(f'Erro ao atualizar endereço: {str(e)}', 'danger')
+            logger.error(f'Erro ao atualizar endereço: {str(e)}', exc_info=True)
+            flash('Erro ao atualizar endereço. Tente novamente.', 'danger')
     
     return render_template('cadastros/clientes/editar_endereco.html', endereco=endereco, cliente=cliente)
 
@@ -381,7 +383,8 @@ def excluir_endereco(endereco_id):
         flash('Endereço excluído com sucesso!', 'success')
     except Exception as e:
         db.session.rollback()
-        flash(f'Erro ao excluir endereço: {str(e)}', 'danger')
+        logger.error(f'Erro ao excluir endereço: {str(e)}', exc_info=True)
+        flash('Erro ao excluir endereço. Tente novamente.', 'danger')
     
     return redirect(url_for('cliente.visualizar', id=cliente_id))
 
@@ -429,52 +432,42 @@ def consultar_cnpj(cnpj):
     Consulta informações do CNPJ na API pública Brasil API
     """
     try:
-        # Log da requisição
-        print(f"INÍCIO DA CONSULTA CNPJ: {cnpj}")
-        print(f"Path da requisição: {request.path}")
-        print(f"Método: {request.method}")
-        print(f"User Agent: {request.headers.get('User-Agent')}")
-        
+        logger.debug(f"Consulta CNPJ iniciada para: {cnpj}")
+
         # Remover caracteres especiais do CNPJ
         cnpj_limpo = re.sub(r'[^0-9]', '', cnpj)
         
         if len(cnpj_limpo) != 14:
-            print(f"CNPJ inválido: {cnpj_limpo} - deve ter 14 dígitos")
             return jsonify({"success": False, "error": "CNPJ deve conter 14 dígitos"})
-        
+
         # Consultar na API
         url = f"https://brasilapi.com.br/api/cnpj/v1/{cnpj_limpo}"
-        print(f"Fazendo requisição para: {url}")
-        
+        logger.debug(f"Consultando CNPJ na BrasilAPI: {cnpj_limpo}")
+
         try:
-            # Configurar headers para parecer mais com um navegador
             headers = {
                 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
                 'Accept': 'application/json'
             }
-            
+
             response = requests.get(url, headers=headers, timeout=10)
-            print(f"Status da resposta: {response.status_code}")
-            print(f"Headers da resposta: {response.headers}")
-            
+            logger.debug(f"BrasilAPI CNPJ status: {response.status_code}")
+
             if response.status_code == 200:
                 try:
                     dados = response.json()
-                    print(f"Dados recebidos da API: {json.dumps(dados, ensure_ascii=False)}")
-                    
-                    # Se não tiver razão social, pode ser uma resposta vazia ou inválida
+
                     if not dados.get("razao_social"):
                         return jsonify({
-                            "success": False, 
+                            "success": False,
                             "error": "CNPJ encontrado, mas sem dados completos da empresa"
                         })
-                    
-                    # Formatar o retorno para o frontend
+
                     resultado = {
                         "success": True,
                         "dados": {
                             "nome": dados.get("razao_social"),
-                            "cnpj": cnpj,  # Mantém o CNPJ formatado
+                            "cnpj": cnpj,
                             "telefone": dados.get("ddd_telefone_1", ""),
                             "logradouro": dados.get("logradouro", ""),
                             "numero": dados.get("numero", ""),
@@ -485,37 +478,31 @@ def consultar_cnpj(cnpj):
                             "cep": dados.get("cep", "").replace(".", "")
                         }
                     }
-                    print(f"Retornando resultado: {json.dumps(resultado, ensure_ascii=False)}")
                     return jsonify(resultado)
                 except json.JSONDecodeError as e:
-                    print(f"Erro ao decodificar JSON: {str(e)}")
-                    print(f"Conteúdo da resposta: {response.text}")
+                    logger.error(f"Erro ao decodificar JSON da BrasilAPI: {str(e)}")
                     return jsonify({
-                        "success": False, 
+                        "success": False,
                         "error": "Erro ao processar dados retornados pela API"
                     })
             elif response.status_code == 404:
-                print(f"CNPJ não encontrado: {cnpj_limpo}")
                 return jsonify({"success": False, "error": "CNPJ não encontrado na base de dados"})
             elif response.status_code == 429:
-                print(f"Limite de requisições excedido para CNPJ: {cnpj_limpo}")
                 return jsonify({"success": False, "error": "Limite de requisições excedido. Tente novamente em alguns minutos."})
             else:
-                print(f"Erro na API para CNPJ {cnpj_limpo}: Status {response.status_code}")
-                print(f"Conteúdo da resposta: {response.text}")
+                logger.warning(f"BrasilAPI retornou status {response.status_code} para CNPJ {cnpj_limpo}")
                 return jsonify({"success": False, "error": f"Erro na consulta à API: Status {response.status_code}"})
-        
+
         except requests.exceptions.Timeout:
-            print(f"Timeout na requisição à API Brasil para CNPJ: {cnpj_limpo}")
+            logger.warning(f"Timeout na consulta CNPJ {cnpj_limpo}")
             return jsonify({"success": False, "error": "Tempo limite excedido na consulta à API. Tente novamente."})
         except requests.exceptions.ConnectionError:
-            print(f"Erro de conexão com a API Brasil para CNPJ: {cnpj_limpo}")
+            logger.warning(f"Erro de conexão ao consultar CNPJ {cnpj_limpo}")
             return jsonify({"success": False, "error": "Erro de conexão com o serviço. Verifique sua internet."})
         except requests.exceptions.RequestException as e:
-            print(f"Erro na requisição para CNPJ {cnpj_limpo}: {str(e)}")
-            return jsonify({"success": False, "error": f"Erro na comunicação com a API: {str(e)}"})
-    
+            logger.error(f"Erro na requisição para CNPJ {cnpj_limpo}: {str(e)}")
+            return jsonify({"success": False, "error": "Erro na comunicação com o serviço de CNPJ. Tente novamente."})
+
     except Exception as e:
-        print(f"Erro inesperado na consulta de CNPJ {cnpj}: {str(e)}")
-        traceback.print_exc()
-        return jsonify({"success": False, "error": f"Erro inesperado ao processar a consulta: {str(e)}"}) 
+        logger.error(f"Erro inesperado na consulta de CNPJ {cnpj}: {str(e)}", exc_info=True)
+        return jsonify({"success": False, "error": "Erro inesperado ao processar a consulta de CNPJ."}) 

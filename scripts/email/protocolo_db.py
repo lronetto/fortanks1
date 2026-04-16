@@ -1,11 +1,11 @@
 """
-Persistência de Protocolo e extração simples de número em PDF (uso legado / PyPDF2).
+Persistência de Protocolo e extração simples de número em PDF.
 """
 import io
 import logging
 from datetime import datetime
 
-from PyPDF2 import PdfReader
+from pypdf import PdfReader
 
 from models.database import db
 from models.protocolo import Protocolo

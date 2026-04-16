@@ -5,16 +5,10 @@ from sqlalchemy import or_
 
 from models.database import db
 from models.departamento import Departamento
+from utils.decorators import criar_verificacao_permissao
 
 departamento_bp = Blueprint('departamento', __name__)
-
-# Middleware para verificar se o usuário tem permissão
-@departamento_bp.before_request
-@login_required
-def verificar_permissao():
-    if not current_user.is_admin:
-        flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
-        return redirect(url_for('dashboard.index'))
+departamento_bp.before_request(login_required(criar_verificacao_permissao('admin')))
 
 @departamento_bp.route('/')
 @login_required

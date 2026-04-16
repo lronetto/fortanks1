@@ -3,44 +3,7 @@
 {% block title %}Visualizar Dados Analíticos{% endblock %}
 
 {% block styles %}
-<style>
-    .filtros-container {
-        background-color: #f8f9fc;
-        border-radius: 0.35rem;
-        padding: 1rem;
-        margin-bottom: 1rem;
-    }
-    .filtro-collapse {
-        padding: 0.5rem;
-    }
-    .table-container {
-        overflow-x: auto;
-    }
-    .data-table th {
-        white-space: nowrap;
-        font-size: 0.9rem;
-    }
-    .data-table td {
-        font-size: 0.85rem;
-    }
-    .valor-positivo {
-        color: #1cc88a;
-        font-weight: bold;
-    }
-    .valor-negativo {
-        color: #e74a3b;
-        font-weight: bold;
-    }
-    .pagination-container {
-        margin-top: 1rem;
-    }
-    .total-container {
-        font-size: 1.2rem;
-        font-weight: bold;
-        text-align: right;
-        margin-top: 1rem;
-    }
-</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/relatorios.css') }}">
 {% endblock %}
 
 {% block content %}

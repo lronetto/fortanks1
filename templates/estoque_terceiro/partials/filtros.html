@@ -4,7 +4,7 @@
             <h6 class="m-0 font-weight-bold text-primary">Filtros</h6>
         </div>
         <div class="card-body">
-            <div class="row">
+            <div class="row g-3 align-items-end">
                 <div class="col-md-3">
                     <label for="filtro_data" class="form-label">Data do Estoque Terceiro</label>
                     <select id="filtro_data" class="form-select">
@@ -17,25 +17,31 @@
                         <!-- Opções carregadas via JavaScript -->
                     </select>
                     <small class="text-muted">Segure Ctrl para selecionar mais de um.</small>
-                    <div class="form-check mt-2">
-                        <input class="form-check-input" type="checkbox" id="filtro_sped" value="1">
-                        <label class="form-check-label" for="filtro_sped">SPED (tipos 10, 15, 18)</label>
+                    <div class="d-flex flex-column gap-1 mt-2">
+                        <div class="form-check mb-0">
+                            <input class="form-check-input" type="checkbox" id="filtro_todos_tipos" value="1">
+                            <label class="form-check-label" for="filtro_todos_tipos">Selecionar todos os tipos</label>
+                        </div>
+                        <div class="form-check mb-0">
+                            <input class="form-check-input" type="checkbox" id="filtro_sped" value="1">
+                            <label class="form-check-label" for="filtro_sped">SPED (tipos 10, 15, 18)</label>
+                        </div>
                     </div>
                 </div>
-                <div class="col-md-3 d-flex flex-column justify-content-end">
-                    <div class="form-check">
+                <div class="col-md-3 d-flex align-items-end">
+                    <div class="form-check mb-0">
                         <input class="form-check-input" type="checkbox" id="filtro_quantidade_zero" value="1">
                         <label class="form-check-label" for="filtro_quantidade_zero">Excluir quantidade 0 (sistema e terceiro)</label>
                     </div>
                 </div>
-                <div class="col-md-3 d-flex flex-column justify-content-end">
-                    <div class="form-check">
+                <div class="col-md-3 d-flex align-items-end">
+                    <div class="form-check mb-0">
                         <input class="form-check-input" type="checkbox" id="filtro_sem_material_sistema" value="1">
                         <label class="form-check-label" for="filtro_sem_material_sistema">Sem material no sistema</label>
                     </div>
                 </div>
-                <div class="col-md-3 d-flex flex-column justify-content-end">
-                    <div class="form-check">
+                <div class="col-md-3 d-flex align-items-end">
+                    <div class="form-check mb-0">
                         <input class="form-check-input" type="checkbox" id="filtro_ter_os_dois" value="1">
                         <label class="form-check-label" for="filtro_ter_os_dois">Ter os dois (sistema e terceiro)</label>
                     </div>

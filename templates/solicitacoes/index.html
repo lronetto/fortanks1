@@ -2,6 +2,10 @@
 
 {% block title %}Solicitações de Materiais{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/solicitacoes.css') }}">
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
@@ -92,90 +96,7 @@
 <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 <!-- HTML2PDF -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-<style>
-    /* Corrigir problemas visuais no select2 */
-    .select2-container {
-        width: 100% !important;
-    }
-    
-    /* Esconder textos soltos que possam aparecer */
-    #novaSolicitacaoModal .modal-body > *:not(form, .row, .card, div, h1, h2, h3, h4, h5, h6, p, span, label, input, select, textarea, button, table) {
-        display: none !important;
-    }
-    
-    /* Remover o X que aparece indevidamente */
-    #novaSolicitacaoModal .modal-body .close {
-        display: none !important;
-    }
-    
-    /* Esconder qualquer elemento duplicado que possa aparecer */
-    .select2-hidden-accessible + .select2-container + * {
-        display: none !important;
-    }
-    
-    /* Estilos para exportação PDF */
-    @media print {
-        body * {
-            visibility: hidden;
-        }
-        .modal-content, .modal-content * {
-            visibility: visible;
-        }
-        .modal-content {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-        }
-        .modal-footer, .modal-header button {
-            display: none !important;
-        }
-    }
-    
-    /* Estilos para o PDF gerado */
-    .pdf-conteudo {
-        font-family: Arial, sans-serif;
-    }
-    
-    .pdf-cabecalho {
-        text-align: center;
-        padding: 10px;
-        margin-bottom: 20px;
-        border-bottom: 1px solid #ddd;
-    }
-    
-    .pdf-secao {
-        margin-bottom: 15px;
-        page-break-inside: avoid;
-    }
-    
-    .pdf-titulo {
-        color: #333;
-        border-bottom: 1px solid #eee;
-        padding-bottom: 5px;
-        margin-bottom: 10px;
-    }
-    
-    .pdf-tabela {
-        width: 100%;
-        border-collapse: collapse;
-    }
-    
-    .pdf-tabela th, .pdf-tabela td {
-        border: 1px solid #ddd;
-        padding: 8px;
-    }
-    
-    .pdf-tabela th {
-        background-color: #f2f2f2;
-    }
-    
-    .pdf-tabela tr:nth-child(even) {
-        background-color: #f9f9f9;
-    }
-</style>
-<script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script><script>
 // Variáveis globais para armazenar os itens
 let itens = []; // Para nova solicitação
 const itensSolicitacoes = {}; // Para solicitações em edição

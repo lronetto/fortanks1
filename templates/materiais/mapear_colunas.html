@@ -2,20 +2,32 @@
 
 {% block title %}Mapear Colunas - Importação de Materiais{% endblock %}
 
-{% block content %}
-<div class="container-fluid px-4">
-    <h1 class="mt-4">Importar Materiais</h1>
-    <ol class="breadcrumb mb-4">
-        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">Dashboard</a></li>
-        <li class="breadcrumb-item"><a href="{{ url_for('material.index') }}">Materiais</a></li>
-        <li class="breadcrumb-item"><a href="{{ url_for('material.importar') }}">Importar</a></li>
-        <li class="breadcrumb-item active">Mapear Colunas</li>
-    </ol>
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/materiais.css') }}">
+{% endblock %}
 
-    <div class="card mb-4">
+{% block content %}
+<div class="container-fluid materiais-page">
+    <div class="ft-page-header">
+        <h1 class="h3 mb-0"><i class="fas fa-table"></i> Mapear Colunas</h1>
+        <a href="{{ url_for('material.importar') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i>
+            <span class="d-none d-md-inline ms-1">Importar</span>
+        </a>
+    </div>
+
+    <nav aria-label="breadcrumb" class="mb-4">
+        <ol class="breadcrumb">
+            <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">Dashboard</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('material.index') }}">Materiais</a></li>
+            <li class="breadcrumb-item"><a href="{{ url_for('material.importar') }}">Importar</a></li>
+            <li class="breadcrumb-item active">Mapear Colunas</li>
+        </ol>
+    </nav>
+
+    <div class="card mb-4 shadow">
         <div class="card-header">
-            <i class="fas fa-table me-1"></i>
-            Mapear Colunas do Arquivo
+            <i class="fas fa-table me-2" style="color:var(--mat-accent)"></i>Mapear Colunas do Arquivo
         </div>
         <div class="card-body">
             <div class="alert alert-info mb-4">
@@ -151,7 +163,7 @@
 
                 <h4 class="mb-3">Pré-visualização dos Dados</h4>
                 <div class="table-responsive mb-4">
-                    <table class="table table-bordered table-hover table-sm">
+                    <table class="table table-bordered table-hover table-sm mat-preview-table">
                         <thead>
                             <tr>
                                 {% for coluna in colunas %}

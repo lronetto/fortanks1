@@ -3,134 +3,14 @@
 {% block title %}Relatório de Notas Fiscais de Venda{% endblock %}
 
 {% block extra_css %}
-<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
-<style>
-    .card {
-        transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
-        border-width: 2px;
-    }
-    
-    .card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    }
-    
-    .card-title {
-        font-weight: 600;
-        margin-bottom: 1rem;
-    }
-    
-    .card-body h3 {
-        font-weight: 700;
-        margin-bottom: 0.5rem;
-    }
-    
-    .card-body p {
-        font-size: 0.9rem;
-    }
-    
-    .card-resumo {
-        min-height: 120px;
-        display: flex;
-        flex-direction: column;
-    }
-    
-    .card-resumo .card-body {
-        flex: 1;
-        display: flex;
-        flex-direction: column;
-        justify-content: center;
-    }
-    
-    .card-resumo .card-title {
-        font-size: 0.9rem;
-        margin-bottom: 10px;
-    }
-    
-    .card-resumo h3 {
-        font-size: 1.8rem;
-        margin: 0;
-    }
-    
-    .filtros-card {
-        background-color: #f8f9fa;
-        padding: 20px;
-        border-radius: 5px;
-        margin-bottom: 20px;
-    }
-    
-    .border-primary {
-        border-color: #007bff !important;
-    }
-    
-    .border-success {
-        border-color: #28a745 !important;
-    }
-    
-    .border-warning {
-        border-color: #ffc107 !important;
-    }
-    
-    .border-info {
-        border-color: #17a2b8 !important;
-    }
-    
-    .border-secondary {
-        border-color: #6c757d !important;
-    }
-    
-    .border-danger {
-        border-color: #dc3545 !important;
-    }
-    
-    .text-primary {
-        color: #007bff !important;
-    }
-    
-    .text-success {
-        color: #28a745 !important;
-    }
-    
-    .text-warning {
-        color: #ffc107 !important;
-    }
-    
-    .text-info {
-        color: #17a2b8 !important;
-    }
-    
-    .text-secondary {
-        color: #6c757d !important;
-    }
-    
-    .text-danger {
-        color: #dc3545 !important;
-    }
-    
-    .table-info {
-        background-color: #d1ecf1 !important;
-    }
-    
-    .table-success {
-        background-color: #d4edda !important;
-    }
-    
-    .table-warning {
-        background-color: #fff3cd !important;
-    }
-    
-    .table-primary {
-        background-color: #cce5ff !important;
-    }
-    
-    .table-danger {
-        background-color: #f8d7da !important;
-    }
-</style>
+<link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/relatorios.css') }}">
 {% endblock %}
 
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid relatorio-notas">
     <div class="row mb-4">
         <div class="col-12">
             <h2><i class="fas fa-file-invoice-dollar"></i> Relatório de Notas Fiscais de Venda por Centro de Custo</h2>

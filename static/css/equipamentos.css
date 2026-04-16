@@ -1,0 +1,77 @@
+/* ============================================================
+   equipamentos — Grids de fotos e modais de equipamento
+   ============================================================ */
+
+/* Botões de upload compartilhados entre editar e novo */
+.editar-eq-foto-actions,
+.novo-eq-foto-actions {
+    display: flex;
+    gap: .5rem;
+    flex-wrap: wrap;
+}
+.editar-eq-foto-actions .btn,
+.novo-eq-foto-actions .btn {
+    flex: 1 1 auto;
+    min-width: 120px;
+}
+
+/* Grade de preview de fotos */
+.editar-eq-preview-grid,
+.novo-eq-preview-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+    gap: .5rem;
+}
+.editar-eq-preview-item,
+.novo-eq-preview-item {
+    position: relative;
+    aspect-ratio: 1;
+    border-radius: .375rem;
+    overflow: hidden;
+    border: 1px solid var(--bs-border-color);
+}
+.editar-eq-preview-item img,
+.novo-eq-preview-item img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+.editar-eq-preview-item .badge-remove,
+.novo-eq-preview-item .badge-remove {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    cursor: pointer;
+    font-size: .7rem;
+    line-height: 1;
+    padding: .25em .4em;
+    z-index: 2;
+}
+
+/* Card de foto atual (editar) */
+.editar-eq-foto-atual-card {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    padding: .5rem;
+    border-radius: .375rem;
+    background: var(--bs-light, #f8f9fa);
+    border: 1px solid var(--bs-border-color);
+}
+.editar-eq-foto-atual-card img {
+    width: 64px;
+    height: 64px;
+    object-fit: cover;
+    border-radius: .375rem;
+    flex-shrink: 0;
+}
+
+@media (max-width: 767.98px) {
+    #editarEquipamentoModal .modal-body,
+    #novoEquipamentoModal .modal-body { padding: .75rem; }
+
+    #editarEquipamentoModal .form-control,
+    #editarEquipamentoModal .form-select,
+    #novoEquipamentoModal .form-control,
+    #novoEquipamentoModal .form-select { font-size: 16px; } /* Evitar zoom no iOS */
+}

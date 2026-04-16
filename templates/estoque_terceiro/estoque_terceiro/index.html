@@ -1,0 +1,253 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Estoque de Terceiros{% endblock %}
+{% block mobile_title %}Estoque de Terceiros{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/estoque.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid py-4">
+    <div class="ft-page-header">
+        <h1 class="h3 mb-0">Estoque de Terceiros</h1>
+        <div class="btn-group">
+            <button type="button" class="btn btn-outline-secondary btn-sm" id="btnLimparFiltrosEstoqueTerceiro" title="Limpar filtros">
+                <i class="fas fa-eraser"></i>
+                <span class="d-none d-md-inline ms-1">Limpar filtros</span>
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" id="btnAplicarFiltrosEstoqueTerceiro">
+                <i class="fas fa-search"></i>
+                <span class="d-none d-md-inline ms-1">Aplicar filtros</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4 filtros-card">
+        <div class="card-header py-3 d-flex align-items-center justify-content-between">
+            <span class="card-title-text"><i class="fas fa-filter me-2"></i>Filtros</span>
+        </div>
+        <div class="card-body">
+            <form id="filtrosEstoqueTerceiro" class="row g-3">
+                <div class="col-md-4">
+                    <label for="filtroNomeEstoqueTerceiro" class="form-label">Nome</label>
+                    <input type="text" class="form-control" id="filtroNomeEstoqueTerceiro" placeholder="Buscar por nome do material">
+                </div>
+                <div class="col-md-4">
+                    <label for="filtroTipoEstoqueTerceiro" class="form-label">Tipo</label>
+                    <select id="filtroTipoEstoqueTerceiro" class="form-select" multiple>
+                        <option value="">Todos os tipos</option>
+                    </select>
+                    <small class="text-muted">Segure Ctrl para selecionar mais de um tipo.</small>
+                </div>
+                <div class="col-md-4">
+                    <label for="filtroDataEstoqueTerceiro" class="form-label">Data</label>
+                    <select id="filtroDataEstoqueTerceiro" class="form-select">
+                        <option value="">Todas as datas</option>
+                    </select>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow" data-ft-colvis="tabelaEstoqueTerceiro">
+        <div class="card-header py-3 d-flex align-items-center justify-content-between">
+            <span class="card-title-text"><i class="fas fa-table me-2"></i>Registros do terceiro</span>
+            <div class="ft-col-toggle-placeholder"></div>
+        </div>
+        <div class="card-body p-md-3 p-2">
+            <div class="ft-datatable-wrapper">
+                <table class="table table-bordered table-hover" id="tabelaEstoqueTerceiro" style="width:100%">
+                    <thead>
+                        <tr>
+                            <th>Código ERP</th>
+                            <th>Nome</th>
+                            <th>Tipo</th>
+                            <th>Data</th>
+                            <th>Unidade</th>
+                            <th>Quantidade</th>
+                            <th>Valor Unitário</th>
+                            <th>Valor Total</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    var URL_LISTA = "{{ url_for('estoque_terceiro.api_lista') }}";
+    var URL_TIPOS = "{{ url_for('estoque_terceiro.api_tipos_disponiveis') }}";
+    var URL_DATAS = "{{ url_for('estoque_terceiro.api_datas_disponiveis') }}";
+    var TITULOS = ['Código ERP', 'Nome', 'Tipo', 'Data', 'Unidade', 'Quantidade', 'Valor Unitário', 'Valor Total'];
+    var tabela = null;
+
+    function fmtQtd(v) {
+        return (parseFloat(v) || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 });
+    }
+
+    function fmtMoeda(v) {
+        return (parseFloat(v) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    function filtroTiposSelecionados() {
+        var vals = $('#filtroTipoEstoqueTerceiro').val() || [];
+        vals = vals.filter(function (v) { return String(v || '').trim() !== ''; });
+        return vals;
+    }
+
+    function carregarDatas() {
+        return fetch(URL_DATAS)
+            .then(function (r) { return r.json(); })
+            .then(function (json) {
+                var select = $('#filtroDataEstoqueTerceiro');
+                select.empty().append('<option value="">Todas as datas</option>');
+                (json.datas || []).forEach(function (d) {
+                    select.append('<option value="' + d + '">' + d + '</option>');
+                });
+            })
+            .catch(function () {
+                console.warn('Não foi possível carregar datas do estoque de terceiros.');
+            });
+    }
+
+    function carregarTipos() {
+        return fetch(URL_TIPOS)
+            .then(function (r) { return r.json(); })
+            .then(function (json) {
+                var select = $('#filtroTipoEstoqueTerceiro');
+                select.empty();
+                (json.tipos || []).forEach(function (t) {
+                    select.append('<option value="' + t + '">' + t + '</option>');
+                });
+            })
+            .catch(function () {
+                console.warn('Não foi possível carregar tipos do estoque de terceiros.');
+            });
+    }
+
+    function inicializarTabela() {
+        tabela = $('#tabelaEstoqueTerceiro').DataTable(FT.dtOpcoes({
+            processing: true,
+            serverSide: false,
+            ajax: function (data, callback) {
+                var url = new URL(URL_LISTA, window.location.origin);
+                var nome = ($('#filtroNomeEstoqueTerceiro').val() || '').trim();
+                var dataFiltro = $('#filtroDataEstoqueTerceiro').val();
+                var tipos = filtroTiposSelecionados();
+                if (nome) url.searchParams.set('nome', nome);
+                if (dataFiltro) url.searchParams.set('data_filtro', dataFiltro);
+                if (tipos.length) url.searchParams.set('tipos', tipos.join(','));
+
+                fetch(url.toString())
+                    .then(function (resp) { return resp.json(); })
+                    .then(function (json) {
+                        var dados = Array.isArray(json.data) ? json.data : [];
+                        callback({ data: dados });
+                    })
+                    .catch(function () {
+                        callback({ data: [] });
+                        FT.alerta('Não foi possível carregar os dados de estoque de terceiros.', 'danger');
+                    });
+            },
+            columns: [
+                {
+                    data: 'codigo_erp',
+                    render: function (d) {
+                        return d ? String(d) : '-';
+                    }
+                },
+                {
+                    data: 'material_nome',
+                    defaultContent: '-',
+                },
+                {
+                    data: 'tipo',
+                    render: function (d) {
+                        return d ? String(d) : '-';
+                    }
+                },
+                {
+                    data: 'data_estoque_terceiro',
+                    render: function (d) {
+                        return d ? String(d) : '-';
+                    }
+                },
+                {
+                    data: 'unidade_terceiro',
+                    render: function (d) {
+                        return d ? String(d) : '-';
+                    }
+                },
+                {
+                    data: 'quantidade_terceiro',
+                    className: 'text-end',
+                    render: function (d) {
+                        return fmtQtd(d);
+                    }
+                },
+                {
+                    data: 'valor_unitario_original',
+                    className: 'text-end',
+                    render: function (d) {
+                        return fmtMoeda(d);
+                    }
+                },
+                {
+                    data: 'valor_terceiro',
+                    className: 'text-end',
+                    render: function (d) {
+                        return fmtMoeda(d);
+                    }
+                }
+            ],
+            order: [[1, 'asc']],
+            pageLength: 25
+        }));
+
+        FT.dtColunas.inicializar(tabela, 'tabelaEstoqueTerceiro', TITULOS);
+    }
+
+    function limparFiltros() {
+        $('#filtroNomeEstoqueTerceiro').val('');
+        $('#filtroTipoEstoqueTerceiro').val([]);
+        $('#filtroDataEstoqueTerceiro').val('');
+        if (tabela) {
+            tabela.search('');
+            tabela.columns().search('');
+            tabela.ajax.reload();
+        }
+    }
+
+    $('#btnAplicarFiltrosEstoqueTerceiro').on('click', function () {
+        if (!tabela) return;
+        tabela.ajax.reload();
+    });
+
+    $('#btnLimparFiltrosEstoqueTerceiro').on('click', function () {
+        limparFiltros();
+    });
+
+    $('#filtroNomeEstoqueTerceiro').on('input', function () {
+        if (!tabela) return;
+        tabela.ajax.reload();
+    });
+
+    $('#filtrosEstoqueTerceiro').on('submit', function (e) {
+        e.preventDefault();
+        if (tabela) {
+            tabela.ajax.reload();
+        }
+    });
+
+    Promise.all([carregarDatas(), carregarTipos()]).finally(function () {
+        inicializarTabela();
+    });
+})();
+</script>
+{% endblock %}

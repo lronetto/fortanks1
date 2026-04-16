@@ -4,16 +4,7 @@
 {% block mobile_title %}Estoque{% endblock %}
 
 {% block extra_css %}
-<style>
-.link-historico-estoque {
-    text-decoration: none;
-    color: #4e73df;
-    cursor: pointer;
-    font-weight: 500;
-    transition: color .2s;
-}
-.link-historico-estoque:hover { color: #224abe; text-decoration: underline; }
-</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/estoque.css') }}">
 {% endblock %}
 
 {% block content %}

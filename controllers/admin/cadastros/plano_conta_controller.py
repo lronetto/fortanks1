@@ -7,24 +7,18 @@ from werkzeug.utils import secure_filename
 
 from models.database import db
 from models.plano_conta import PlanoConta
+from utils.decorators import criar_verificacao_permissao
 
 # Configuração para upload de arquivos
 UPLOAD_FOLDER = 'temp_uploads'
 ALLOWED_EXTENSIONS = {'xlsx', 'xls'}
 
 plano_conta_bp = Blueprint('plano_conta', __name__)
+plano_conta_bp.before_request(login_required(criar_verificacao_permissao('gerente')))
 
 # Verificar se a extensão do arquivo é permitida
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
-
-# Middleware para verificar se o usuário tem permissão
-@plano_conta_bp.before_request
-@login_required
-def verificar_permissao():
-    if not current_user.is_gerente_ou_superior:
-        flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
-        return redirect(url_for('dashboard.index'))
 
 @plano_conta_bp.route('/')
 @login_required

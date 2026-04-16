@@ -14,6 +14,7 @@ from models.database import db
 from models.material import Materiais
 from models.unidade import Unidades
 from models.plano_conta import PlanoConta
+from utils.material_imagem_upload import dump_dados_json, parse_dados_json
 
 from .. import material_bp
 
@@ -270,12 +271,8 @@ def confirmar_importacao():
                 
                 # Verificar se material já existe (por código ou nome)
                 material_existente = None
-                if codigo:
-                    material_existente = Materiais.query.filter_by(codigo=codigo).first()
-                
-                if not material_existente:
-                    # Tentar buscar por nome exato
-                    material_existente = Materiais.query.filter_by(nome=nome).first()
+                # Coluna `codigo` foi removida do banco; mantém fallback por nome exato.
+                material_existente = Materiais.query.filter_by(nome=nome).first()
                 
                 if material_existente:
                     if opcao_atualizacao:
@@ -283,9 +280,13 @@ def confirmar_importacao():
                         material_existente.nome = nome
                         material_existente.categoria = categoria
                         if codigo:
-                            material_existente.codigo = codigo
+                            extras = parse_dados_json(material_existente.dados_adicionais)
+                            extras["codigo_sox"] = codigo
+                            material_existente.dados_adicionais = dump_dados_json(extras) if extras else None
                         if codigo_erp:
-                            material_existente.codigo_erp = codigo_erp
+                            extras = parse_dados_json(material_existente.dados_adicionais)
+                            extras["codigo_alterdata"] = codigo_erp
+                            material_existente.dados_adicionais = dump_dados_json(extras) if extras else None
                         if plano_conta_id:
                             material_existente.plano_conta_id = plano_conta_id
                         if plano_conta_string:
@@ -304,11 +305,14 @@ def confirmar_importacao():
                         continue
                 else:
                     # Criar novo material
+                    extras = parse_dados_json(None)
+                    if codigo:
+                        extras["codigo_sox"] = codigo
+                    if codigo_erp:
+                        extras["codigo_alterdata"] = codigo_erp
                     novo_material = Materiais(
-                        codigo=codigo,
                         nome=nome,
                         categoria=categoria,
-                        codigo_erp=codigo_erp,
                         plano_conta=plano_conta_string,
                         plano_conta_id=plano_conta_id,
                         unidade_id=unidade_id,
@@ -316,6 +320,7 @@ def confirmar_importacao():
                         ncm=ncm,
                         ativo=True
                     )
+                    novo_material.dados_adicionais = dump_dados_json(extras) if extras else None
                     db.session.add(novo_material)
                     resultados["inseridos"] += 1
                 

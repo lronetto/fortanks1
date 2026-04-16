@@ -1,0 +1,9 @@
+/* ============================================================
+   solicitacoes — Módulo de solicitações
+   ============================================================ */
+
+/* Ocultar elementos indevidamente renderizados pelo Jinja2/Bootstrap */
+#novaSolicitacaoModal .modal-body > *:not(form, .row, .card, div, h1, h2, h3, h4, h5, h6, p, span, label, input, select, textarea, button, table) {
+    display: none !important;
+}
+#novaSolicitacaoModal .modal-body .close { display: none !important; }

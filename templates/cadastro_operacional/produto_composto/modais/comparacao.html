@@ -15,63 +15,7 @@
                     Selecione 2 ou mais produtos na lista e clique em <strong>Comparar</strong>. Aqui você pode ajustar as quantidades de cada produto lado a lado.
                 </div>
 
-                <style>
-                    /* Área com rolagem; cabeçalho (título das colunas) e 1ª coluna fixos ao rolar */
-                    .comparacao-tabela-scroll {
-                        overflow: auto;
-                        max-height: min(65vh, 520px);
-                        -webkit-overflow-scrolling: touch;
-                        border: 1px solid rgba(0, 0, 0, 0.08);
-                        border-radius: 4px;
-                    }
-
-                    /* Bootstrap .table usa width:100%; colgroup + width:auto = soma das colunas */
-                    #tabela-comparacao-produtos {
-                        --col-comparacao: 100px;
-                        --comparacao-sticky-bg: #fff;
-                        table-layout: fixed;
-                        width: auto !important;
-                        max-width: none;
-                        margin-bottom: 0;
-                    }
-                    #tabela-comparacao-produtos col.col-comparacao-col {
-                        width: var(--col-comparacao);
-                    }
-                    #tabela-comparacao-produtos .col-comparacao-fixa {
-                        width: var(--col-comparacao) !important;
-                        min-width: var(--col-comparacao) !important;
-                        max-width: var(--col-comparacao) !important;
-                        box-sizing: border-box;
-                        vertical-align: middle;
-                        word-break: break-word;
-                        overflow-wrap: anywhere;
-                    }
-                    #tabela-comparacao-produtos .input-qtd-comparacao {
-                        max-width: 100%;
-                        box-sizing: border-box;
-                    }
-
-                    #tabela-comparacao-produtos thead th {
-                        position: sticky;
-                        top: 0;
-                        z-index: 3;
-                        background-color: var(--comparacao-sticky-bg);
-                        box-shadow: 0 2px 0 rgba(0, 0, 0, 0.06);
-                    }
-                    #tabela-comparacao-produtos thead th:first-child {
-                        left: 0;
-                        z-index: 5;
-                        box-shadow: 2px 2px 0 rgba(0, 0, 0, 0.06);
-                    }
-                    #tabela-comparacao-produtos tbody td:first-child {
-                        position: sticky;
-                        left: 0;
-                        z-index: 2;
-                        background-color: var(--comparacao-sticky-bg);
-                        box-shadow: 2px 0 4px rgba(0, 0, 0, 0.06);
-                    }
-                </style>
-
+                
                 <div class="comparacao-tabela-scroll">
                     <table class="table table-bordered table-sm" id="tabela-comparacao-produtos" cellspacing="0">
                         <colgroup id="comparacao-colgroup"></colgroup>

@@ -6,6 +6,7 @@ from models.colaborador import Colaborador
 from models.database import db
 from models.estoque import Estoque, EstoqueMovimentacoes, EstoqueInventarios, EstoqueInventariosItens
 from utils.ca_scraper import consultar_ca, baixar_pagina_consultaca
+from utils.material_imagem_upload import parse_dados_json
 from datetime import datetime, timedelta, date
 import json
 import logging
@@ -150,7 +151,7 @@ def epis_datatables():
         term = f'%{search_value}%'
         clauses = [
             Materiais.nome.ilike(term),
-            Materiais.codigo.ilike(term),
+            Materiais.dados_adicionais.ilike(term),
             Epi.ca_numero.ilike(term),
         ]
         if search_value.isdigit():
@@ -432,7 +433,7 @@ def epis_json():
             'material': {
                 'id': epi.material.id,
                 'nome': epi.material.nome or '',
-                'codigo': epi.material.codigo or ''
+                'codigo': parse_dados_json(epi.material.dados_adicionais).get("codigo_sox") or ''
             }
         })
     

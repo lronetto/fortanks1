@@ -4,16 +4,10 @@ from datetime import datetime
 
 from models.database import db
 from models.centro_custo import CentroCusto
+from utils.decorators import criar_verificacao_permissao
 
 centro_custo_bp = Blueprint('centro_custo', __name__)
-
-# Middleware para verificar se o usuário tem permissão
-@centro_custo_bp.before_request
-@login_required
-def verificar_permissao():
-    if not current_user.is_gerente_ou_superior:
-        flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
-        return redirect(url_for('dashboard.index'))
+centro_custo_bp.before_request(login_required(criar_verificacao_permissao('gerente')))
 
 @centro_custo_bp.route('/')
 def index():

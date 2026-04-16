@@ -41,7 +41,7 @@ def exportar_excel():
         if search_term:
             search_pattern = f"%{search_term}%"
             query = query.filter(
-                or_(Materiais.nome.ilike(search_pattern), Materiais.codigo.ilike(search_pattern))
+                or_(Materiais.nome.ilike(search_pattern), Materiais.dados_adicionais.ilike(search_pattern))
             )
         if category_filters:
             query = query.filter(Materiais.categoria.in_(category_filters))
@@ -57,6 +57,7 @@ def exportar_excel():
             mega = json_obj.get('cod_mega', '')
             if mega:
                 continue
+            codigo_alterdata = json_obj.get("codigo_alterdata", "")
 
             itens_por_ncm = {}
             for item in itens:
@@ -82,7 +83,7 @@ def exportar_excel():
                     "Unidade": mat.unidade_obj.nome if mat.unidade_obj else "",
                     "NCM": (mat.ncm if mat.ncm != "0" else (ncm_unico or "")),
                     "Plano de Conta": mat.plano_conta,
-                    "Código Alterdata": mat.codigo_erp,
+                    "Código Alterdata": codigo_alterdata,
                     "Data Criação": mat.data_criacao.strftime("%Y-%m-%d %H:%M:%S") if mat.data_criacao else "",
                     "Quantidade Importada": len(itens),
                     "ncn iguais": ncm_iguais,
@@ -130,10 +131,8 @@ def exportar_excel1():
                 estoque_atual = 0
             print(f"material: {i}/{len(materiais)}")
             i+=1
-            if mat.codigo_erp:
-                codigo_alterdata = str(mat.codigo_erp).replace(".0", "")
-            else:
-                codigo_alterdata = ""
+            json_obj = json.loads(mat.dados_adicionais) if mat.dados_adicionais else {}
+            codigo_alterdata = str(json_obj.get("codigo_alterdata") or "").replace(".0", "")
             dados_exportacao.append(
                 {
                     "ID": mat.id,

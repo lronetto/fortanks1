@@ -1,0 +1,100 @@
+/* ============================================================
+   cadastro_operacional — Produto Composto e afins
+   ============================================================ */
+
+/* ── Modal de Comparação de Produtos ─────────────────────────── */
+.comparacao-tabela-scroll {
+    overflow: auto;
+    max-height: min(65vh, 520px);
+    -webkit-overflow-scrolling: touch;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 4px;
+}
+#tabela-comparacao-produtos {
+    --col-comparacao: 100px;
+    --comparacao-sticky-bg: #fff;
+    table-layout: fixed;
+    width: auto !important;
+    max-width: none;
+    margin-bottom: 0;
+}
+#tabela-comparacao-produtos col.col-comparacao-col { width: var(--col-comparacao); }
+#tabela-comparacao-produtos .col-comparacao-fixa {
+    width: var(--col-comparacao) !important;
+    min-width: var(--col-comparacao) !important;
+    max-width: var(--col-comparacao) !important;
+    box-sizing: border-box;
+    vertical-align: middle;
+    word-break: break-word;
+    overflow-wrap: anywhere;
+}
+
+/* ── Modal de Produção ────────────────────────────────────────── */
+#producaoModal .modal-dialog {
+    max-width: 80%;
+    margin: 1rem auto;
+}
+#producaoModal .modal-body { overflow: visible; }
+
+#tabela-componentes-producao { margin-bottom: 0; }
+#tabela-componentes-producao thead th {
+    position: sticky;
+    top: 0;
+    background-color: #f8f9fa;
+    z-index: 10;
+    border-bottom: 2px solid #dee2e6;
+    white-space: nowrap;
+    padding: 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+#tabela-componentes-producao tbody td {
+    white-space: nowrap;
+    padding: 0.5rem;
+    font-size: 0.9rem;
+}
+
+.tabela-produtos-compostos {
+    max-height: 50vh;
+    overflow-y: auto;
+    overflow-x: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+}
+
+@media (max-width: 768px) {
+    #producaoModal .modal-dialog { max-width: 100%; margin: 0.5rem; }
+    .tabela-produtos-compostos { max-height: 40vh; }
+}
+
+/* ── Modal de Histórico de Custo ─────────────────────────────── */
+#tabela-historico-custo table.table {
+    margin-bottom: 0;
+    background-color: #fff;
+}
+#tabela-historico-custo table.table thead th {
+    font-size: 0.8em;
+    padding: 0.3rem;
+    font-weight: 600;
+}
+#tabela-historico-custo table.table tbody td {
+    padding: 0.4rem;
+    font-size: 0.85em;
+}
+#tabela-historico-custo table.table tbody tr:hover { background-color: #f8f9fa; }
+
+.historico-custo-scroll {
+    max-height: 420px;
+    overflow-y: auto;
+    overflow-x: auto;
+}
+.historico-custo-scroll #tabela-historico-custo thead th {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+    box-shadow: 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+/* Modal de detalhamento acima do modal principal */
+#detalhamentoCustoModal { z-index: 1060 !important; }
+#detalhamentoCustoModal .modal-backdrop { z-index: 1055 !important; }

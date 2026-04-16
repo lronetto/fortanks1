@@ -1,0 +1,125 @@
+/* ============================================================
+   cronograma — Matriz semanal e timeline de produção
+   ============================================================ */
+
+.cron-matriz-toggle { min-width: 1.25rem; line-height: 1; }
+.cron-matriz-toggle .cron-matriz-chevron {
+    transition: transform 0.15s ease;
+    font-size: 0.7rem;
+}
+
+/* Colunas fixas à esquerda ao rolar horizontalmente */
+.cron-matriz-scroll {
+    --cron-matriz-w1: 9rem;
+    --cron-matriz-w2: 12rem;
+    --cron-matriz-w3: 5.75rem;
+    --cron-matriz-w4: 4.5rem;
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+}
+.cron-matriz-sticky-1 {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+    width: var(--cron-matriz-w1);
+    min-width: var(--cron-matriz-w1);
+    max-width: 14rem;
+    background-color: var(--bs-body-bg, #fff);
+    box-shadow: 3px 0 0 rgba(0, 0, 0, 0.06);
+}
+.cron-matriz-sticky-2 {
+    position: sticky;
+    left: var(--cron-matriz-w1);
+    z-index: 2;
+    width: var(--cron-matriz-w2);
+    min-width: var(--cron-matriz-w2);
+    max-width: 22rem;
+    background-color: var(--bs-body-bg, #fff);
+    box-shadow: 3px 0 0 rgba(0, 0, 0, 0.06);
+}
+.cron-matriz-sticky-3 {
+    position: sticky;
+    left: calc(var(--cron-matriz-w1) + var(--cron-matriz-w2));
+    z-index: 2;
+    width: var(--cron-matriz-w3);
+    min-width: var(--cron-matriz-w3);
+    background-color: var(--bs-body-bg, #fff);
+    box-shadow: 3px 0 0 rgba(0, 0, 0, 0.06);
+}
+.cron-matriz-sticky-4 {
+    position: sticky;
+    left: calc(var(--cron-matriz-w1) + var(--cron-matriz-w2) + var(--cron-matriz-w3));
+    z-index: 2;
+    width: var(--cron-matriz-w4);
+    min-width: var(--cron-matriz-w4);
+    background-color: var(--bs-body-bg, #fff);
+    box-shadow: 3px 0 0 rgba(0, 0, 0, 0.06);
+}
+thead.table-light .cron-matriz-sticky-1,
+thead.table-light .cron-matriz-sticky-2,
+thead.table-light .cron-matriz-sticky-3,
+thead.table-light .cron-matriz-sticky-4 {
+    z-index: 7;
+    background-color: var(--bs-light, #f8f9fa) !important;
+}
+tbody .cron-matriz-sticky-1,
+tbody .cron-matriz-sticky-2,
+tbody .cron-matriz-sticky-3,
+tbody .cron-matriz-sticky-4 {
+    background-color: var(--bs-body-bg, #fff);
+}
+thead.table-light {
+    position: sticky;
+    top: 0;
+    z-index: 3;
+}
+
+/* ── Timeline horizontal de dias ─────────────────────────────── */
+.cron-dias-timeline {
+    display: grid;
+    grid-template-columns: repeat(var(--n, 8), minmax(2rem, 1fr));
+    gap: 0;
+    min-width: max(100%, calc(var(--n, 8) * 2.75rem));
+}
+.cron-dias-timeline-week {
+    border-left: 1px solid rgba(0, 0, 0, 0.08);
+    min-width: 0;
+}
+.cron-dias-timeline-week:first-child { border-left-color: transparent; }
+.cron-dias-timeline-header .cron-dias-timeline-week { border-left-color: rgba(0, 0, 0, 0.06); }
+.cron-dias-runs-wrap { min-width: max(100%, calc(var(--n, 8) * 2.75rem)); }
+.cron-dias-runs-track {
+    position: relative;
+    min-height: 1.85rem;
+    margin-bottom: 0;
+}
+.cron-dias-h-run {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    box-sizing: border-box;
+    min-height: 4px;
+    background: rgba(54, 162, 235, 0.92);
+    border: 1px solid rgba(13, 110, 253, 0.4);
+    border-radius: 0.2rem;
+    pointer-events: auto;
+}
+.cron-dias-runs-axis {
+    height: 2px;
+    background: rgba(108, 117, 125, 0.45);
+    border-radius: 1px;
+    margin: 0 0 0.2rem 0;
+}
+.cron-dias-timeline-nums .cron-dias-timeline-week {
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-start;
+}
+.cron-matriz-zoom-label {
+    min-width: 3.25rem;
+    text-align: center;
+    font-size: 0.75rem;
+    line-height: 1.25;
+    padding: 0.25rem 0.35rem;
+    user-select: none;
+}

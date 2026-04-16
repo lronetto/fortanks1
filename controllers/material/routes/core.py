@@ -105,11 +105,7 @@ def novo():
                 return redirect(url_for("material.index"))
             return render_template("materiais/novo.html", planos_conta=planos_conta, unidades=unidades)
 
-        if codigo and Materiais.query.filter_by(codigo=codigo).first():
-            flash(f"Já existe um material com o código {codigo}!", "danger")
-            if from_modal:
-                return redirect(url_for("material.index"))
-            return render_template("materiais/novo.html", planos_conta=planos_conta, unidades=unidades)
+        # A coluna `codigo` foi removida do banco; o valor do usuário é salvo em dados_adicionais["codigo_sox"].
 
         extras = parse_dados_json(None)
         if codigo:
@@ -121,12 +117,10 @@ def novo():
             extras["cod_mega"] = codigo_mega
 
         material = Materiais(
-            codigo=codigo,
             nome=nome.upper(),
             descricao=descricao,
             categoria=categoria,
             plano_conta=plano_conta,
-            codigo_erp=codigo_alterdata,
             unidade_id=unidade,
             mascara=mascara,
             formula_calculo=formula_calculo if formula_calculo else None,
@@ -169,7 +163,9 @@ def editar(id):
             descricao = request.form.get("descricao", "")
             categoria = request.form.get("categoria", "")
             plano_conta = request.form.get("plano_conta", "")
-            codigo_erp = _normalizar_codigo_inteiro(request.form.get("codigo_erp", ""))
+            codigo_alterdata = _normalizar_codigo_inteiro(
+                request.form.get("codigo_alterdata") or request.form.get("codigo_erp", "")
+            )
             unidade = request.form.get("unidade", "")
             mascara = _normalizar_codigo_inteiro(request.form.get("mascara", ""))
             formula_calculo = request.form.get("formula_calculo", "").strip()
@@ -183,27 +179,23 @@ def editar(id):
                     unidades=unidades,
                 )
 
-            if codigo and codigo != material.codigo and Materiais.query.filter_by(codigo=codigo).first():
-                flash(f"Já existe um material com o código {codigo}!", "danger")
-                return render_template(
-                    "materiais/editar.html",
-                    material=material,
-                    planos_conta=PlanoConta.query.filter_by(ativo=True).all(),
-                    unidades=unidades,
-                )
-
-            if not codigo:
-                codigo = f"AUTO-{id}-{datetime.now().strftime('%Y%m%d%H%M%S')}"
-
-            material.codigo = codigo
+            # A coluna `codigo` foi removida do banco; salvamos em dados_adicionais["codigo_sox"].
             material.nome = nome.upper()
             material.descricao = descricao
             material.categoria = categoria
             material.plano_conta = plano_conta
-            material.codigo_erp = codigo_erp
             material.unidade_id = unidade
             material.mascara = mascara
             material.formula_calculo = formula_calculo if formula_calculo else None
+
+            extras = parse_dados_json(material.dados_adicionais)
+            if codigo:
+                extras["codigo_sox"] = codigo
+            if codigo_alterdata:
+                extras["codigo_alterdata"] = codigo_alterdata
+            else:
+                extras.pop("codigo_alterdata", None)
+            material.dados_adicionais = dump_dados_json(extras) if extras else None
 
             db.session.add(material)
             db.session.commit()

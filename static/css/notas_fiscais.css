@@ -1,0 +1,384 @@
+/* ================================================================
+   Notas Fiscais — Design System Centralizado
+   Inclua este arquivo em todas as views do módulo notas_fiscais.
+   ================================================================ */
+
+/* Fontes --------------------------------------------------------- */
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+/* Variáveis de cor ---------------------------------------------- */
+:root {
+    --nf-navy:       #1e3a5f;
+    --nf-navy-light: #2d5a8e;
+    --nf-amber:      #b45309;
+    --nf-amber-bg:   #fffbeb;
+    --nf-surface:    #f8fafc;
+    --nf-border:     #cbd5e1;
+    --nf-text-muted: #64748b;
+    --nf-hover-row:  #eef4ff;
+}
+
+/* Page header ---------------------------------------------------- */
+.nf-page-header {
+    padding-bottom: 1rem;
+    margin-bottom: 1.25rem;
+    border-bottom: 2px solid var(--nf-border);
+}
+.nf-page-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1.65rem;
+    font-weight: 700;
+    color: var(--nf-navy);
+    letter-spacing: 0.02em;
+    text-transform: uppercase;
+    margin: 0;
+    line-height: 1.1;
+}
+.nf-page-subtitle {
+    font-size: 0.8rem;
+    color: var(--nf-text-muted);
+    margin: 0.25rem 0 0;
+}
+
+/* Action button bar --------------------------------------------- */
+.nf-btn-bar,
+.btn-bar {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem;
+    align-items: center;
+}
+.nf-btn-bar .btn,
+.btn-bar .btn {
+    font-size: 0.8rem;
+    padding: 0.35rem 0.75rem;
+    border-radius: 5px;
+    font-weight: 500;
+    letter-spacing: 0.01em;
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+.nf-btn-bar .btn:hover,
+.btn-bar .btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* Filter card ---------------------------------------------------- */
+.nf-filter-card {
+    border: 1px solid var(--nf-border) !important;
+    border-left: 3px solid var(--nf-navy) !important;
+    border-radius: 6px !important;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
+}
+.nf-filter-card .card-header {
+    background: var(--nf-surface) !important;
+    border-bottom: 1px solid var(--nf-border);
+    padding: 0.6rem 1rem;
+}
+.nf-filter-card .card-header .card-title-text,
+.nf-filter-card .card-title-text {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--nf-navy);
+}
+.nf-filter-card .form-label,
+.nf-filter-card label {
+    font-size: 0.73rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--nf-text-muted);
+    margin-bottom: 0.25rem;
+}
+.nf-filter-card .form-control,
+.nf-filter-card .form-select {
+    font-size: 0.85rem;
+    border-color: var(--nf-border);
+    border-radius: 4px;
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+.nf-filter-card .form-control:focus,
+.nf-filter-card .form-select:focus {
+    border-color: var(--nf-navy);
+    box-shadow: 0 0 0 3px rgba(30, 58, 95, 0.12);
+}
+
+/* Table card (nf-table-card e nf-items-card) -------------------- */
+.nf-table-card,
+.nf-items-card {
+    border: 1px solid var(--nf-border) !important;
+    border-radius: 6px !important;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.07) !important;
+}
+.nf-table-card .card-header,
+.nf-items-card .card-header {
+    background: var(--nf-navy) !important;
+    color: white !important;
+    padding: 0.6rem 1rem;
+    border-radius: 5px 5px 0 0;
+}
+.nf-table-card .card-header .card-title-text,
+.nf-items-card .card-header .card-title-text,
+.nf-table-card .card-title-text,
+.nf-items-card .card-title-text {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: white;
+}
+
+/* DataTable — cabeçalho padrão NF -------------------------------- */
+.nf-datatable {
+    font-size: 0.855rem;
+}
+.nf-datatable thead th {
+    background: var(--nf-navy) !important;
+    color: rgba(255, 255, 255, 0.9) !important;
+    font-family: 'Barlow Condensed', sans-serif !important;
+    font-size: 0.75rem !important;
+    letter-spacing: 0.07em !important;
+    text-transform: uppercase !important;
+    border-color: var(--nf-navy-light) !important;
+    white-space: nowrap;
+    padding: 0.6rem 0.7rem !important;
+}
+.nf-datatable tbody tr {
+    transition: background 0.12s;
+}
+.nf-datatable tbody tr:hover td {
+    background: var(--nf-hover-row) !important;
+}
+
+/* Info section (visualizar / itens) ----------------------------- */
+.nf-info-section {
+    border: 1px solid var(--nf-border);
+    border-radius: 6px;
+    overflow: hidden;
+    margin-bottom: 1rem;
+}
+.nf-info-section-header {
+    background: var(--nf-navy);
+    color: white;
+    padding: 0.5rem 1rem;
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 0.75rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+}
+.nf-info-section-body { padding: 0; }
+
+.nf-info-table { margin: 0; font-size: 0.855rem; }
+.nf-info-table th {
+    background: var(--nf-surface) !important;
+    color: var(--nf-text-muted);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    padding: 0.5rem 0.85rem;
+    width: 38%;
+    border-color: var(--nf-border);
+}
+.nf-info-table td {
+    padding: 0.5rem 0.85rem;
+    border-color: var(--nf-border);
+    vertical-align: middle;
+}
+
+/* Main card header (visualizar) --------------------------------- */
+.nf-main-card-header {
+    background: var(--nf-navy);
+    color: white;
+    border-radius: 5px 5px 0 0;
+}
+.nf-main-card-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: white;
+}
+.nf-main-card-header .btn { font-size: 0.8rem; }
+.nf-main-card-header .btn-close { filter: invert(1) brightness(2); }
+
+/* Typography helpers -------------------------------------------- */
+.nf-monospace {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    letter-spacing: 0.03em;
+    word-break: break-all;
+}
+.nf-value-large {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1.2rem;
+    font-weight: 700;
+    color: var(--nf-navy);
+}
+.nf-number {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.82rem;
+    font-weight: 500;
+    color: var(--nf-navy);
+    letter-spacing: 0.03em;
+}
+.nf-cnpj {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--nf-text-muted);
+}
+
+/* Stats mini-cards ---------------------------------------------- */
+.nf-stat {
+    background: white;
+    border: 1px solid var(--nf-border);
+    border-radius: 6px;
+    padding: 0.9rem 1.1rem;
+    display: flex;
+    align-items: center;
+    gap: 0.9rem;
+}
+.nf-stat-icon {
+    width: 42px;
+    height: 42px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 1rem;
+}
+.nf-stat-icon.primary { background: #dbeafe; color: #1d4ed8; }
+.nf-stat-icon.success { background: #d1fae5; color: #065f46; }
+.nf-stat-icon.amber   { background: #fef3c7; color: #92400e; }
+.nf-stat-label {
+    font-size: 0.7rem;
+    color: var(--nf-text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    font-weight: 600;
+}
+.nf-stat-value {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1.35rem;
+    font-weight: 700;
+    color: var(--nf-navy);
+    line-height: 1.1;
+}
+
+/* Status badges -------------------------------------------------- */
+.badge-nf {
+    font-size: 0.68rem;
+    font-weight: 700;
+    padding: 0.28em 0.7em;
+    border-radius: 20px;
+    letter-spacing: 0.04em;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25em;
+    border: 1px solid transparent;
+    white-space: nowrap;
+}
+.badge-nf-importada  { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
+.badge-nf-parcial    { background: #fef3c7; color: #92400e; border-color: #fbbf24; }
+.badge-nf-pendente   { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+.badge-nf-cancelada  { background: #f1f5f9; color: #475569; border-color: #cbd5e1; }
+.badge-nf-na         { background: #f3f4f6; color: #6b7280; border-color: #d1d5db; }
+
+.badge-nf-status {
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 0.35em 0.8em;
+    border-radius: 20px;
+    letter-spacing: 0.03em;
+}
+.badge-nf-status.importada  { background: #d1fae5; color: #065f46; border: 1px solid #6ee7b7; }
+.badge-nf-status.processada { background: #dbeafe; color: #1e40af; border: 1px solid #93c5fd; }
+.badge-nf-status.erro       { background: #fee2e2; color: #991b1b; border: 1px solid #fca5a5; }
+.badge-nf-status.default    { background: #f1f5f9; color: #475569; border: 1px solid #cbd5e1; }
+
+.badge-attach {
+    font-size: 0.65rem;
+    padding: 0.2em 0.45em;
+    border-radius: 4px;
+}
+
+/* Badges de transferência --------------------------------------- */
+.badge-entrada {
+    background: #dbeafe;
+    color: #1e40af;
+    border: 1px solid #93c5fd;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.25em 0.65em;
+    border-radius: 20px;
+}
+.badge-saida {
+    background: #fef3c7;
+    color: #92400e;
+    border: 1px solid #fbbf24;
+    font-size: 0.7rem;
+    font-weight: 700;
+    padding: 0.25em 0.65em;
+    border-radius: 20px;
+}
+
+/* Modal — cabeçalho padrão NF ----------------------------------- */
+.modal-header {
+    background: var(--nf-navy);
+    color: white;
+    border-radius: 7px 7px 0 0;
+}
+.modal-header .btn-close {
+    filter: invert(1) brightness(2);
+}
+.modal-title {
+    font-family: 'Barlow Condensed', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+}
+.modal {
+    z-index: 1050 !important;
+}
+.modal-backdrop {
+    z-index: 1040 !important;
+}
+
+/* Link com borda tracejada (análise de preços) ------------------ */
+.link-historico-preco {
+    color: var(--nf-navy);
+    text-decoration: none;
+    border-bottom: 1px dashed var(--nf-navy);
+    transition: color 0.15s;
+}
+.link-historico-preco:hover {
+    color: var(--nf-amber);
+    border-color: var(--nf-amber);
+}
+
+/* Misc ---------------------------------------------------------- */
+.item-importado {
+    background-color: rgba(25, 135, 84, 0.07) !important;
+}
+.breadcrumb { font-size: 0.8rem; }
+.breadcrumb-item + .breadcrumb-item::before { color: var(--nf-text-muted); }
+
+/* ── Modal de análise de transferências CNPJ ─────────────────── */
+#modalAnaliseTransferenciasCNPJ .modal-dialog {
+    max-width: 90%;
+    width: 90%;
+}
+#modalAnaliseTransferenciasCNPJ .table-responsive { font-size: 0.85rem; }
+#modalAnaliseTransferenciasCNPJ th {
+    white-space: nowrap;
+    font-size: 0.8rem;
+}
+#modalAnaliseTransferenciasCNPJ td { font-size: 0.8rem; }

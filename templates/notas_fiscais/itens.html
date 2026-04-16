@@ -2,87 +2,104 @@
 
 {% block title %}Itens da Nota Fiscal{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/notas_fiscais.css') }}">
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid px-4">
-    <h1 class="mt-4">Itens da Nota Fiscal</h1>
-    <ol class="breadcrumb mb-4">
-        <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">Dashboard</a></li>
-        <li class="breadcrumb-item"><a href="{{ url_for('nota_fiscal.index') }}">Notas Fiscais</a></li>
-        <li class="breadcrumb-item active">Itens - NF {{ nota_fiscal.numero_nf }}</li>
-    </ol>
 
-    <div class="card mb-4">
-        <div class="card-header">
-            <div class="d-flex justify-content-between align-items-center">
-                <div>
-                    <i class="fas fa-list me-1"></i>
-                    Itens da Nota Fiscal #{{ nota_fiscal.numero_nf }}
-                </div>
-                <div>
-                    <a href="{{ url_for('nota_fiscal.index') }}" class="btn btn-secondary">
-                        <i class="fas fa-arrow-left me-1"></i> Voltar para Notas Fiscais
-                    </a>
-                    <a href="{{ url_for('nota_fiscal.visualizar', id=nota_fiscal.id) }}" class="btn btn-primary">
-                        <i class="fas fa-eye me-1"></i> Ver Detalhes da Nota
-                    </a>
-                    <a href="{{ url_for('nota_fiscal.gerar_pdf', id=nota_fiscal.id) }}" class="btn btn-danger" target="_blank">
-                        <i class="fas fa-file-pdf me-1"></i> PDF
-                    </a>
-                    <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportarEstoque">
-                        <i class="fas fa-exchange-alt me-1"></i> Importar para Estoque
-                    </button>
-                    <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovoItem">
-                        <i class="fas fa-plus me-1"></i> Novo Item
-                    </button>
-                </div>
+    <!-- Header -->
+    <div class="nf-page-header d-flex justify-content-between align-items-start flex-wrap gap-3 mt-3">
+        <div>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb mb-1">
+                    <li class="breadcrumb-item"><a href="{{ url_for('dashboard.index') }}">Dashboard</a></li>
+                    <li class="breadcrumb-item"><a href="{{ url_for('nota_fiscal.index') }}">Notas Fiscais</a></li>
+                    <li class="breadcrumb-item active">Itens — NF {{ nota_fiscal.numero_nf }}</li>
+                </ol>
+            </nav>
+            <h1 class="nf-page-title">
+                <i class="fas fa-list me-2" style="color:var(--nf-amber);"></i>
+                Itens — NF <span style="font-family:'JetBrains Mono',monospace;">#{{ nota_fiscal.numero_nf }}</span>
+            </h1>
+        </div>
+        <div class="nf-btn-bar">
+            <a href="{{ url_for('nota_fiscal.index') }}" class="btn btn-outline-secondary">
+                <i class="fas fa-arrow-left me-1"></i> Voltar
+            </a>
+            <a href="{{ url_for('nota_fiscal.visualizar', id=nota_fiscal.id) }}" class="btn btn-outline-primary">
+                <i class="fas fa-eye me-1"></i> Detalhes
+            </a>
+            <a href="{{ url_for('nota_fiscal.gerar_pdf', id=nota_fiscal.id) }}" class="btn btn-danger" target="_blank">
+                <i class="fas fa-file-pdf me-1"></i> PDF
+            </a>
+            <button type="button" class="btn btn-success" data-bs-toggle="modal" data-bs-target="#modalImportarEstoque">
+                <i class="fas fa-exchange-alt me-1"></i> Importar para Estoque
+            </button>
+            <button type="button" class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#modalNovoItem">
+                <i class="fas fa-plus me-1"></i> Novo Item
+            </button>
+        </div>
+    </div>
+
+    {% include 'common/messages.html' %}
+
+    <!-- NF summary -->
+    <div class="row g-3 mb-3">
+        <div class="col-md-6">
+            <div class="nf-info-section">
+                <div class="nf-info-section-header"><i class="fas fa-file-invoice me-2"></i>Nota Fiscal</div>
+                <table class="table nf-info-table mb-0">
+                    <tbody>
+                        <tr>
+                            <th>Número da NF</th>
+                            <td><span class="nf-monospace">{{ nota_fiscal.numero_nf }}</span></td>
+                        </tr>
+                        <tr>
+                            <th>Data de Emissão</th>
+                            <td>{{ nota_fiscal.data_emissao.strftime('%d/%m/%Y') }}</td>
+                        </tr>
+                        <tr>
+                            <th>Emitente</th>
+                            <td>{{ nota_fiscal.nome_emitente }} <span class="nf-monospace text-muted" style="font-size:0.75rem;">({{ nota_fiscal.cnpj_emitente|formatcnpj }})</span></td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
-        <div class="card-body">
-            {% include 'common/messages.html' %}
-            
-            <div class="mb-3">
-                <div class="row">
-                    <div class="col-md-6">
-                        <table class="table table-bordered table-sm">
-                            <tbody>
-                                <tr>
-                                    <th class="bg-light" style="width: 40%">Número da NF:</th>
-                                    <td>{{ nota_fiscal.numero_nf }}</td>
-                                </tr>
-                                <tr>
-                                    <th class="bg-light">Data de Emissão:</th>
-                                    <td>{{ nota_fiscal.data_emissao.strftime('%d/%m/%Y') }}</td>
-                                </tr>
-                                <tr>
-                                    <th class="bg-light">Emitente:</th>
-                                    <td>{{ nota_fiscal.nome_emitente }} ({{ nota_fiscal.cnpj_emitente|formatcnpj }})</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                    <div class="col-md-6">
-                        <table class="table table-bordered table-sm">
-                            <tbody>
-                                <tr>
-                                    <th class="bg-light" style="width: 40%">Valor Total:</th>
-                                    <td>R$ {{ "%.2f"|format(nota_fiscal.valor_total|float) }}</td>
-                                </tr>
-                                <tr>
-                                    <th class="bg-light">Destinatário:</th>
-                                    <td>{{ nota_fiscal.nome_destinatario }} ({{ nota_fiscal.cnpj_destinatario|formatcnpj }})</td>
-                                </tr>
-                                <tr>
-                                    <th class="bg-light">Status:</th>
-                                    <td>{{ nota_fiscal.status_processamento }}</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
+        <div class="col-md-6">
+            <div class="nf-info-section">
+                <div class="nf-info-section-header"><i class="fas fa-building me-2"></i>Valores e Destinatário</div>
+                <table class="table nf-info-table mb-0">
+                    <tbody>
+                        <tr>
+                            <th>Valor Total</th>
+                            <td><span class="nf-value-large">R$ {{ "%.2f"|format(nota_fiscal.valor_total|float) }}</span></td>
+                        </tr>
+                        <tr>
+                            <th>Destinatário</th>
+                            <td>{{ nota_fiscal.nome_destinatario }} <span class="nf-monospace text-muted" style="font-size:0.75rem;">({{ nota_fiscal.cnpj_destinatario|formatcnpj }})</span></td>
+                        </tr>
+                        <tr>
+                            <th>Status</th>
+                            <td>{{ nota_fiscal.status_processamento }}</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
-            
-            <div class="table-responsive">
-                <table id="datatablesItens" class="table table-striped table-bordered">
+        </div>
+    </div>
+
+    <!-- Items table -->
+    <div class="card nf-items-card mb-4">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <span class="card-title-text"><i class="fas fa-boxes me-2"></i>Itens da Nota</span>
+            <div class="ft-col-toggle-placeholder"></div>
+        </div>
+        <div class="card-body">
+            <div class="ft-datatable-wrapper">
+                <table id="datatablesItens" class="table table-bordered nf-datatable" style="width:100%">
                     <thead>
                         <tr>
                             <th>Código</th>
@@ -107,31 +124,40 @@
                             <td>{{ "%.4f"|format(item.quantidade|float) }}</td>
                             <td>R$ {{ "%.4f"|format(item.valor_unitario|float) }}</td>
                             <td>R$ {{ "%.2f"|format(item.valor_total|float) }}</td>
-                            <td class="text-center">
-                                <div class="btn-group" role="group">
-                                    <button type="button" class="btn btn-sm btn-warning" 
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#modalEditarItem" 
-                                            data-id="{{ item.id }}"
-                                            data-codigo="{{ item.codigo }}"
-                                            data-descricao="{{ item.descricao }}"
-                                            data-ncm="{{ item.ncm }}"
-                                            data-cfop="{{ item.cfop }}"
-                                            data-unidade="{{ item.unidade }}"
-                                            data-quantidade="{{ item.quantidade }}"
-                                            data-valor-unitario="{{ item.valor_unitario }}"
-                                            data-valor-total="{{ item.valor_total }}"
-                                            title="Editar">
-                                        <i class="fas fa-edit"></i>
+                            <td>
+                                <div class="ft-acoes-dropdown dropdown">
+                                    <button class="btn btn-sm btn-outline-secondary dropdown-toggle" type="button"
+                                            data-bs-toggle="dropdown" aria-expanded="false" title="Ações">
+                                        <i class="fas fa-ellipsis-v"></i>
                                     </button>
-                                    <button type="button" class="btn btn-sm btn-danger" 
-                                            data-bs-toggle="modal" 
-                                            data-bs-target="#modalExcluirItem" 
-                                            data-id="{{ item.id }}"
-                                            data-descricao="{{ item.descricao }}"
-                                            title="Excluir">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
+                                    <ul class="dropdown-menu dropdown-menu-end">
+                                        <li>
+                                            <button type="button" class="dropdown-item"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#modalEditarItem"
+                                                    data-id="{{ item.id }}"
+                                                    data-codigo="{{ item.codigo }}"
+                                                    data-descricao="{{ item.descricao }}"
+                                                    data-ncm="{{ item.ncm }}"
+                                                    data-cfop="{{ item.cfop }}"
+                                                    data-unidade="{{ item.unidade }}"
+                                                    data-quantidade="{{ item.quantidade }}"
+                                                    data-valor-unitario="{{ item.valor_unitario }}"
+                                                    data-valor-total="{{ item.valor_total }}">
+                                                <i class="fas fa-edit text-warning me-2"></i> Editar
+                                            </button>
+                                        </li>
+                                        <li><hr class="dropdown-divider"></li>
+                                        <li>
+                                            <button type="button" class="dropdown-item text-danger"
+                                                    data-bs-toggle="modal"
+                                                    data-bs-target="#modalExcluirItem"
+                                                    data-id="{{ item.id }}"
+                                                    data-descricao="{{ item.descricao }}">
+                                                <i class="fas fa-trash text-danger me-2"></i> Excluir
+                                            </button>
+                                        </li>
+                                    </ul>
                                 </div>
                             </td>
                         </tr>

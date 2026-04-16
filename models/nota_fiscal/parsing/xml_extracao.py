@@ -15,33 +15,55 @@ from ..xml_utils import _parse_nfe_data_emissao_xml, get_xml_text
 
 logger = logging.getLogger(__name__)
 
+def _first_not_none(*values):
+        for value in values:
+            if value is not None:
+                return value
+        return None
+
 def extrair_dados_xml_cte(xml_data: str):
         root = ET.fromstring(base64.b64decode(xml_data).decode('utf-8'))
         ns = {'cte': 'http://www.portalfiscal.inf.br/cte'}
-        infCte = root.find('.//cte:infCte', ns) or root.find('.//infCte', ns)
+        infCte = _first_not_none(
+            root.find('.//cte:infCte', ns),
+            root.find('.//infCte', ns),
+        )
         if infCte is None:
             logger.warning("extrair_dados_xml_cte: XML não contém infCte (pode ser NFe ou formato inválido)")
             return None, None
-        emit = infCte.find('.//cte:emit', ns) or infCte.find('.//emit', ns)
-        dest = infCte.find('.//cte:dest', ns) or infCte.find('.//dest', ns)
-        rem = infCte.find('.//cte:rem', ns) or infCte.find('.//rem', ns)
-        ide = infCte.find('.//cte:ide', ns) or infCte.find('.//ide', ns)
-        vPrest = infCte.find('.//cte:vPrest', ns) or infCte.find('.//vPrest', ns)
-        compl = infCte.find('.//cte:compl', ns) or infCte.find('.//compl', ns)
-        imp = infCte.find('.//cte:imp', ns) or infCte.find('.//imp', ns)
-        infCTeNorm = infCte.find('.//cte:infCTeNorm', ns) or infCte.find('.//infCTeNorm', ns)
+        emit = _first_not_none(infCte.find('.//cte:emit', ns), infCte.find('.//emit', ns))
+        dest = _first_not_none(infCte.find('.//cte:dest', ns), infCte.find('.//dest', ns))
+        rem = _first_not_none(infCte.find('.//cte:rem', ns), infCte.find('.//rem', ns))
+        ide = _first_not_none(infCte.find('.//cte:ide', ns), infCte.find('.//ide', ns))
+        vPrest = _first_not_none(infCte.find('.//cte:vPrest', ns), infCte.find('.//vPrest', ns))
+        compl = _first_not_none(infCte.find('.//cte:compl', ns), infCte.find('.//compl', ns))
+        imp = _first_not_none(infCte.find('.//cte:imp', ns), infCte.find('.//imp', ns))
+        infCTeNorm = _first_not_none(
+            infCte.find('.//cte:infCTeNorm', ns),
+            infCte.find('.//infCTeNorm', ns),
+        )
         chave_nf = ''
         if infCTeNorm is not None:
-            infDoc = infCTeNorm.find('.//cte:infDoc', ns) or infCTeNorm.find('.//infDoc', ns)
+            infDoc = _first_not_none(
+                infCTeNorm.find('.//cte:infDoc', ns),
+                infCTeNorm.find('.//infDoc', ns),
+            )
             if infDoc is not None:
-                infNFe = infDoc.find('.//cte:infNFe', ns) or infDoc.find('.//infNFe', ns)
+                infNFe = _first_not_none(
+                    infDoc.find('.//cte:infNFe', ns),
+                    infDoc.find('.//infNFe', ns),
+                )
                 if infNFe is not None:
                     chave_nf = infNFe.findtext('.//cte:chave', default='', namespaces=ns)
                     
         
         impostos = {}
         if imp is not None:
-            ICMSa = imp.find('.//cte:ICMS', ns) or imp.find('.//ICMS', ns) or imp.find('.//ICMS00', ns) or imp.find('.//ICMS', ns)
+            ICMSa = _first_not_none(
+                imp.find('.//cte:ICMS', ns),
+                imp.find('.//ICMS', ns),
+                imp.find('.//ICMS00', ns),
+            )
             if ICMSa is not None:
                 ICMSOutraUF = ICMSa.find('.//cte:ICMSOutraUF', ns)
                 if ICMSOutraUF is not None:
@@ -55,7 +77,10 @@ def extrair_dados_xml_cte(xml_data: str):
                         'pICMS': pICMSOutraUF,
                         'vICMS': vICMSOutraUF
                     }
-                ICMS00 = ICMSa.find('.//cte:ICMS00', ns) or ICMSa.find('.//ICMS00', ns)
+                ICMS00 = _first_not_none(
+                    ICMSa.find('.//cte:ICMS00', ns),
+                    ICMSa.find('.//ICMS00', ns),
+                )
                 if ICMS00 is not None:
                     CSTv = ICMS00.findtext('.//cte:CST', default='0', namespaces=ns)
                     vBC = ICMS00.findtext('.//cte:vBC', default='0', namespaces=ns)
@@ -67,7 +92,10 @@ def extrair_dados_xml_cte(xml_data: str):
                         'pICMS': pICMS,
                         'vICMS': vICMS
                     }
-        infModal = infCte.find('.//cte:infModal', ns) or infCte.find('.//infModal', ns)
+        infModal = _first_not_none(
+            infCte.find('.//cte:infModal', ns),
+            infCte.find('.//infModal', ns),
+        )
         rodo = infModal.find('.//cte:rodo', ns) if infModal is not None else None
 
         # Chave de acesso
@@ -174,7 +202,10 @@ def extrair_dados_xml_nfe(xml_data: str):
             }
             
             # Extrair dados da nota
-            inf_nfe = root.find('.//nfe:infNFe', ns) or root.find('.//infNFe', ns)
+            inf_nfe = _first_not_none(
+                root.find('.//nfe:infNFe', ns),
+                root.find('.//infNFe', ns),
+            )
             if inf_nfe is None:
                 # Tentar com outro namespace
                 ns = {'': 'http://www.portalfiscal.inf.br/nfe'}
@@ -189,14 +220,23 @@ def extrair_dados_xml_nfe(xml_data: str):
                 chave_acesso = chave_acesso[3:]  # Remove o prefixo 'NFe'
             
             # Extrair dados essenciais
-            ide = inf_nfe.find('.//nfe:ide', ns) or inf_nfe.find('.//ide', ns)
-            emit = inf_nfe.find('.//nfe:emit', ns) or inf_nfe.find('.//emit', ns)
-            dest = inf_nfe.find('.//nfe:dest', ns) or inf_nfe.find('.//dest', ns)
-            total = inf_nfe.find('.//nfe:total/nfe:ICMSTot', ns) or inf_nfe.find('.//total/ICMSTot', ns)
+            ide = _first_not_none(inf_nfe.find('.//nfe:ide', ns), inf_nfe.find('.//ide', ns))
+            emit = _first_not_none(inf_nfe.find('.//nfe:emit', ns), inf_nfe.find('.//emit', ns))
+            dest = _first_not_none(inf_nfe.find('.//nfe:dest', ns), inf_nfe.find('.//dest', ns))
+            total = _first_not_none(
+                inf_nfe.find('.//nfe:total/nfe:ICMSTot', ns),
+                inf_nfe.find('.//total/ICMSTot', ns),
+            )
             itens = inf_nfe.findall('.//nfe:det', ns) or inf_nfe.findall('.//det', ns)
-            cobr = inf_nfe.find('.//nfe:cobr', ns) or inf_nfe.find('.//cobr', ns)
-            total = inf_nfe.find('.//nfe:total', ns) or inf_nfe.find('.//total', ns)
-            ICMSTot = total.find('.//nfe:ICMSTot', ns) or total.find('.//ICMSTot', ns)
+            cobr = _first_not_none(inf_nfe.find('.//nfe:cobr', ns), inf_nfe.find('.//cobr', ns))
+            total = _first_not_none(inf_nfe.find('.//nfe:total', ns), inf_nfe.find('.//total', ns))
+            if ide is None or emit is None or dest is None or total is None:
+                logger.error("Dados essenciais ausentes no XML da NFe")
+                return chave_acesso, None
+            ICMSTot = _first_not_none(total.find('.//nfe:ICMSTot', ns), total.find('.//ICMSTot', ns))
+            if ICMSTot is None:
+                logger.error("Totais de impostos ausentes no XML da NFe")
+                return chave_acesso, None
             vIPI = ICMSTot.findtext('.//nfe:vIPI', default='0', namespaces=ns) or ICMSTot.findtext('.//vIPI', default='0', namespaces=ns)
             vPIS = ICMSTot.findtext('.//nfe:vPIS', default='0', namespaces=ns) or ICMSTot.findtext('.//vPIS', default='0', namespaces=ns)
             vCOFINS = ICMSTot.findtext('.//nfe:vCOFINS', default='0', namespaces=ns) or ICMSTot.findtext('.//vCOFINS', default='0', namespaces=ns)
@@ -208,15 +248,12 @@ def extrair_dados_xml_nfe(xml_data: str):
                 'vCOFINS': vCOFINS,
                 'vICMS': vICMS,
             }
-            if cobr:
+            if cobr is not None:
                 #print(f'cobr: {cobr}')
-                fatura = cobr.find('.//nfe:fat', ns) or cobr.find('.//fat', ns)
+                fatura = _first_not_none(cobr.find('.//nfe:fat', ns), cobr.find('.//fat', ns))
                 #print(f'fatura: {fatura}')
-                dup = cobr.find('.//nfe:dup', ns) or cobr.find('.//dup', ns)
+                dup = _first_not_none(cobr.find('.//nfe:dup', ns), cobr.find('.//dup', ns))
                 #print(f'dup: {dup}')
-            if not ide or not emit or not dest or not total:
-                logger.error("Dados essenciais ausentes no XML da NFe")
-                return chave_acesso, None
             
             # Extrair número da nota
             numero = get_xml_text(ide, './/nfe:nNF', ns) or get_xml_text(ide, './/nNF', ns)
@@ -304,12 +341,12 @@ def extrair_dados_xml_nfe(xml_data: str):
             for item in itens:
                 try:
                     num_item = item.attrib.get('nItem', '0')
-                    prod = item.find('.//nfe:prod', ns) or item.find('.//prod', ns)
+                    prod = _first_not_none(item.find('.//nfe:prod', ns), item.find('.//prod', ns))
 
-                    infAdProd = item.find('.//nfe:infAdProd', ns) or item.find('.//infAdProd', ns)
+                    infAdProd = _first_not_none(item.find('.//nfe:infAdProd', ns), item.find('.//infAdProd', ns))
 
                     
-                    if not prod:
+                    if prod is None:
                         logger.warning(f"Produto não encontrado para o item {num_item}")
                         continue
                     
@@ -325,53 +362,53 @@ def extrair_dados_xml_nfe(xml_data: str):
                     unidade = get_xml_text(prod, './/nfe:uCom', ns) or get_xml_text(prod, './/uCom', ns) or 'UN'
                     xPed = get_xml_text(prod, './/nfe:xPed', ns) or get_xml_text(prod, './/xPed', ns) or ''
                     nItemPed = get_xml_text(prod, './/nfe:nItemPed', ns) or get_xml_text(prod, './/nItemPed', ns) or ''
-                    impostos = item.find('.//nfe:imposto', ns) or item.find('.//imposto', ns)
-                    ICMS = impostos.find('.//nfe:ICMS', ns) or impostos.find('.//ICMS', ns)
-                    if ICMS:   
-                        ICMS60 = ICMS.find('.//nfe:ICMS60', ns) or ICMS.find('.//ICMS60', ns)
+                    impostos = _first_not_none(item.find('.//nfe:imposto', ns), item.find('.//imposto', ns))
+                    ICMS = _first_not_none(impostos.find('.//nfe:ICMS', ns), impostos.find('.//ICMS', ns))
+                    if ICMS is not None:
+                        ICMS60 = _first_not_none(ICMS.find('.//nfe:ICMS60', ns), ICMS.find('.//ICMS60', ns))
                     else:
                         ICMS60 = None
-                    IPI = impostos.find('.//nfe:IPI', ns) or impostos.find('.//IPI', ns)
-                    if IPI: 
-                        IPITrib = IPI.find('.//nfe:IPITrib', ns) or IPI.find('.//IPITrib', ns)
+                    IPI = _first_not_none(impostos.find('.//nfe:IPI', ns), impostos.find('.//IPI', ns))
+                    if IPI is not None:
+                        IPITrib = _first_not_none(IPI.find('.//nfe:IPITrib', ns), IPI.find('.//IPITrib', ns))
                     else:
                         IPITrib = None
-                    PIS = impostos.find('.//nfe:PIS', ns) or impostos.find('.//PIS', ns)
-                    if PIS:
-                        PISAliq = PIS.find('.//nfe:PISAliq', ns) or PIS.find('.//PISAliq', ns)
+                    PIS = _first_not_none(impostos.find('.//nfe:PIS', ns), impostos.find('.//PIS', ns))
+                    if PIS is not None:
+                        PISAliq = _first_not_none(PIS.find('.//nfe:PISAliq', ns), PIS.find('.//PISAliq', ns))
                     else:
                         PISAliq = None
-                    COFINS = impostos.find('.//nfe:COFINS', ns) or impostos.find('.//COFINS', ns)
-                    if COFINS:
-                        COFINSAliq = COFINS.find('.//nfe:COFINSAliq', ns) or COFINS.find('.//COFINSAliq', ns)
+                    COFINS = _first_not_none(impostos.find('.//nfe:COFINS', ns), impostos.find('.//COFINS', ns))
+                    if COFINS is not None:
+                        COFINSAliq = _first_not_none(COFINS.find('.//nfe:COFINSAliq', ns), COFINS.find('.//COFINSAliq', ns))
                     else:
                         COFINSAliq = None
                     
                     impostos = {
                         'ICMS': {
-                            'CST': ICMS60.findtext('.//nfe:CST', default='0', namespaces=ns) or ICMS60.findtext('.//CST', default='0', namespaces=ns) if ICMS60 else None,
-                            'vBCSTRet': ICMS60.findtext('.//nfe:vBCSTRet', default='0', namespaces=ns) or ICMS60.findtext('.//vBCSTRet', default='0', namespaces=ns) if ICMS60 else None,
-                            'pST': ICMS60.findtext('.//nfe:pST', default='0', namespaces=ns) or ICMS60.findtext('.//pST', default='0', namespaces=ns) if ICMS60 else None,
-                            'vICMSSTRet': ICMS60.findtext('.//nfe:vICMSSTRet', default='0', namespaces=ns) or ICMS60.findtext('.//vICMSSTRet', default='0', namespaces=ns) if ICMS60 else None,
-                            'vICMSSubstituto': ICMS60.findtext('.//nfe:vICMSSubstituto', default='0', namespaces=ns) or ICMS60.findtext('.//vICMSSubstituto', default='0', namespaces=ns) if ICMS60 else None,
+                            'CST': ICMS60.findtext('.//nfe:CST', default='0', namespaces=ns) or ICMS60.findtext('.//CST', default='0', namespaces=ns) if ICMS60 is not None else None,
+                            'vBCSTRet': ICMS60.findtext('.//nfe:vBCSTRet', default='0', namespaces=ns) or ICMS60.findtext('.//vBCSTRet', default='0', namespaces=ns) if ICMS60 is not None else None,
+                            'pST': ICMS60.findtext('.//nfe:pST', default='0', namespaces=ns) or ICMS60.findtext('.//pST', default='0', namespaces=ns) if ICMS60 is not None else None,
+                            'vICMSSTRet': ICMS60.findtext('.//nfe:vICMSSTRet', default='0', namespaces=ns) or ICMS60.findtext('.//vICMSSTRet', default='0', namespaces=ns) if ICMS60 is not None else None,
+                            'vICMSSubstituto': ICMS60.findtext('.//nfe:vICMSSubstituto', default='0', namespaces=ns) or ICMS60.findtext('.//vICMSSubstituto', default='0', namespaces=ns) if ICMS60 is not None else None,
                         },
                         'IPI': {
-                            'CST': IPITrib.findtext('.//nfe:CST', default='0', namespaces=ns) or IPITrib.findtext('.//CST', default='0', namespaces=ns) if IPITrib else None,
-                            'vBC': IPITrib.findtext('.//nfe:vBC', default='0', namespaces=ns) or IPITrib.findtext('.//vBC', default='0', namespaces=ns) if IPITrib else None,
-                            'pIPI': IPITrib.findtext('.//nfe:pIPI', default='0', namespaces=ns) or IPITrib.findtext('.//pIPI', default='0', namespaces=ns) if IPITrib else None,
-                            'vIPI': IPITrib.findtext('.//nfe:vIPI', default='0', namespaces=ns) or IPITrib.findtext('.//vIPI', default='0', namespaces=ns) if IPITrib else None,
+                            'CST': IPITrib.findtext('.//nfe:CST', default='0', namespaces=ns) or IPITrib.findtext('.//CST', default='0', namespaces=ns) if IPITrib is not None else None,
+                            'vBC': IPITrib.findtext('.//nfe:vBC', default='0', namespaces=ns) or IPITrib.findtext('.//vBC', default='0', namespaces=ns) if IPITrib is not None else None,
+                            'pIPI': IPITrib.findtext('.//nfe:pIPI', default='0', namespaces=ns) or IPITrib.findtext('.//pIPI', default='0', namespaces=ns) if IPITrib is not None else None,
+                            'vIPI': IPITrib.findtext('.//nfe:vIPI', default='0', namespaces=ns) or IPITrib.findtext('.//vIPI', default='0', namespaces=ns) if IPITrib is not None else None,
                         },
                         'PIS': {
-                            'CST': PISAliq.findtext('.//nfe:CST', default='0', namespaces=ns) or PISAliq.findtext('.//CST', default='0', namespaces=ns) if PISAliq else None,
-                            'vBC': PISAliq.findtext('.//nfe:vBC', default='0', namespaces=ns) or PISAliq.findtext('.//vBC', default='0', namespaces=ns) if PISAliq else None,
-                            'pPIS': PISAliq.findtext('.//nfe:pPIS', default='0', namespaces=ns) or PISAliq.findtext('.//pPIS', default='0', namespaces=ns) if PISAliq else None,
-                            'vPIS': PISAliq.findtext('.//nfe:vPIS', default='0', namespaces=ns) or PISAliq.findtext('.//vPIS', default='0', namespaces=ns) if PISAliq else None,
+                            'CST': PISAliq.findtext('.//nfe:CST', default='0', namespaces=ns) or PISAliq.findtext('.//CST', default='0', namespaces=ns) if PISAliq is not None else None,
+                            'vBC': PISAliq.findtext('.//nfe:vBC', default='0', namespaces=ns) or PISAliq.findtext('.//vBC', default='0', namespaces=ns) if PISAliq is not None else None,
+                            'pPIS': PISAliq.findtext('.//nfe:pPIS', default='0', namespaces=ns) or PISAliq.findtext('.//pPIS', default='0', namespaces=ns) if PISAliq is not None else None,
+                            'vPIS': PISAliq.findtext('.//nfe:vPIS', default='0', namespaces=ns) or PISAliq.findtext('.//vPIS', default='0', namespaces=ns) if PISAliq is not None else None,
                         },
                         'COFINS': {
-                            'CST': COFINSAliq.findtext('.//nfe:CST', default='0', namespaces=ns) or COFINSAliq.findtext('.//CST', default='0', namespaces=ns) if COFINSAliq else None,
-                            'vBC': COFINSAliq.findtext('.//nfe:vBC', default='0', namespaces=ns) or COFINSAliq.findtext('.//vBC', default='0', namespaces=ns) if COFINSAliq else None,
-                            'pCOFINS': COFINSAliq.findtext('.//nfe:pCOFINS', default='0', namespaces=ns) or COFINSAliq.findtext('.//pCOFINS', default='0', namespaces=ns) if COFINSAliq else None,
-                            'vCOFINS': COFINSAliq.findtext('.//nfe:vCOFINS', default='0', namespaces=ns) or COFINSAliq.findtext('.//vCOFINS', default='0', namespaces=ns) if COFINSAliq else None,
+                            'CST': COFINSAliq.findtext('.//nfe:CST', default='0', namespaces=ns) or COFINSAliq.findtext('.//CST', default='0', namespaces=ns) if COFINSAliq is not None else None,
+                            'vBC': COFINSAliq.findtext('.//nfe:vBC', default='0', namespaces=ns) or COFINSAliq.findtext('.//vBC', default='0', namespaces=ns) if COFINSAliq is not None else None,
+                            'pCOFINS': COFINSAliq.findtext('.//nfe:pCOFINS', default='0', namespaces=ns) or COFINSAliq.findtext('.//pCOFINS', default='0', namespaces=ns) if COFINSAliq is not None else None,
+                            'vCOFINS': COFINSAliq.findtext('.//nfe:vCOFINS', default='0', namespaces=ns) or COFINSAliq.findtext('.//vCOFINS', default='0', namespaces=ns) if COFINSAliq is not None else None,
                         },
                     }
                     item_data = {

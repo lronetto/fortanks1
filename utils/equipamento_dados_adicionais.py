@@ -32,31 +32,26 @@ def _extras_vazios() -> Dict[str, Any]:
     }
 
 
-def _normaliza_checklist_modelo_id(val: Any) -> int | None:
+def _normaliza_id_opcional(val: Any) -> int | None:
+    """Normaliza identificadores opcionais para int|None."""
     if val is None:
         return None
     s = str(val).strip()
     if not s.isdigit():
         return None
     return int(s)
+
+
+def _normaliza_checklist_modelo_id(val: Any) -> int | None:
+    return _normaliza_id_opcional(val)
 
 
 def _normaliza_nota_fiscal_id(val: Any) -> int | None:
-    if val is None:
-        return None
-    s = str(val).strip()
-    if not s.isdigit():
-        return None
-    return int(s)
+    return _normaliza_id_opcional(val)
 
 
 def _normaliza_material_id(val: Any) -> int | None:
-    if val is None:
-        return None
-    s = str(val).strip()
-    if not s.isdigit():
-        return None
-    return int(s)
+    return _normaliza_id_opcional(val)
 
 
 def parse_extras(text: str | None) -> Dict[str, Any]:

@@ -1,11 +1,13 @@
+import logging
 from datetime import datetime
 from flask import json
-from sqlalchemy import Text, JSON
+from sqlalchemy import JSON
 from models.database import db
-from models.material import Materiais, MateriaisGrupos
 from decimal import Decimal
 from models.estoque import Estoque
-from models.estoque import EstoqueMovimentacoes
+from utils.utils import normalizar_para_data
+
+logger = logging.getLogger(__name__)
 class ProdutoComposto(db.Model):
     """
     Modelo para representar produtos compostos para produção de peças concretadas
@@ -30,12 +32,15 @@ class ProdutoComposto(db.Model):
     
     # Relacionamentos
     componentes = db.relationship('ProdutoCompostoItem', back_populates="produto", cascade="all, delete-orphan")
-    
+
     def adicionar_item(self, estoque, quantidade):
         """Adiciona um material ao produto composto"""
-        
-        # Log para debug
-        print(f"Adicionando item - Quantidade recebida: {quantidade} (tipo: {type(quantidade)})")
+        logger.debug(
+            "Adicionando item ao produto composto %s - quantidade=%s tipo=%s",
+            self.id,
+            quantidade,
+            type(quantidade),
+        )
             
         # Verificar se o material já existe neste produto
         componente_existente = None
@@ -46,9 +51,13 @@ class ProdutoComposto(db.Model):
         
         if componente_existente:
             # Atualizar componente existente
-            print(f"Atualizando componente existente - Quantidade anterior: {componente_existente.quantidade}")
+            logger.debug(
+                "Atualizando componente existente id=%s quantidade_anterior=%s nova_quantidade=%s",
+                componente_existente.id,
+                componente_existente.quantidade,
+                quantidade,
+            )
             componente_existente.quantidade = quantidade
-            print(f"Quantidade atualizada: {componente_existente.quantidade}")
             return componente_existente
         else:
             # Criar novo componente
@@ -62,7 +71,7 @@ class ProdutoComposto(db.Model):
                 estoque_id=estoque.id,
                 quantidade=quantidade
             )
-            print(f"Novo componente criado - Quantidade: {componente.quantidade}")
+            logger.debug("Novo componente criado com quantidade=%s", componente.quantidade)
             self.componentes.append(componente)
             
             # Adicionar ao banco de dados para obter um ID
@@ -100,10 +109,16 @@ class ProdutoComposto(db.Model):
         """Verifica se há estoque suficiente para produzir um número específico de peças"""        
         itens_necessarios = self.calcular_itens_necessarios(quantidade)
         disponibilidade = []
-        
+
+        estoque_ids = list(itens_necessarios.keys())
+        estoques = Estoque.query.filter(Estoque.id.in_(estoque_ids)).all() if estoque_ids else []
+        quantidade_por_estoque_id = {
+            item.id: Decimal(str(item.quantidade or 0))
+            for item in estoques
+        }
+
         for estoque_id, info in itens_necessarios.items():
-            estoque_items = Estoque.query.filter_by(id=estoque_id).all()
-            quantidade_total_estoque = sum(item.quantidade for item in estoque_items)
+            quantidade_total_estoque = quantidade_por_estoque_id.get(estoque_id, Decimal('0'))
             
             disponibilidade.append({
                 'estoque': info['estoque'],
@@ -153,7 +168,13 @@ class ProdutoComposto(db.Model):
             log: Se True, imprime logs de debug
             produtos_processados: Conjunto de IDs de produtos compostos já processados (para evitar loops infinitos)
         """
-        print(f"Produzindo produto composto {self.nome} (ID: {self.id}) - Quantidade: {quantidade}")
+        if log:
+            logger.info(
+                "Produzindo produto composto %s (ID: %s) - Quantidade: %s",
+                self.nome,
+                self.id,
+                quantidade,
+            )
         # Inicializar conjunto de produtos processados se não foi fornecido
         if produtos_processados is None:
             produtos_processados = set()
@@ -182,64 +203,31 @@ class ProdutoComposto(db.Model):
             materiais_necessarios = {}
         
         
-        # Normalizar data_movimento para date se necessário
-        from datetime import date as date_type
-        if data_movimento is None:
-            data_movimento = datetime.now().date()
-        elif isinstance(data_movimento, datetime):
-            data_movimento = data_movimento.date()
-        elif isinstance(data_movimento, date_type):
-            pass  # Já é date
-        else:
-            # Tentar converter string para date
-            try:
-                if isinstance(data_movimento, str):
-                    data_movimento = datetime.strptime(data_movimento, '%Y-%m-%d').date()
-                else:
-                    data_movimento = datetime.now().date()
-            except (ValueError, TypeError):
-                data_movimento = datetime.now().date()
+        data_movimento = normalizar_para_data(
+            data_movimento,
+            default=datetime.now().date(),
+        )
         
         for componente in self.componentes:
             if componente.dados_adicionais:
                 try:
                     dados_adicionais = json.loads(componente.dados_adicionais)
-                    datainicio = dados_adicionais.get('data_inicio')
-                    if datainicio:
-                        # Tentar parse da data
-                        if isinstance(datainicio, str):
-                            datainicio = datetime.strptime(datainicio, '%Y-%m-%d').date()
-                        elif isinstance(datainicio, datetime):
-                            datainicio = datainicio.date()
-                        elif isinstance(datainicio, date_type):
-                            pass  # Já é date
-                        else:
-                            datainicio = None
-                        
-                        # Comparar apenas se datainicio foi parseado com sucesso
-                        if datainicio and data_movimento and datainicio > data_movimento:
-                            continue
-                    
-                    datatermino = dados_adicionais.get('data_termino')
-                    if datatermino:
-                        # Tentar parse da data
-                        if isinstance(datatermino, str):
-                            datatermino = datetime.strptime(datatermino, '%Y-%m-%d').date()
-                        elif isinstance(datatermino, datetime):
-                            datatermino = datatermino.date()
-                        elif isinstance(datatermino, date_type):
-                            pass  # Já é date
-                        else:
-                            datatermino = None
-                        
-                        # Comparar apenas se datatermino foi parseado com sucesso
-                        if datatermino and data_movimento and datatermino <= data_movimento:
-                            continue
+                    datainicio = normalizar_para_data(dados_adicionais.get('data_inicio'))
+                    if datainicio and data_movimento and datainicio > data_movimento:
+                        continue
+
+                    datatermino = normalizar_para_data(dados_adicionais.get('data_termino'))
+                    if datatermino and data_movimento and datatermino <= data_movimento:
+                        continue
                 except (ValueError, TypeError) as e:
                     # Se houver erro no parse, logar e continuar processando o componente
                     if log:
-                        print(f"  AVISO: Erro ao processar datas do componente {componente.id}: {str(e)}")
-                    pass  # Continuar processando o componente mesmo com erro nas datas
+                        logger.warning(
+                            "Erro ao processar datas do componente %s: %s",
+                            componente.id,
+                            str(e),
+                        )
+                    # Continuar processando o componente mesmo com erro nas datas
             if componente.estoque.tipo_item == 'material':
                 estoque_id = componente.estoque.id
                 quantidade_total = quantidade * componente.quantidade

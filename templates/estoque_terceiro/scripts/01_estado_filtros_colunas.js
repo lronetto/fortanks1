@@ -225,6 +225,7 @@
 
                 // Sincroniza checkbox SPED (se marcado, força seleção 10/15/18)
                 sincronizarFiltroSpedComTipos();
+                atualizarEstadoFiltroTodosTipos();
             })
             .catch(error => {
                 console.error('Erro ao carregar tipos:', error);
@@ -246,6 +247,22 @@
                 select.val([]);
             }
         }
+        atualizarEstadoFiltroTodosTipos();
+    }
+
+    function atualizarEstadoFiltroTodosTipos() {
+        const select = $('#filtro_tipos');
+        const totalOpcoes = select.find('option').length;
+        const selecionados = (select.val() || []).length;
+        const chkTodos = $('#filtro_todos_tipos');
+        if (!chkTodos.length) return;
+        if (totalOpcoes <= 0) {
+            chkTodos.prop('checked', false);
+            chkTodos.prop('indeterminate', false);
+            return;
+        }
+        chkTodos.prop('checked', selecionados === totalOpcoes);
+        chkTodos.prop('indeterminate', selecionados > 0 && selecionados < totalOpcoes);
     }
     
     // Filtros customizados (aplicados no frontend)

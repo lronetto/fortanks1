@@ -1,0 +1,31 @@
+/* ============================================================
+   operacional — Usinagem, Acabamento/Transporte e afins
+   ============================================================ */
+
+/* ── Modal de Redosagem — z-index acima de modal pai ─────────── */
+#modalRedosagem,
+#modalRedosagem.show,
+body.modal-open #modalRedosagem { z-index: 1065 !important; }
+
+/* Suprimir backdrop adicional do modal aninhado */
+#modalRedosagem + .modal-backdrop { display: none !important; }
+
+/* Garantir clicabilidade mesmo com backdrop do modal pai */
+#modalRedosagem .modal-dialog,
+#modalRedosagem .modal-content { pointer-events: auto !important; }
+
+/* ── Autocomplete e Select2 dentro de modais de transporte ───── */
+#modalTransporte .select2-container,
+#modalTransporte .select2-dropdown { z-index: 9999; }
+
+#modalTransporte .ui-autocomplete,
+#modalTransporteLinha .ui-autocomplete { z-index: 10000 !important; }
+
+.select2-container--bootstrap-5 .select2-dropdown {
+    max-height: 300px;
+    overflow-y: auto;
+}
+
+/* ── Rompimentos de CP ────────────────────────────────────────── */
+.rompimento-grupo            { background-color: #f8f9fa; }
+.grupo-serie-header:hover    { background-color: #dee2e6 !important; }

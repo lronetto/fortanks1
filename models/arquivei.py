@@ -1,20 +1,10 @@
 import requests
-from dotenv import load_dotenv
-import os
-import base64
-from flask import jsonify
 from datetime import datetime, timedelta
 import logging
-import json
-from models.logs import Logs
 
-load_dotenv()
+from models.nota_fiscal.constants import ARQUIVEI_API_ID, ARQUIVEI_API_KEY
 
 logger = logging.getLogger(__name__)
-
-
-ARQUIVEI_API_ID = os.getenv('ARQUIVEI_API_ID')
-ARQUIVEI_API_KEY = os.getenv('ARQUIVEI_API_KEY')
 class Arquivei: 
     pdf = None
     chave_acesso = None
@@ -27,48 +17,50 @@ class Arquivei:
     log_info = None
     datas = []
     id = None
-    def __init__(self, data_inicial=None, chave_acesso=None, data_final=None, data=None, xml_data=None,cancelamento=False,send=False,tipo=None,pdf=None):
+
+    def __init__(
+        self,
+        data_inicial=None,
+        chave_acesso=None,
+        data_final=None,
+        data=None,
+        xml_data=None,
+        cancelamento=False,
+        send=False,
+        tipo=None,
+        pdf=None,
+    ):
         self.data = data
         self.chave_acesso = chave_acesso
-        if data:
-            self.chave_acesso = data.get('chave_acesso',None)
-            self.xml_data = data.get('xml',None)
-            self.id = data.get('id',None)
-        self.data_inicial = data_inicial
-        self.data_final = data_final
+        self.id = None
+        self.xml_data = None
         self.xml_datas = []
+        self.datas = []
         self.pdf = None
         self.cancelada = False
+        self.log_info = None
+
+        if data:
+            self.chave_acesso = data.get('chave_acesso', None)
+            self.xml_data = data.get('xml', None)
+            self.id = data.get('id', None)
+
+        self.data_inicial = data_inicial
+        self.data_final = data_final
         self.tipo = tipo
-        #31062002253113791001285000000002718526021360649640
-        #32053092226452925000167000000000000826020933758380
-        #42260205405307000196550010000696781840333914
+
         if xml_data:
             self.xml_data = xml_data
             self.upload()
+
         if data_inicial and data_final and tipo:
-            print(f'processando arquivei {tipo}')
-            self.processar_arquivei()
-            self.processar_arquivei(send=True)
-            print(f'datas: {len(self.datas)}')
-         
+            logger.info('processando arquivei %s', tipo)
+            self.processar_periodo_completo()
+            logger.info('datas carregadas: %s', len(self.datas))
+
         if self.chave_acesso:
-            print(f'chave_acesso: {self.chave_acesso}')
-            if len(self.chave_acesso) == 44:
-                if int(self.chave_acesso[20:22]) == 57:
-                    self.tipo = 'cte'
-                elif int(self.chave_acesso[20:22]) == 55:
-                    self.tipo = 'nfe'
-            elif len(self.chave_acesso) == 50:
-                from models.nota_fiscal import NotaFiscal
-                nota = NotaFiscal.query.filter_by(chave_acesso=self.chave_acesso).first()
-                json_nota = json.loads(nota.dados_adicionais)
-                id = json_nota.get('id',None)
-                self.id = id
-                self.tipo = 'nfse'
-            #52b7814201c4afacb5fe6f90f73b41cb   
-            elif len(self.chave_acesso) == 32:
-                self.tipo = 'nfse'
+            logger.debug('chave_acesso recebida: %s...', self.chave_acesso[:12])
+            self._definir_tipo_por_chave()
 
             if pdf:
                 self.get_pdf()
@@ -77,12 +69,36 @@ class Arquivei:
         if send:
             self.processar_arquivei(send=True)
 
+    def _headers(self):
+        return {
+            'X-API-ID': ARQUIVEI_API_ID,
+            'X-API-KEY': ARQUIVEI_API_KEY,
+            'Content-Type': 'application/json',
+        }
+
+    def _definir_tipo_por_chave(self):
+        if not self.chave_acesso:
+            return
+
+        if len(self.chave_acesso) == 44:
+            try:
+                modelo = int(self.chave_acesso[20:22])
+            except ValueError:
+                return
+            if modelo == 57:
+                self.tipo = 'cte'
+            elif modelo == 55:
+                self.tipo = 'nfe'
+        elif len(self.chave_acesso) in (50, 32):
+            # Mantém identificação por formato sem acoplar com NotaFiscal/query.
+            self.tipo = 'nfse'
+
+    def processar_periodo_completo(self):
+        self.processar_arquivei(send=False)
+        self.processar_arquivei(send=True)
+
     def upload(self):
-        headers = {
-                    'X-API-ID': ARQUIVEI_API_ID,
-                    'X-API-KEY': ARQUIVEI_API_KEY,
-                    'Content-Type': 'application/json'
-                }
+        headers = self._headers()
         url="https://api.arquivei.com.br/v1/nfe/upload";
         payload = {
             "invoices":[
@@ -96,11 +112,7 @@ class Arquivei:
         return response.json()
 
     def cancelamento(self):
-        headers = {
-            'X-API-ID': ARQUIVEI_API_ID,
-            'X-API-KEY': ARQUIVEI_API_KEY,
-            'Content-Type': 'application/json'
-        }
+        headers = self._headers()
         if self.tipo == 'cte':
             url = f"https://api.arquivei.com.br/v2/cte/events?access_key[]={self.chave_acesso}"
         elif self.tipo == 'nfe':
@@ -162,23 +174,18 @@ class Arquivei:
         """
         Processa as notas fiscais da API do Arquivei
         """
-                # Configurar cabeçalhos da API
-        headers = {
-            'X-API-ID': ARQUIVEI_API_ID,
-            'X-API-KEY': ARQUIVEI_API_KEY,
-            'Content-Type': 'application/json'
-        }
+        headers = self._headers()
         params = {}
-        if self.data_inicial:
-            params['created_at[from]'] = self.data_inicial
-        if self.data_final:
-            params['created_at[to]'] = self.data_final
+        url = None
+        query_data_inicial = self.data_inicial
+        query_data_final = self.data_final
+
         if self.tipo=='nfe':
             # Construir parâmetros da consulta
             params['document_type'] = 'nfe'
             if send:
-                self.data_inicial = '2020-01-01'
-                self.data_final = datetime.now().strftime("%Y-%m-%d")
+                query_data_inicial = '2020-01-01'
+                query_data_final = datetime.now().strftime("%Y-%m-%d")
                 url = 'https://api.arquivei.com.br/v1/nfe/emitted'
             else:
                 url = 'https://api.arquivei.com.br/v1/nfe/received'
@@ -189,9 +196,21 @@ class Arquivei:
                 url = 'https://api.arquivei.com.br/v1/nfse/emitted'
             else:
                 url = 'https://api.arquivei.com.br/v1/nfse/received'
-        print(f'url: {url}')
-        print(f'params: {params}')
-        response = requests.get(url, headers=headers, params=params)
+        if not url:
+            self.log_info = {
+                'success': False,
+                'message': f'Tipo de documento inválido para processamento: {self.tipo}',
+                'tipo': self.tipo,
+                'send': send,
+            }
+            return self.log_info
+        if query_data_inicial:
+            params['created_at[from]'] = query_data_inicial
+        if query_data_final:
+            params['created_at[to]'] = query_data_final
+
+        logger.debug('processar_arquivei url=%s params=%s', url, params)
+        response = requests.get(url, headers=headers, params=params, timeout=60)
         #print(f'data_ini: {params["created_at[from]"]} data_fim: {params["created_at[to]"]} qtd: {len(response.json()["data"])} 1')
         #print(f'data_ini: {params["created_at[from]"]} data_fim: {params["created_at[to]"]}')
         #print(f'response: {response.json()}')
@@ -207,11 +226,17 @@ class Arquivei:
             
             # Verificar se há dados retornados
             if 'data' not in response_data or not response_data['data']:
-                return jsonify({'success': False, 'message': 'Nenhuma nota fiscal encontrada para o período especificado.'})
+                self.log_info = {
+                    'success': False,
+                    'message': 'Nenhuma nota fiscal encontrada para o período especificado.',
+                    'tipo': self.tipo,
+                    'send': send,
+                }
+                return self.log_info
             #print(response_data)
             
-            dt_inicial = datetime.strptime(self.data_inicial, "%Y-%m-%d")
-            dt_final = datetime.strptime(self.data_final, "%Y-%m-%d")
+            dt_inicial = datetime.strptime(query_data_inicial, "%Y-%m-%d")
+            dt_final = datetime.strptime(query_data_final, "%Y-%m-%d")
            
             data_ini = dt_inicial
             data_fim = dt_inicial
@@ -262,10 +287,10 @@ class Arquivei:
                 #print(f'processando notas {self.tipo} processadas: {notas_processadas} ignoradas: {notas_ignoradas}')
                 params['created_at[from]'] = data_ini.strftime("%Y-%m-%d")
                 params['created_at[to]'] = data_fim.strftime("%Y-%m-%d")
-                response = requests.get(url, headers=headers, params=params)
+                response = requests.get(url, headers=headers, params=params, timeout=60)
                 #print(f'data_ini: {params["created_at[from]"]} data_fim: {params["created_at[to]"]} qtd: {len(response.json()["data"])} 2')
                 #print(f'data_fim: {data_fim} data_final: {dt_final}')
-                while len(response.json()['data']) == 50:
+                while len(response.json().get('data', [])) == 50:
                     
                     if(dt_final - data_fim).days > 20 and d > 20:
                         d-=10
@@ -276,44 +301,56 @@ class Arquivei:
                     #print(f'dt_final - data_fim: {(dt_final - data_fim).days} d {d}')
                     params['created_at[from]'] = data_ini.strftime("%Y-%m-%d")
                     params['created_at[to]'] = data_fim.strftime("%Y-%m-%d")
-                    response = requests.get(url, headers=headers, params=params)  
+                    response = requests.get(url, headers=headers, params=params, timeout=60)
                     #print(f'data_ini: {params["created_at[from]"]} data_fim: {params["created_at[to]"]} qtd: {len(response.json()["data"])} 2')
                 
 
 
             # Se alguma nota foi processada, mostrar mensagem de sucesso
             log = {
-                'data_ini': self.data_inicial,
-                'data_fim': self.data_final,
+                'success': True,
+                'data_ini': query_data_inicial,
+                'data_fim': query_data_final,
                 'notas_processadas': notas_processadas,
                 'notas_ignoradas': notas_ignoradas,
                 'tipo': self.tipo
             }
             self.log_info = log
+            return log
         else: 
             try:
                 error_data = response.json()
+                error_msg = f'Erro ao consultar Arquivei (HTTP {response.status_code})'
                 if 'error' in error_data:
                     error_msg += f' - {error_data["error"]}'
                 if 'message' in error_data:
                     error_msg += f' - {error_data["message"]}'
-                self.log_info['erro'] = error_msg
-                return jsonify({'success': False, 'message': error_msg})
-            except:
-                pass
+                self.log_info = {
+                    'success': False,
+                    'message': error_msg,
+                    'tipo': self.tipo,
+                    'send': send,
+                }
+                return self.log_info
+            except Exception:
+                error_msg = f'Erro ao consultar Arquivei (HTTP {response.status_code})'
+                self.log_info = {
+                    'success': False,
+                    'message': error_msg,
+                    'tipo': self.tipo,
+                    'send': send,
+                }
+                return self.log_info
+
     def get_xml(self):
-        headers = {
-            'X-API-ID': ARQUIVEI_API_ID,
-            'X-API-KEY': ARQUIVEI_API_KEY,
-            'Content-Type': 'application/json'
-        }
+        headers = self._headers()
         if self.tipo == 'cte':
             url = f"https://api.arquivei.com.br/v1/cte/taker?access_key[]={self.chave_acesso}"
         else:
             url = f"https://api.arquivei.com.br/v1/nfe/received?access_key[]={self.chave_acesso}"
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=60)
         response_data = response.json() 
-        print('get xml')
+        logger.debug('get_xml executado para tipo=%s', self.tipo)
         if response_data.get('status').get('code') == 200:
             if response_data.get('data'):
                 for item in response_data.get('data'):
@@ -326,19 +363,15 @@ class Arquivei:
         self.get_pdf()
 
     def get_pdf(self):
-        headers = {
-            'X-API-ID': ARQUIVEI_API_ID,
-            'X-API-KEY': ARQUIVEI_API_KEY,
-            'Content-Type': 'application/json'
-        }
-        print(f'tipo: {self.tipo}')
+        headers = self._headers()
+        logger.debug('get_pdf tipo=%s', self.tipo)
         if self.tipo == 'cte':
             url = f"https://api.arquivei.com.br//v1/cte/dacte?access_key={self.chave_acesso}"
         elif self.tipo == 'nfe':
             url = f"https://api.arquivei.com.br/v1/nfe/danfe?access_key={self.chave_acesso}"
         elif self.tipo == 'nfse':
             url = f"https://api.arquivei.com.br/v1/nfse/danfse?id={self.chave_acesso}"
-        response = requests.get(url, headers=headers)
+        response = requests.get(url, headers=headers, timeout=60)
         response_data = response.json() 
        #print('get pdf')
         #print(f'url: {url}')

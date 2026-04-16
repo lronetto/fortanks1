@@ -3,8 +3,12 @@
 {% block title %}Materiais - Sistema de Gestão{% endblock %}
 {% block mobile_title %}Materiais{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/materiais.css') }}">
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid">
+<div class="container-fluid materiais-page">
     <div class="ft-page-header">
         <h1 class="h3 mb-0"><i class="fas fa-boxes"></i> Materiais</h1>
         <div class="btn-group">
@@ -31,22 +35,22 @@
         {% include "common/alerts.html" %}
     </div>
 
-    <div class="card shadow mb-4" data-ft-colvis="dataTable">
+    <div class="card shadow mb-4" data-ft-colvis="tabelaMateriais">
         <div class="card-header py-3 d-flex align-items-center justify-content-between">
-            <h6 class="m-0 fw-bold">Lista de Materiais</h6>
+            <span class="card-title-text"><i class="fas fa-database me-2" style="color:var(--mat-accent)"></i>Catálogo de Materiais</span>
             <div class="ft-col-toggle-placeholder"></div>
         </div>
-        <div class="card-body p-md-3 p-2 ft-datatable-wrapper">
+        <div class="card-body p-md-3 p-2">
             <form id="filterForm" class="mb-3">
                 <div class="row g-2 align-items-center">
                     <div class="col-md-5">
                         <div class="input-group input-group-sm">
                             <span class="input-group-text"><i class="fas fa-search"></i></span>
-                            <input type="text" class="form-control" id="searchInput" placeholder="Código, nome, máscara ou ID..." value="{{ search_term }}">
+                            <input type="text" class="form-control" id="searchInput" name="search_term" placeholder="Código, nome, máscara ou ID..." value="{{ search_term }}">
                         </div>
                     </div>
                     <div class="col-md-4">
-                        <select class="form-select form-select-sm" id="categoriaFilter" multiple="multiple" data-placeholder="Todas as categorias">
+                        <select class="form-select form-select-sm" id="categoriaFilter" name="categoria" multiple="multiple" data-placeholder="Todas as categorias">
                             {% for cat in categorias_filtro %}
                             <option value="{{ cat }}" {{ 'selected' if cat in category_filters else '' }}>{{ cat }}</option>
                             {% endfor %}
@@ -63,25 +67,27 @@
                 </div>
             </form>
 
-            <table class="table table-bordered table-hover w-100" id="dataTable" cellspacing="0">
+            <div class="ft-datatable-wrapper">
+            <table class="table table-bordered table-hover w-100 ft-table-wrap-head" id="tabelaMateriais" cellspacing="0">
                 <thead>
                     <tr>
-                        <th class="text-center">Img</th>
+                        <th class="text-center"><span class="ft-th-wrap">Img</span></th>
                         <th>ID</th>
                         <th>Máscara</th>
-                        <th>Cód. SOX</th>
-                        <th>Cód. Alterdata</th>
-                        <th>Cód. Mega</th>
+                        <th><span class="ft-th-wrap">Cód.<br>SOX</span></th>
+                        <th><span class="ft-th-wrap">Cód.<br>Alterdata</span></th>
+                        <th><span class="ft-th-wrap">Cód.<br>Mega</span></th>
                         <th>Nome</th>
                         <th>Categoria</th>
                         <th>Unidade</th>
-                        <th>Plano de Conta</th>
-                        <th>Criado em</th>
-                        <th class="text-center">Ações</th>
+                        <th><span class="ft-th-wrap">Plano de<br>Conta</span></th>
+                        <th><span class="ft-th-wrap">Criado<br>em</span></th>
+                        <th class="text-center"><span class="ft-th-wrap">Ações</span></th>
                     </tr>
                 </thead>
                 <tbody></tbody>
             </table>
+            </div>
         </div>
     </div>
 </div>
@@ -96,16 +102,20 @@
 {% block extra_js %}
 <script>
 (function () {
-    var urlDatatables  = "{{ url_for('material.materiais_datatables') }}";
-    var csrf           = FT.csrf();
-    var urlExcluirTpl  = "{{ url_for('material.excluir', id=999999999) }}".replace('999999999', '');
-    var urlTplImagem   = "{{ url_for('material.material_imagem_inline', upload_id=999999999) }}";
+    var urlDatatables = "{{ url_for('material.materiais_datatables') }}";
+    var csrf          = FT.csrf();
 
     function montarQueryExportacao() {
         var params = new URLSearchParams();
-        var s = ($('#searchInput').val() || '').trim();
-        if (s) params.set('search', s);
-        ($('#categoriaFilter').val() || []).forEach(function (c) { if (c) params.append('category', c); });
+        var search = ($('#searchInput').val() || '').trim();
+        if (search) params.set('search', search);
+
+        ($('#categoriaFilter').val() || []).forEach(function(categoria) {
+            if (categoria && categoria.trim() !== '') {
+                params.append('category', categoria);
+            }
+        });
+
         var q = params.toString();
         return q ? ('?' + q) : '';
     }
@@ -138,21 +148,38 @@
             if (window.dtMateriais) window.dtMateriais.ajax.reload();
         });
 
-        var TITULOS_MAT = ['Img', 'ID', 'Máscara', 'Cód. SOX', 'Cód. Alterdata', 'Cód. Mega', 'Nome', 'Categoria', 'Unidade', 'Plano de Conta', 'Criado em', 'Ações'];
+        var TITULOS_MAT = ['', 'ID', 'Máscara', 'Cód. SOX', 'Cód. Alterdata', 'Cód. Mega', 'Nome', 'Categoria', 'Unidade', 'Plano de Conta', 'Criado em', ''];
 
-        window.dtMateriais = $('#dataTable').DataTable(FT.dtOpcoes({
+        // Se houver preferência antiga/inválida de colunas, evita aplicar estado inconsistente.
+        try {
+            var keyColVis = FT.dtColunas.storageKey('tabelaMateriais');
+            var salvoColVis = JSON.parse(localStorage.getItem(keyColVis) || 'null');
+            var migracaoColVisV2 = 'ft:colunas:tabelaMateriais:migracao-v2';
+
+            // Migração pontual: zera preferências antigas para garantir exibição completa
+            // após ajuste de comportamento da tabela.
+            if (!localStorage.getItem(migracaoColVisV2)) {
+                localStorage.removeItem(keyColVis);
+                localStorage.setItem(migracaoColVisV2, '1');
+                salvoColVis = null;
+            }
+
+            if (Array.isArray(salvoColVis) && salvoColVis.length !== TITULOS_MAT.length) {
+                localStorage.removeItem(keyColVis);
+            }
+        } catch (e) {}
+
+        window.dtMateriais = $('#tabelaMateriais').DataTable(FT.dtOpcoes({
             searching: false,
             ajax: {
                 url: urlDatatables,
-                type: 'POST',
-                headers: { 'X-CSRFToken': csrf },
+                type: 'GET',
                 data: function (d) {
-                    d.csrf_token = csrf;
-                    d.search = d.search || {};
-                    d.search.value = ($('#searchInput').val() || '').trim();
-                    var cats = $('#categoriaFilter').val() || [];
-                    d.filtro_categorias_csv = cats.length ? cats.join(',') : '';
+                    $('#filterForm').serializeArray().forEach(function(item) {
+                        d[item.name] = item.value;
+                    });
                 },
+                dataSrc: function (json) { return json.data; },
                 error: function (xhr) {
                     console.error('Erro DataTables materiais', xhr);
                     FT.alerta('Erro ao carregar a lista de materiais.', 'danger');
@@ -162,84 +189,31 @@
             lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'Todos']],
             autoWidth: false,
             columns: [
-                {
-                    data: null, orderable: false, searchable: false,
-                    className: 'text-center align-middle',
-                    render: function (_d, type, row) {
-                        if (type !== 'display') return '';
-                        if (!row.imagem_upload_id) return '<span class="text-muted small">—</span>';
-                        var src = urlTplImagem.replace('999999999', String(row.imagem_upload_id));
-                        return '<img src="' + FT.escAttr(src) + '" alt="" role="button" tabindex="0" title="Clique para ampliar" '
-                            + 'class="img-thumbnail rounded ft-thumb materiais-thumb-img materiais-thumb-ampliar" '
-                            + 'data-full-src="' + FT.escAttr(src) + '" data-nome-material="' + FT.escAttr(row.nome) + '">';
-                    }
-                },
-                { data: 'id', className: 'text-center align-middle' },
-                { data: 'mascara',              defaultContent: '—', render: function (d) { return d || '—'; } },
-                { data: 'codigo',               defaultContent: '—', render: function (d) { return d || '—'; } },
-                { data: 'codigo_alterdata',     defaultContent: '—', render: function (d) { return d || '—'; } },
-                { data: 'codigo_mega',          orderable: false, defaultContent: '—', render: function (d) { return d || '—'; } },
-                { data: 'nome',                 className: 'align-middle' },
-                { data: 'categoria',            defaultContent: '' },
-                { data: 'unidade_nome',         defaultContent: '—', render: function (d) { return d || '—'; } },
-                { data: 'plano_conta_descricao',defaultContent: '—' },
-                { data: 'criado_em' },
-                {
-                    data: null, orderable: false, searchable: false,
-                    className: 'text-center align-middle text-nowrap',
-                    render: function (_d, _t, row) {
-                        var id = row.id;
-                        var dis = row.em_uso;
-                        var itens = [
-                            {
-                                label: 'Visualizar', icon: 'fa-eye', iconCor: 'info', classe: 'btn-visualizar',
-                                attrs: 'data-id="' + id + '" data-codigo="' + FT.escAttr(row.codigo) + '" '
-                                    + 'data-codigo_erp="' + FT.escAttr(row.codigo_erp) + '" '
-                                    + 'data-codigo-alterdata="' + FT.escAttr(row.codigo_alterdata) + '" '
-                                    + 'data-codigo-mega="' + FT.escAttr(row.codigo_mega) + '" data-nome="' + FT.escAttr(row.nome) + '" '
-                                    + 'data-categoria="' + FT.escAttr(row.categoria) + '" data-unidade="' + FT.escAttr(row.unidade_id) + '" '
-                                    + 'data-unidade-nome="' + FT.escAttr(row.unidade_nome) + '" '
-                                    + 'data-plano_conta="' + FT.escAttr(row.plano_conta) + '" '
-                                    + 'data-plano-descricao="' + FT.escAttr(row.plano_conta_descricao) + '" '
-                                    + 'data-descricao="' + FT.escAttr(row.descricao) + '"'
-                            },
-                            {
-                                label: 'Editar', icon: 'fa-edit', iconCor: 'primary', classe: 'btn-editar',
-                                attrs: 'data-id="' + id + '" data-codigo="' + FT.escAttr(row.codigo) + '" '
-                                    + 'data-codigo-erp="' + FT.escAttr(row.codigo_erp) + '" data-nome="' + FT.escAttr(row.nome) + '" '
-                                    + 'data-codigo-alterdata="' + FT.escAttr(row.codigo_alterdata) + '" '
-                                    + 'data-codigo-mega="' + FT.escAttr(row.codigo_mega) + '" '
-                                    + 'data-categoria="' + FT.escAttr(row.categoria) + '" '
-                                    + 'data-plano-conta="' + FT.escAttr(row.plano_conta) + '" '
-                                    + 'data-descricao="' + FT.escAttr(row.descricao) + '" '
-                                    + 'data-unidade="' + FT.escAttr(row.unidade_id) + '" '
-                                    + 'data-mascara="' + FT.escAttr(row.mascara) + '" '
-                                    + 'data-formula-calculo="' + FT.escAttr(row.formula_calculo) + '" '
-                                    + 'data-imagem-upload-id="' + FT.escAttr(row.imagem_upload_id != null ? row.imagem_upload_id : '') + '"'
-                            },
-                            { divider: true },
-                            {
-                                label: dis ? 'Em uso' : 'Excluir',
-                                icon: 'fa-trash', iconCor: dis ? 'secondary' : 'danger',
-                                classe: 'btn-excluir-material' + (dis ? ' disabled' : ''),
-                                attrs: 'data-id="' + id + '" data-nome="' + FT.escAttr(row.nome) + '" '
-                                    + 'data-excluir-url="' + FT.escAttr(urlExcluirTpl + id) + '"'
-                                    + (dis ? ' disabled' : '')
-                            },
-                        ];
-                        return FT.renderAcoesDropdown(itens);
-                    }
-                }
+                { data: 0,  name: 'imagem',          orderable: false, searchable: false, className: 'text-center align-middle' },
+                { data: 1,  name: 'id',               className: 'text-center align-middle' },
+                { data: 2,  name: 'mascara' },
+                { data: 3,  name: 'codigo' },
+                { data: 4,  name: 'codigo_alterdata' },
+                { data: 5,  name: 'codigo_mega',      orderable: false },
+                { data: 6,  name: 'nome',             className: 'align-middle' },
+                { data: 7,  name: 'categoria' },
+                { data: 8,  name: 'unidade' },
+                { data: 9,  name: 'plano_conta' },
+                { data: 10, name: 'criado_em' },
+                { data: 11, name: 'acoes',            orderable: false, searchable: false, className: 'text-center align-middle text-nowrap' },
+            ],
+            columnDefs: [
+                // Mantém as duas últimas colunas visíveis no modo responsivo
+                { responsivePriority: 1, targets: 11 }, // Ações
+                { responsivePriority: 2, targets: 10 }  // Criado em
             ],
             drawCallback: function () {
-                $('#dataTable .materiais-thumb-img').off('error.dtThumb').on('error.dtThumb', function () {
+                $('#tabelaMateriais .materiais-thumb-img').off('error.dtThumb').on('error.dtThumb', function () {
                     $(this).replaceWith('<span class="text-muted small">—</span>');
                 });
-            },
-            initComplete: function () {
-                FT.dtColunas.inicializar(window.dtMateriais, 'dataTable', TITULOS_MAT);
             }
         }));
+        FT.dtColunas.inicializar(window.dtMateriais, 'tabelaMateriais', TITULOS_MAT);
 
         $(document).on('click', '.btn-excluir-material:not(.disabled)', function () {
             var url  = this.getAttribute('data-excluir-url');

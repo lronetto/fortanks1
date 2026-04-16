@@ -2,9 +2,9 @@
 Funções auxiliares compartilhadas entre usinagens e rompimentos
 """
 import pandas as pd
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date as date_type
 import re
-from PyPDF2 import PdfReader, PdfWriter
+from pypdf import PdfReader, PdfWriter
 import io
 import logging
 import json
@@ -22,6 +22,22 @@ def normalizar_data_str(s):
     # Remover múltiplos espaços e normalizar
     s = re.sub(r'\s+', ' ', s.strip())
     return s
+
+
+def normalizar_para_data(valor, default=None):
+    """Normaliza entrada para date (aceita date, datetime e string YYYY-mm-dd)."""
+    if valor is None:
+        return default
+    if isinstance(valor, datetime):
+        return valor.date()
+    if isinstance(valor, date_type):
+        return valor
+    if isinstance(valor, str):
+        try:
+            return datetime.strptime(valor, '%Y-%m-%d').date()
+        except (ValueError, TypeError):
+            return default
+    return default
 
 
 def get_value_datetime(row, col_index):

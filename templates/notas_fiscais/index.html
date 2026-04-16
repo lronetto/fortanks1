@@ -5,53 +5,71 @@
 {% block content %}
 <div class="container-fluid">
     <!-- Cabeçalho -->
-    <div class="d-flex justify-content-between align-items-center mb-4 cabecalho">
+    <div class="nf-page-header d-flex justify-content-between align-items-start flex-wrap gap-3">
         <div>
-            <h1 class="h3 text-gray-800">Gestão de Notas Fiscais</h1>
-            <p class="mb-0">Visualize e gerencie todas as notas fiscais do sistema.</p>
+            <h1 class="nf-page-title">
+                <i class="fas fa-file-invoice me-2" style="font-size:1.3rem; color: var(--nf-amber);"></i>Gestão de Notas Fiscais
+            </h1>
+            <p class="nf-page-subtitle">Visualize e gerencie todas as notas fiscais do sistema.</p>
         </div>
-        <div>
+        <div class="nf-btn-bar">
             <button type="button" class="btn btn-primary btn-importar-arquivei">
-                <i class="fas fa-cloud-download-alt"></i> Importar Arquivei
+                <i class="fas fa-cloud-download-alt me-1"></i> Importar Arquivei
             </button>
-            <button type="button" class="btn btn-secondary" data-bs-toggle="modal" data-bs-target="#modalImportarXML">
-                <i class="fas fa-file-upload"></i> Importar XML
+            <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalImportarXML">
+                <i class="fas fa-file-upload me-1"></i> Importar XML
             </button>
             {% if current_user.is_admin %}
             <a href="{{ url_for('nota_fiscal.importar_todas_pendentes') }}" class="btn btn-warning" id="btnImportarTodasPendentes">
-                <i class="fas fa-file-import"></i> Importar Pendentes
+                <i class="fas fa-file-import me-1"></i> Pendentes
             </a>
             <a href="{{ url_for('nota_fiscal.reprocessar_importacao') }}" class="btn btn-warning" id="btnReprocessarImportacao">
-                <i class="fas fa-file-import"></i> Reprocessar Importacao
+                <i class="fas fa-sync-alt me-1"></i> Reprocessar
             </a>
             {% endif %}
             <a href="{{ url_for('nota_fiscal.analise') }}" class="btn btn-info">
-                <i class="fas fa-chart-bar"></i> Análise
+                <i class="fas fa-chart-bar me-1"></i> Análise
             </a>
-            <button type="button" class="btn btn-success" id="btnExportarExcel">
-                <i class="fas fa-file-excel"></i> Exportar Excel
-            </button>
-            <button type="button" class="btn btn-success" id="btnExportarSped" title="Exportar CTE para SPED (abas Dentro do Estado e Fora do Estado)">
-                <i class="fas fa-file-export"></i> Exportar SPED
-            </button>
-            <button type="button" class="btn btn-success" id="btnExportarZip">
-                <i class="fas fa-file-zip"></i> Exportar Zip
-            </button>
-            <button type="button" class="btn btn-danger" id="btnExportarPdf">
-                <i class="fas fa-file-pdf"></i> Exportar PDF (originais)
-            </button>
+            <div class="dropdown">
+                <button class="btn btn-success dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-file-export me-1"></i> Exportar
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                        <button class="dropdown-item" id="btnExportarExcel">
+                            <i class="fas fa-file-excel text-success me-2"></i> Excel
+                        </button>
+                    </li>
+                    <li>
+                        <button class="dropdown-item" id="btnExportarSped" title="Exportar CTE para SPED">
+                            <i class="fas fa-file-export text-primary me-2"></i> SPED (CTE)
+                        </button>
+                    </li>
+                    <li>
+                        <button class="dropdown-item" id="btnExportarZip">
+                            <i class="fas fa-file-archive text-warning me-2"></i> ZIP
+                        </button>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <button class="dropdown-item" id="btnExportarPdf">
+                            <i class="fas fa-file-pdf text-danger me-2"></i> PDF (originais selecionados)
+                        </button>
+                    </li>
+                </ul>
+            </div>
             <button type="button" class="btn btn-outline-secondary" id="btnVerificarCanceladas" title="Verifica no Arquivei se as notas do período do filtro foram canceladas">
-                <i class="fas fa-ban"></i> Verificar notas canceladas
+                <i class="fas fa-ban me-1"></i> Verificar canceladas
             </button>
         </div>
     </div>
 
     <!-- Filtros -->
-    <div class="card shadow mb-4">
-        <div class="card-header py-3 d-flex align-items-center justify-content-between">
-            <h6 class="m-0 font-weight-bold text-primary">Filtros</h6>
+    <div class="card nf-filter-card mb-4">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <span class="card-title-text"><i class="fas fa-filter me-2"></i>Filtros</span>
             <button type="button" class="btn btn-sm btn-outline-secondary" id="btnToggleFiltrosNotasFiscais" aria-expanded="true" aria-controls="collapseFiltrosNotasFiscais">
-                <i class="fas fa-eye-slash"></i> Ocultar filtros
+                <i class="fas fa-eye-slash"></i> Ocultar
             </button>
         </div>
         <div class="collapse show" id="collapseFiltrosNotasFiscais">
@@ -207,14 +225,14 @@
   
 
     <!-- Lista de Notas Fiscais -->
-    <div class="card shadow" data-ft-colvis="tabelaNotasFiscais">
-        <div class="card-header py-3 d-flex align-items-center justify-content-between">
-            <h6 class="m-0 fw-bold">Notas Fiscais</h6>
+    <div class="card nf-table-card" data-ft-colvis="tabelaNotasFiscais">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <span class="card-title-text"><i class="fas fa-list me-2"></i>Notas Fiscais</span>
             <div class="ft-col-toggle-placeholder"></div>
         </div>
         <div class="card-body">
             <div class="ft-datatable-wrapper">
-                <table class="table table-bordered" id="tabelaNotasFiscais" style="width:100%">
+                <table class="table table-bordered nf-datatable" id="tabelaNotasFiscais" style="width:100%">
                     <thead>
                         <tr>
                             <th width="40"><input type="checkbox" class="form-check-input" id="selectAllNotas" title="Selecionar todos da página" aria-label="Selecionar todos"></th>
@@ -255,38 +273,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.3/dist/sweetalert2.min.css">
-<style>
-.badge {
-    font-size: 85%;
-    padding: 0.25em 0.6em;
-}
-.btn-group .btn {
-    margin-right: 2px;
-}
-.modal {
-    z-index: 1050 !important;
-}
-.modal-backdrop {
-    z-index: 1040 !important;
-}
-.border-left-primary {
-    border-left: 0.25rem solid #4e73df !important;
-}
-.text-gray-300 {
-    color: #dddfeb !important;
-}
-
-/* Força o título "Número NF" a quebrar em duas linhas */
-#tabelaNotasFiscais thead th.col-numero-nf {
-    width: 50px !important;
-    max-width: 50px !important;
-    white-space: normal !important;
-    line-height: 1.1 !important;
-}
-#tabelaNotasFiscais thead th.col-numero-nf .th-wrap {
-    display: inline-block;
-}
-</style>
+<link rel="stylesheet" href="{{ url_for('static', filename='css/notas_fiscais.css') }}">
 {% endblock %}
 
 {% block extra_js %}
@@ -368,15 +355,13 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Exportar para Excel
     $('#btnExportarExcel').on('click', function() {
-        params = $('#filtrosNotasFiscais').serialize();
-        url = "exportar-excel?" + params;
-        window.location.href = url;
+        var params = $('#filtrosNotasFiscais').serialize();
+        window.location.href = 'exportar-excel?' + params;
     });
     // Exportar SPED (CTE - abas Dentro do Estado e Fora do Estado)
     $('#btnExportarSped').on('click', function() {
-        params = $('#filtrosNotasFiscais').serialize();
-        url = "exportar-sped?" + params;
-        window.location.href = url;
+        var params = $('#filtrosNotasFiscais').serialize();
+        window.location.href = 'exportar-sped?' + params;
     });
     $('#btnExportarZip').on('click', function() {
         // Abrir modal ao invés de redirecionar
@@ -887,15 +872,15 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
     var TITULOS_NF = ['', 'Número NF', 'Tipo', 'Data Emissão', 'Data Vencimento', 'Emitente', 'Destinatário', 'Fornecedor', 'Valor Total', 'Status', 'Ações'];
-    let table = $('#tabelaNotasFiscais').DataTable(FT.dtOpcoes({
+    var table = $('#tabelaNotasFiscais').DataTable(FT.dtOpcoes({
         ajax: {
             url: '/notas-fiscais/api/notas-fiscais/datatables',
             type: 'GET',
             data: function(d) {
-                let formData = $('#filtrosNotasFiscais').serializeArray();
-                formData.forEach(function(item) { d[item.name] = item.value; });
-            },
-            dataSrc: function(json) { return json.data; }
+                $('#filtrosNotasFiscais').serializeArray().forEach(function(item) {
+                    d[item.name] = item.value;
+                });
+            }
         },
         columns: [
             { data: 0, name: 'select', orderable: false, searchable: false, className: 'text-center' },
@@ -913,114 +898,66 @@ document.addEventListener('DOMContentLoaded', function() {
         order: [[3, 'desc']],
         pageLength: 50,
         drawCallback: function() {
-            reiniciarEventosBotoes();
-            var $cb = $('#selectAllNotas');
-            if ($cb.length) $cb.prop('checked', false);
+            $('#selectAllNotas').prop('checked', false);
         }
     }));
     FT.dtColunas.inicializar(table, 'tabelaNotasFiscais', TITULOS_NF);
-
-    function reiniciarEventosBotoes() {}
 
     // ===== EVENTOS DOS BOTÕES DE AÇÃO (usando delegação para funcionar com DataTables) =====
     
     // Visualizar Itens
     $(document).on('click', '.visualizar-itens', function() {
-        console.log('visualizar itens clicado');
         const notaId = $(this).data('id');
-        
-        // Abrir modal
         const modalElement = document.getElementById('modalVisualizarItens');
         if (modalElement) {
-            const modal = new bootstrap.Modal(modalElement);
-            modal.show();
-            
-            // Tentar carregar itens - a função pode estar definida no modal
-            setTimeout(function() {
-                if (typeof carregarItensModal === 'function') {
-                    carregarItensModal(notaId);
-                } else if (window.carregarItensModal) {
-                    window.carregarItensModal(notaId);
-                } else {
-                    console.warn('Função carregarItensModal não encontrada');
-                }
-            }, 100);
+            new bootstrap.Modal(modalElement).show();
+            if (typeof window.carregarItensModal === 'function') {
+                window.carregarItensModal(notaId);
+            }
         }
     });
 
     // Importar Itens
     $(document).on('click', '.importar-itens', function() {
-        console.log('importar itens clicado');
         const notaId = $(this).data('id');
-        
         const modalElement = document.getElementById('modalImportarItens');
         if (modalElement) {
-            const modal = new bootstrap.Modal(modalElement);
-            modal.show();
+            new bootstrap.Modal(modalElement).show();
             $('#importacao_nf_id').val(notaId);
-            
-            // Carregar itens - a função pode estar definida no modal
-            setTimeout(function() {
-                if (typeof carregarItensImportacao === 'function') {
-                    carregarItensImportacao(notaId);
-                } else if (window.carregarItensImportacao) {
-                    window.carregarItensImportacao(notaId);
-                } else {
-                    console.warn('Função carregarItensImportacao não encontrada');
-                }
-            }, 100);
+            if (typeof window.carregarItensImportacao === 'function') {
+                window.carregarItensImportacao(notaId);
+            }
         }
     });
 
     // Vincular Material
     $(document).on('click', '.vincular-material', function() {
-        console.log('vincular material clicado');
         const notaId = $(this).data('id');
-        // Abrir modal de vincular material se existir
         const modalElement = document.getElementById('modalVincularMaterial');
         if (modalElement) {
-            const modal = new bootstrap.Modal(modalElement);
-            modal.show();
-            // Configurar nota ID se necessário
-            if ($('#vincular_nf_id').length) {
-                $('#vincular_nf_id').val(notaId);
-            }
+            new bootstrap.Modal(modalElement).show();
+            $('#vincular_nf_id').val(notaId);
         } else {
-            // Se não houver modal específico, pode ser que precise abrir o modal de importar itens
-            const modal = new bootstrap.Modal(document.getElementById('modalImportarItens'));
-            modal.show();
+            new bootstrap.Modal(document.getElementById('modalImportarItens')).show();
             $('#importacao_nf_id').val(notaId);
-            if (typeof carregarItensImportacao === 'function') {
-                carregarItensImportacao(notaId);
+            if (typeof window.carregarItensImportacao === 'function') {
+                window.carregarItensImportacao(notaId);
             }
         }
     });
 
     // Visualizar Documentos
     $(document).on('click', '.visualizar-docs', function() {
-        console.log('visualizar documentos clicado');
         const notaId = $(this).data('id');
         const numeroNf = $(this).data('numero');
-        console.log('ID da nota:', notaId, 'Número:', numeroNf);
-        
-        // Abrir modal de documentos
         const modalElement = document.getElementById('modalDocumentos');
         if (modalElement) {
-            const modal = new bootstrap.Modal(modalElement);
-            modal.show();
+            new bootstrap.Modal(modalElement).show();
             $('#modalDocumentosLabel').text(`Documentos da Nota Fiscal ${numeroNf}`);
             $('#notaFiscalId').val(notaId);
-            
-            // Carregar documentos - a função pode estar definida no modal
-            setTimeout(function() {
-                if (typeof carregarDocumentos === 'function') {
-                    carregarDocumentos(notaId);
-                } else if (window.carregarDocumentos) {
-                    window.carregarDocumentos(notaId);
-                } else {
-                    console.warn('Função carregarDocumentos não encontrada');
-                }
-            }, 100);
+            if (typeof window.carregarDocumentos === 'function') {
+                window.carregarDocumentos(notaId);
+            }
         }
     });
 

@@ -96,11 +96,13 @@ def register(material_bp):
         materiais = query.all()
         resultado = []
         for material in materiais:
+            extras = parse_dados_json(material.dados_adicionais)
             resultado.append(
                 {
                     "id": material.id,
-                    "codigo": material.codigo or "",
-                    "codigo_erp": str(material.codigo_erp).strip() if material.codigo_erp not in (None, "") else "",
+                    "codigo": _normalizar_codigo_inteiro(extras.get("codigo_sox")),
+                    # Mantém chave legada `codigo_erp` como alias do código Alterdata no JSON.
+                    "codigo_erp": _normalizar_codigo_inteiro(extras.get("codigo_alterdata")),
                     "nome": material.nome or "",
                     "unidade": material.unidade_obj.nome if material.unidade_obj else "",
                 }
@@ -118,11 +120,11 @@ def register(material_bp):
 
         search = request.args.get("q")
         if search:
-            query = query.filter(db.or_(Materiais.codigo.like(f"%{search}%"), Materiais.nome.like(f"%{search}%")))
+            query = query.filter(db.or_(Materiais.dados_adicionais.like(f"%{search}%"), Materiais.nome.like(f"%{search}%")))
 
-        sort_by = request.args.get("sort_by", "codigo")
+        sort_by = request.args.get("sort_by", "nome")
         sort_dir = request.args.get("sort_dir", "asc")
-        if sort_by in ["codigo", "nome", "categoria", "plano_conta"]:
+        if sort_by in ["nome", "categoria", "plano_conta", "mascara"]:
             if sort_dir == "desc":
                 query = query.order_by(db.desc(getattr(Materiais, sort_by)))
             else:
@@ -134,10 +136,11 @@ def register(material_bp):
 
         result = []
         for m in materiais:
+            extras = parse_dados_json(m.dados_adicionais)
             result.append(
                 {
                     "id": m.id,
-                    "codigo": m.codigo,
+                    "codigo": _normalizar_codigo_inteiro(extras.get("codigo_sox")),
                     "nome": m.nome,
                     "descricao": m.descricao,
                     "categoria": m.categoria,
@@ -166,18 +169,11 @@ def register(material_bp):
             materiais_encontrados = []
 
             if codigo:
-                material_codigo_exato = Materiais.query.filter_by(codigo=codigo, ativo=True).first()
-                if material_codigo_exato:
-                    materiais_encontrados.append({"material": material_codigo_exato, "pontuacao": 100, "motivo": "Código exato"})
-
-                materiais_codigo_similar = (
-                    Materiais.query.filter(Materiais.codigo.ilike(f"%{codigo}%"), Materiais.codigo != codigo, Materiais.ativo.is_(True))
-                    .limit(5)
-                    .all()
-                )
-                for mat in materiais_codigo_similar:
-                    if not any(m["material"].id == mat.id for m in materiais_encontrados):
-                        materiais_encontrados.append({"material": mat, "pontuacao": 70, "motivo": "Código similar"})
+                # Coluna `codigo` foi removida; a busca por código (SOX) agora é via dados_adicionais.
+                termo = f"%{codigo}%"
+                mats = Materiais.query.filter(Materiais.dados_adicionais.ilike(termo), Materiais.ativo.is_(True)).limit(5).all()
+                for mat in mats:
+                    materiais_encontrados.append({"material": mat, "pontuacao": 70, "motivo": "Código (dados adicionais)"})
 
             if ncm:
                 materiais_ncm = Materiais.query.filter(Materiais.ncm == ncm, Materiais.ativo.is_(True)).limit(5).all()
@@ -232,8 +228,8 @@ def register(material_bp):
 
             return jsonify({"success": True, "materiais": resultado})
         except Exception as e:
-            logger.error(f"Erro ao buscar materiais semelhantes: {str(e)}")
-            return jsonify({"success": False, "message": f"Erro ao buscar materiais semelhantes: {str(e)}", "materiais": []}), 500
+            logger.error(f"Erro ao buscar materiais semelhantes: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "message": "Erro ao buscar materiais semelhantes.", "materiais": []}), 500
 
     @material_bp.route("/api/criar", methods=["POST"])
     @login_required
@@ -250,8 +246,7 @@ def register(material_bp):
                 return jsonify({"success": False, "message": "Categoria do material é obrigatória"}), 400
 
             codigo = data.get("codigo")
-            if codigo and Materiais.query.filter_by(codigo=codigo).first():
-                return jsonify({"success": False, "message": f"Já existe um material com o código {codigo}"}), 400
+            # Coluna `codigo` foi removida; o valor é salvo em dados_adicionais["codigo_sox"].
 
             unidade_id = data.get("unidade_id")
             if not unidade_id and data.get("unidade_nome"):
@@ -260,30 +255,35 @@ def register(material_bp):
                     unidade_id = unidade.id
 
             material = Materiais(
-                codigo=codigo,
                 nome=data.get("nome"),
                 descricao=data.get("descricao", ""),
                 categoria=data.get("categoria"),
                 plano_conta=data.get("plano_conta"),
-                codigo_erp=data.get("codigo_erp"),
                 unidade_id=unidade_id,
                 mascara=data.get("mascara"),
                 ncm=data.get("ncm"),
                 formula_calculo=data.get("formula_calculo") if data.get("formula_calculo") else None,
             )
+            codigo_alterdata = _normalizar_codigo_inteiro(data.get("codigo_alterdata") or data.get("codigo_erp"))
+            extras = parse_dados_json(None)
+            if codigo:
+                extras["codigo_sox"] = _normalizar_codigo_inteiro(codigo)
+            if codigo_alterdata:
+                extras["codigo_alterdata"] = codigo_alterdata
+            material.dados_adicionais = dump_dados_json(extras) if extras else None
             material.save()
 
             return jsonify(
                 {
                     "success": True,
                     "message": "Material criado com sucesso!",
-                    "material": {"id": material.id, "codigo": material.codigo, "nome": material.nome, "ncm": material.ncm},
+                    "material": {"id": material.id, "codigo": codigo or "", "nome": material.nome, "ncm": material.ncm},
                 }
             )
         except Exception as e:
-            logger.error(f"Erro ao criar material via API: {str(e)}")
+            logger.error(f"Erro ao criar material via API: {str(e)}", exc_info=True)
             db.session.rollback()
-            return jsonify({"success": False, "message": f"Erro ao criar material: {str(e)}"}), 500
+            return jsonify({"success": False, "message": "Erro ao criar material. Tente novamente."}), 500
 
     @material_bp.route("/editar-material-ajax/<int:id>", methods=["GET", "POST"])
     @login_required
@@ -318,18 +318,11 @@ def register(material_bp):
             if not nome or not categoria:
                 return jsonify({"success": False, "message": "Nome e categoria são campos obrigatórios!"})
 
-            if codigo and codigo != material.codigo:
-                existente = Materiais.query.filter_by(codigo=codigo).first()
-                if existente and existente.id != material.id:
-                    return jsonify({"success": False, "message": f"Já existe um material com o código {codigo}!"})
-
             try:
-                material.codigo = codigo
                 material.nome = nome
                 material.descricao = descricao
                 material.categoria = categoria
                 material.plano_conta = plano_conta
-                material.codigo_erp = codigo_alterdata
                 material.unidade_id = unidade
                 material.mascara = mascara
                 material.formula_calculo = formula_calculo if formula_calculo else None
@@ -421,13 +414,13 @@ def register(material_bp):
         return jsonify(
             {
                 "id": material.id,
-                "codigo": _normalizar_codigo_inteiro(material.codigo),
+                "codigo": _normalizar_codigo_inteiro(extras.get("codigo_sox")),
                 "nome": material.nome,
                 "descricao": material.descricao or "",
                 "categoria": material.categoria,
                 "plano_conta": material.plano_conta or "",
-                "codigo_erp": _normalizar_codigo_inteiro(material.codigo_erp),
-                "codigo_alterdata": _normalizar_codigo_inteiro(extras.get("codigo_alterdata") or material.codigo_erp),
+                "codigo_erp": _normalizar_codigo_inteiro(extras.get("codigo_alterdata")),
+                "codigo_alterdata": _normalizar_codigo_inteiro(extras.get("codigo_alterdata")),
                 "codigo_mega": _normalizar_codigo_inteiro(extras.get("codigo_mega") or extras.get("cod_mega")),
                 "unidade": material.unidade_obj.nome if material.unidade_obj else "",
                 "mascara": _normalizar_codigo_inteiro(material.mascara),
@@ -449,9 +442,9 @@ def register(material_bp):
                 "success": True,
                 "material": {
                     "id": material.id,
-                    "codigo": _normalizar_codigo_inteiro(material.codigo),
-                    "codigo_erp": _normalizar_codigo_inteiro(material.codigo_erp),
-                    "codigo_alterdata": _normalizar_codigo_inteiro(extras.get("codigo_alterdata") or material.codigo_erp),
+                    "codigo": _normalizar_codigo_inteiro(extras.get("codigo_sox")),
+                    "codigo_erp": _normalizar_codigo_inteiro(extras.get("codigo_alterdata")),
+                    "codigo_alterdata": _normalizar_codigo_inteiro(extras.get("codigo_alterdata")),
                     "codigo_mega": _normalizar_codigo_inteiro(extras.get("codigo_mega") or extras.get("cod_mega")),
                     "nome": material.nome or "",
                     "descricao": material.descricao or "",
@@ -483,9 +476,9 @@ def register(material_bp):
                 "success": True,
                 "material": {
                     "id": material.id,
-                    "codigo": _normalizar_codigo_inteiro(material.codigo),
-                    "codigo_erp": _normalizar_codigo_inteiro(material.codigo_erp),
-                    "codigo_alterdata": _normalizar_codigo_inteiro(extras.get("codigo_alterdata") or material.codigo_erp),
+                    "codigo": _normalizar_codigo_inteiro(extras.get("codigo_sox")),
+                    "codigo_erp": _normalizar_codigo_inteiro(extras.get("codigo_alterdata")),
+                    "codigo_alterdata": _normalizar_codigo_inteiro(extras.get("codigo_alterdata")),
                     "codigo_mega": _normalizar_codigo_inteiro(extras.get("codigo_mega") or extras.get("cod_mega")),
                     "nome": material.nome or "",
                     "descricao": material.descricao or "",
@@ -529,6 +522,7 @@ def register(material_bp):
             {current_user.is_authenticated if current_user else False}
             """
         except Exception as e:
-            return f"Erro no diagnóstico: {str(e)}"
+            logger.error(f"Erro no diagnóstico do material {id}: {str(e)}", exc_info=True)
+            return "Erro ao executar diagnóstico.", 500
 
 

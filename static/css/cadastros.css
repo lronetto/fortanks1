@@ -1,0 +1,50 @@
+/* ============================================================
+   cadastros — Cadastros gerais (tanques, peças, etc.)
+   ============================================================ */
+
+/* ── Relatório de materiais por tanque ───────────────────────── */
+.badge-custom   { font-size: 0.9rem; padding: 0.5rem 0.75rem; }
+.totais-card    { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: #fff; }
+.totais-card .card-body,
+.totais-card h5 { color: #fff; }
+.material-item  { border-left: 3px solid var(--primary-color, #007bff); padding-left: 1rem; margin-bottom: 0.5rem; }
+.sistema-badge  { font-size: 0.85rem; }
+
+.table-materiais        { font-size: 0.9rem; }
+.table-materiais th,
+.table-materiais td     { vertical-align: middle; }
+.table-materiais th     { white-space: nowrap; }
+.table-materiais code   {
+    font-size: 0.85rem;
+    background-color: #f8f9fa;
+    padding: 0.2rem 0.4rem;
+    border-radius: 0.25rem;
+}
+.table-materiais tfoot th {
+    background-color: #6c757d !important;
+    color: #fff;
+}
+
+/* ── Modal de vinculação com produto composto ────────────────── */
+.table-grupo-tanque-header {
+    background-color: #f8f9fa !important;
+    font-weight: bold;
+    border-top: 3px solid #dee2e6;
+    border-bottom: 2px solid #dee2e6;
+}
+.table-group-header {
+    background-color: #e9ecef !important;
+    font-weight: bold;
+    border-top: 2px solid #dee2e6;
+    border-bottom: 2px solid #dee2e6;
+}
+.table-sub-header {
+    background-color: #f8f9fa !important;
+    font-weight: 600;
+    font-size: 0.9em;
+    padding-left: 2rem !important;
+}
+.table-group-item { background-color: #fff; }
+.table-group-item:hover { background-color: #f8f9fa; }
+.table-group-item td:first-child,
+.table-sub-header td { padding-left: 2rem !important; }

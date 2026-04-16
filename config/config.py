@@ -13,9 +13,15 @@ logger = logging.getLogger(__name__)
 def _get_secret_key():
     key = os.environ.get('SECRET_KEY')
     if not key:
+        if os.environ.get('FLASK_ENV') == 'production':
+            raise RuntimeError(
+                "SECRET_KEY não configurada em produção! "
+                "Defina SECRET_KEY no arquivo .env antes de iniciar a aplicação."
+            )
         logger.warning(
             "SECRET_KEY nao definida via variavel de ambiente! "
-            "Gerando chave aleatoria (sessoes serao perdidas ao reiniciar)."
+            "Gerando chave aleatoria (sessoes serao perdidas ao reiniciar). "
+            "Defina SECRET_KEY no .env para persistir sessoes."
         )
         key = secrets.token_hex(32)
     return key

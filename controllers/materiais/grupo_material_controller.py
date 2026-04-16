@@ -6,6 +6,7 @@ from models.estoque import Estoque
 from forms.forms import FormGrupoMaterial
 from sqlalchemy import or_, and_
 import logging
+from utils.material_imagem_upload import parse_dados_json
 
 # Configurar logging
 logger = logging.getLogger(__name__)
@@ -440,7 +441,7 @@ def api_buscar_materiais():
             query = query.filter(
                 or_(
                     Materiais.nome.ilike(f'%{search}%'),
-                    Materiais.codigo.ilike(f'%{search}%'),
+                    Materiais.dados_adicionais.ilike(f'%{search}%'),
                     Materiais.descricao.ilike(f'%{search}%')
                 )
             )
@@ -541,7 +542,7 @@ def api_materiais(id):
             query = query.filter(
                 or_(
                     Materiais.nome.ilike(f'%{search}%'),
-                    Materiais.codigo.ilike(f'%{search}%'),
+                    Materiais.dados_adicionais.ilike(f'%{search}%'),
                     Materiais.descricao.ilike(f'%{search}%')
                 )
             )
@@ -553,7 +554,7 @@ def api_materiais(id):
         for material in materiais:
             materiais_data.append({
                 'id': material.id,
-                'codigo': material.codigo or '',
+                'codigo': parse_dados_json(material.dados_adicionais).get("codigo_sox") or '',
                 'nome': material.nome,
                 'categoria': material.categoria or '',
                 'unidade': material.unidade_obj.nome if material.unidade_obj else '',

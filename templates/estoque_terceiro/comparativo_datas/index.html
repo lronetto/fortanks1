@@ -2,19 +2,11 @@
 
 {% block title %}Comparativo entre datas — Estoque terceiro{% endblock %}
 
-{% block content %}
-<style>
-    #tabelaComparativoDatas_wrapper .dataTables_scrollBody {
-        transform: scaleY(-1);
-    }
-    #tabelaComparativoDatas_wrapper .dataTables_scrollBody table {
-        transform: scaleY(-1);
-    }
-    .diff-negativo { color: #c0392b; font-weight: 600; }
-    .diff-positivo { color: #27ae60; font-weight: 600; }
-    .diff-zero { color: #7f8c8d; }
-</style>
-<div class="container-fluid">
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/estoque.css') }}">
+{% endblock %}
+
+{% block content %}<div class="container-fluid">
     {% include 'estoque_terceiro/partials/comparativo_datas_cabecalho.html' %}
     {% include 'estoque_terceiro/partials/comparativo_datas_filtros.html' %}
     {% include 'estoque_terceiro/partials/comparativo_datas_resumo.html' %}

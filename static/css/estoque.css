@@ -1,0 +1,33 @@
+/* ============================================================
+   estoque — Estoque, Estoque de Terceiro e Inventário
+   ============================================================ */
+
+/* Link de histórico de estoque */
+.link-historico-estoque {
+    text-decoration: none;
+    color: #4e73df;
+    cursor: pointer;
+    font-weight: 500;
+    transition: color .2s;
+}
+.link-historico-estoque:hover {
+    color: #224abe;
+    text-decoration: underline;
+}
+
+/* DataTable com scrollbar invertido (barra no topo) */
+#tabelaComparativo_wrapper .dataTables_scrollBody,
+#tabelaComparativoDatas_wrapper .dataTables_scrollBody {
+    transform: scaleY(-1);
+}
+#tabelaComparativo_wrapper .dataTables_scrollBody table,
+#tabelaComparativoDatas_wrapper .dataTables_scrollBody table {
+    transform: scaleY(-1);
+}
+
+/* ── Inventário — estados de linha ───────────────────────────── */
+.item-row.nao-contado              { background-color: #fff3cd !important; }
+.item-row.nao-contado:hover        { background-color: #ffeaa7 !important; }
+.item-row.contado                  { background-color: #ffffff; }
+.item-row.contado:hover            { background-color: #f8f9fa; }
+.item-row.divergente               { border-left: 4px solid #dc3545; }

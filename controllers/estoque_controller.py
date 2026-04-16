@@ -2,6 +2,7 @@ from time import time
 from flask import Blueprint, render_template, request, flash, redirect, url_for, jsonify, abort, send_file
 from flask_login import login_required, current_user
 from flask_wtf.csrf import generate_csrf
+from extensions import limiter
 from models.estoque import Estoque, EstoqueMovimentacoes
 from models.material import Materiais,MateriaisGrupos
 from models.epi import Epi,EpiEntregas
@@ -22,6 +23,7 @@ from weasyprint import HTML, CSS
 import os
 
 from models.produto_composto import ProdutoComposto
+from utils.material_imagem_upload import parse_dados_json
 
 # Configuração do logger
 logger = logging.getLogger(__name__)
@@ -89,7 +91,7 @@ def _obter_itens_estoque_listagem(request):
             ProdutoComposto, Estoque.ProdComp_id == ProdutoComposto.id).filter(
             or_(
                 Materiais.nome.ilike(termo),
-                Materiais.codigo.ilike(termo),
+                Materiais.dados_adicionais.ilike(termo),
                 Estoque.localizacao.ilike(termo),
                 ProdutoComposto.nome.ilike(termo)
             )
@@ -317,7 +319,7 @@ def api_datatables():
         return jsonify({'data': data})
     except Exception as e:
         logger.error(f"api_datatables estoque: {e}", exc_info=True)
-        return jsonify({'data': [], 'error': str(e)}), 500
+        return jsonify({'data': [], 'error': 'Erro ao carregar dados do estoque.'}), 500
 
 @estoque_bp.route('/novo', methods=['GET', 'POST'])
 @login_required
@@ -389,22 +391,22 @@ def novo():
             return redirect(url_for('estoque.index'))
         except Exception as e:
             db.session.rollback()
-            logger.error(f"Erro ao adicionar item ao estoque: {str(e)}")
-            
+            logger.error(f"Erro ao adicionar item ao estoque: {str(e)}", exc_info=True)
+
             if is_ajax:
                 return jsonify({
                     'success': False,
-                    'message': f'Erro ao adicionar item: {str(e)}'
+                    'message': 'Erro ao adicionar item ao estoque. Tente novamente.'
                 })
-            
-            flash(f'Erro ao adicionar item: {str(e)}', 'danger')
+
+            flash('Erro ao adicionar item ao estoque. Tente novamente.', 'danger')
     elif request.method == 'POST' and is_ajax:
         # Retornar erros de validação para o modal
         errors = {}
         for field, field_errors in form.errors.items():
             errors[field] = field_errors
         
-        print(errors)
+        logger.debug(f"Erros de validação no form de estoque: {errors}")
         return jsonify({
             'success': False,
             'message': 'Erro de validação',
@@ -483,8 +485,8 @@ def editar(id):
             return redirect(url_for('estoque.detalhes', id=item.id))
         except Exception as e:
             db.session.rollback()
-            logger.error(f"Erro ao editar item do estoque: {str(e)}")
-            flash(f'Erro ao atualizar item: {str(e)}', 'danger')
+            logger.error(f"Erro ao editar item do estoque: {str(e)}", exc_info=True)
+            flash('Erro ao atualizar item. Tente novamente.', 'danger')
     
     return render_template('estoque/form.html', form=form, title='Editar Item de Estoque')
 
@@ -580,11 +582,10 @@ def excluir(id):
         flash('Item excluído com sucesso!', 'success')
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Erro ao excluir item do estoque: {str(e)}")
-        msg = f'Erro ao excluir item: {str(e)}'
+        logger.error(f"Erro ao excluir item do estoque: {str(e)}", exc_info=True)
         if ajax:
-            return jsonify({'success': False, 'message': msg}), 500
-        flash(msg, 'danger')
+            return jsonify({'success': False, 'message': 'Erro ao excluir item. Tente novamente.'}), 500
+        flash('Erro ao excluir item. Tente novamente.', 'danger')
 
     return redirect(url_for('estoque.index'))
 
@@ -740,9 +741,11 @@ def nova_movimentacao():
     for e in estoques:
         nome_item = ''
         if e.material:
-            nome_item = f"{e.material.codigo} - {e.material.nome}"
+            codigo_sox = parse_dados_json(e.material.dados_adicionais).get("codigo_sox")
+            nome_item = f"{codigo_sox} - {e.material.nome}" if codigo_sox else f"{e.material.nome}"
         elif e.epi and e.epi.material:
-            nome_item = f"{e.epi.material.codigo or 'S/C'} - {e.epi.material.nome}"
+            codigo_sox = parse_dados_json(e.epi.material.dados_adicionais).get("codigo_sox")
+            nome_item = f"{codigo_sox} - {e.epi.material.nome}" if codigo_sox else f"{e.epi.material.nome}"
         else:
             nome_item = "Item sem descrição"
             
@@ -784,8 +787,8 @@ def nova_movimentacao():
             return redirect(url_for('estoque.movimentacoes'))
         except Exception as e:
             db.session.rollback()
-            logger.error(f"Erro ao registrar movimentação: {str(e)}")
-            flash(f'Erro ao registrar movimentação: {str(e)}', 'danger')
+            logger.error(f"Erro ao registrar movimentação: {str(e)}", exc_info=True)
+            flash('Erro ao registrar movimentação. Tente novamente.', 'danger')
     
     return render_template('estoque/movimentacao_form.html', form=form)
 
@@ -998,8 +1001,8 @@ def excluir_movimentacao(id_movimentacao):
         flash(f'Movimentação ID {id_movimentacao} excluída com sucesso e estoque revertido.', 'success')
     except Exception as e:
         db.session.rollback()
-        logger.error(f"Erro ao excluir movimentação de estoque ID {id_movimentacao}: {str(e)}")
-        flash(f'Erro ao excluir movimentação: {str(e)}', 'danger')
+        logger.error(f"Erro ao excluir movimentação de estoque ID {id_movimentacao}: {str(e)}", exc_info=True)
+        flash('Erro ao excluir movimentação. Tente novamente.', 'danger')
     
     return redirect(url_for('estoque.movimentacoes'))
 
@@ -1618,6 +1621,7 @@ def sincronizar_estoque(id):
 
 @estoque_bp.route('/exportar-excel')
 @login_required
+@limiter.limit("10 per minute")
 def exportar_excel():
     """
     Exporta os itens de estoque filtrados para Excel.
@@ -1653,7 +1657,7 @@ def exportar_excel():
                 ProdutoComposto, Estoque.ProdComp_id == ProdutoComposto.id).filter(
                 or_(
                     Materiais.nome.ilike(termo),
-                    Materiais.codigo.ilike(termo),
+                    Materiais.dados_adicionais.ilike(termo),
                     Estoque.localizacao.ilike(termo),
                     ProdutoComposto.nome.ilike(termo)
                 )
@@ -1728,9 +1732,10 @@ def exportar_excel():
             codigo_alterdata = None
             unidade = None
             if item.material:
-                codigo_material = item.material.id or item.material.codigo or "N/A"
+                codigo_material = item.material.id or "N/A"
                 nome = item.material.nome
-                codigo_alterdata = str(item.material.codigo_erp).replace(".0", "") if item.material.codigo_erp else "N/A"
+                extras = parse_dados_json(item.material.dados_adicionais)
+                codigo_alterdata = str(extras.get("codigo_alterdata") or "").replace(".0", "") or "N/A"
                 unidade = item.material.unidade_obj.nome if item.material.unidade_obj else "N/A"
             elif item.produto_composto:
                 codigo_material = item.produto_composto.id or "N/A"
@@ -1780,6 +1785,7 @@ def exportar_excel():
 
 @estoque_bp.route('/movimentacoes/exportar-excel')
 @login_required
+@limiter.limit("10 per minute")
 def exportar_movimentacoes_excel():
     """
     Exporta as movimentações de estoque filtradas para Excel.

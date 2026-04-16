@@ -3,8 +3,12 @@
 {% block title %}Grupos de Materiais{% endblock %}
 {% block mobile_title %}Grupos de Materiais{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/materiais.css') }}">
+{% endblock %}
+
 {% block content %}
-<div class="container-fluid py-4">
+<div class="container-fluid py-4 materiais-page">
     <div class="ft-page-header">
         <h1 class="h3 mb-0">Grupos de Materiais</h1>
         <div class="btn-group">
@@ -26,7 +30,7 @@
     <!-- Filtros -->
     <div class="card shadow mb-4">
         <div class="card-header py-3 d-flex align-items-center justify-content-between">
-            <h6 class="m-0 fw-bold">Filtros</h6>
+            <span><i class="fas fa-filter me-2" style="color:var(--mat-accent)"></i>Filtros</span>
             <a href="{{ url_for('grupo_material.index') }}" class="btn btn-sm btn-outline-secondary" title="Limpar filtros">
                 <i class="fas fa-eraser"></i>
             </a>
@@ -61,7 +65,7 @@
     <!-- Tabela -->
     <div class="card shadow mb-4">
         <div class="card-header py-3">
-            <h6 class="m-0 fw-bold">Lista de Grupos</h6>
+            <span><i class="fas fa-layer-group me-2" style="color:var(--mat-accent)"></i>Grupos de Materiais</span>
         </div>
         <div class="card-body p-md-3 p-2 ft-datatable-wrapper">
             <table class="table table-bordered table-hover w-100" id="dataTable" cellspacing="0">

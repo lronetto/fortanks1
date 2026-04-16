@@ -15,6 +15,7 @@ from models.database import db
 from models.estoque import EstoqueMovimentacoes
 from models.logs import Logs
 from models.material import Materiais
+from utils.material_imagem_upload import parse_dados_json
 from models.nota_fiscal import NotaFiscal, NotaFiscalItem
 from models.upload import Upload
 from models.pedido_compra import PedidoCompraEntrada, PedidoCompraItem
@@ -95,10 +96,12 @@ def register(nota_fiscal_bp):
         # Obter query com filtros (usando request modificado)
         modified_request = ModifiedRequest(request)
         query = api_get_dados_notas_fiscais(modified_request)
-        
-        # Contar total de registros (antes da paginação)
-        total_records = query.count()
-        
+
+        # recordsTotal = total sem filtros (DataTables exige a distinção)
+        total_geral = db.session.query(func.count(NotaFiscal.id)).scalar() or 0
+        # recordsFiltered = total após aplicar os filtros do formulário
+        total_filtrado = query.count()
+
         # Aplicar paginação
         pagination = query.paginate(page=page, per_page=per_page, error_out=False)
         notas_fiscais_pagina = pagination.items
@@ -246,8 +249,8 @@ def register(nota_fiscal_bp):
 
         return jsonify({
             "draw": draw,
-            "recordsTotal": total_records,
-            "recordsFiltered": total_records,
+            "recordsTotal": total_geral,
+            "recordsFiltered": total_filtrado,
             "data": data
         })
 
@@ -372,7 +375,7 @@ def register(nota_fiscal_bp):
             Materiais.query.filter(
                 Materiais.ativo.is_(True),
                 db.or_(
-                    Materiais.codigo.ilike(termo_busca),
+                    Materiais.dados_adicionais.ilike(termo_busca),
                     Materiais.descricao.ilike(termo_busca),
                     Materiais.nome.ilike(termo_busca),
                 ),
@@ -392,7 +395,7 @@ def register(nota_fiscal_bp):
                 {
                     "id": material.id,
                     "nome": material.nome,
-                    "codigo": material.codigo or "",
+                    "codigo": parse_dados_json(material.dados_adicionais).get("codigo_sox") or "",
                     "descricao": material.descricao or "",
                     "unidade": unidade,
                     "unidade_sigla": unidade_sigla,
@@ -422,7 +425,8 @@ def register(nota_fiscal_bp):
         Espera JSON: {unidadeNota: str, unidadeMaterial: str}
         Retorna: {success: bool, fator_conversao: float|None}
         """
-        print('api_comparar_unidades', request.get_json());
+        logger.debug('api_comparar_unidades chamada')
+
         data = request.get_json() or {}
         unidade_nota = data.get("unidadeNota", "").strip()
         unidade_material = data.get("unidadeMaterial", "").strip()
@@ -610,7 +614,7 @@ def register(nota_fiscal_bp):
             )
         except Exception as e:
             logger.exception("api_importar_item_estoque item_id=%s", item_id)
-            return jsonify({"success": False, "message": str(e)}), 500
+            return jsonify({"success": False, "message": "Erro ao importar item para o estoque."}), 500
 
         if not sucesso:
             return jsonify({"success": False, "message": mensagem or "Erro ao importar item."}), 400
@@ -890,8 +894,8 @@ def register(nota_fiscal_bp):
         except ValueError:
             return jsonify({"success": False, "message": "ID da nota fiscal inválido"}), 400
         except Exception as e:
-            logger.error(f"Erro ao excluir nota fiscal: {str(e)}")
-            return jsonify({"success": False, "message": f"Erro ao excluir nota fiscal: {str(e)}"}), 500
+            logger.error(f"Erro ao excluir nota fiscal: {str(e)}", exc_info=True)
+            return jsonify({"success": False, "message": "Erro ao excluir nota fiscal. Tente novamente."}), 500
 
     @nota_fiscal_bp.route("/api/liberar", methods=["POST"])
     @login_required
@@ -1052,7 +1056,7 @@ def register(nota_fiscal_bp):
             })
         except Exception as e:
             logger.error(f"Erro ao alterar status de liberação: {str(e)}", exc_info=True)
-            return jsonify({"success": False, "message": f"Erro ao alterar status de liberação: {str(e)}"}), 500
+            return jsonify({"success": False, "message": "Erro ao alterar status de liberação. Tente novamente."}), 500
 
     @nota_fiscal_bp.route("/api/cancelar", methods=["POST"])
     @login_required
@@ -1131,9 +1135,9 @@ def register(nota_fiscal_bp):
         except ValueError:
             return jsonify({"success": False, "message": "ID da nota fiscal inválido"}), 400
         except Exception as e:
-            logger.error(f"Erro ao alterar status de cancelamento: {str(e)}")
+            logger.error(f"Erro ao alterar status de cancelamento: {str(e)}", exc_info=True)
             return jsonify(
-                {"success": False, "message": f"Erro ao alterar status de cancelamento: {str(e)}"}
+                {"success": False, "message": "Erro ao alterar status de cancelamento. Tente novamente."}
             ), 500
 
 

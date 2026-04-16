@@ -24,6 +24,7 @@ from sqlalchemy import or_, func, and_
 from sqlalchemy.orm import joinedload
 from decimal import Decimal
 from collections import defaultdict
+from utils.material_imagem_upload import parse_dados_json
 
 logger = logging.getLogger(__name__)
 
@@ -899,7 +900,7 @@ def api_itens_estoque():
         query = query.filter(
             or_(
                 Materiais.nome.ilike(like),
-                Materiais.codigo.ilike(like),
+                Materiais.dados_adicionais.ilike(like),
                 ProdutoComposto.nome.ilike(like),
             )
         )
@@ -911,7 +912,8 @@ def api_itens_estoque():
         if item.material:
             sigla = item.material.unidade_obj.sigla if (item.material.unidade_obj and hasattr(item.material.unidade_obj, "sigla")) else None
             unidade_txt = f" ({sigla})" if sigla else ""
-            codigo_txt = f"{item.material.codigo} - " if item.material.codigo else ""
+            codigo_sox = parse_dados_json(item.material.dados_adicionais).get("codigo_sox")
+            codigo_txt = f"{codigo_sox} - " if codigo_sox else ""
             # [E] = material contido em estoque.py (ou seja, existe registro em Estoque)
             text = f"[E] {codigo_txt}{item.material.nome}{unidade_txt}"
             results.append({'id': item.id, 'text_sort': item.material.nome.lower(), 'text': text,'tipo': 'estoque'})
@@ -934,13 +936,14 @@ def api_itens_estoque():
     )
     if search_term:
         like = f'%{search_term}%'
-        materiais_query = materiais_query.filter(or_(Materiais.nome.ilike(like), Materiais.codigo.ilike(like)))
+        materiais_query = materiais_query.filter(or_(Materiais.nome.ilike(like), Materiais.dados_adicionais.ilike(like)))
 
     materiais_sem_estoque = materiais_query.order_by(Materiais.nome.asc()).limit(200).all()
     for material in materiais_sem_estoque:
         sigla = material.unidade_obj.nome if (material.unidade_obj and hasattr(material.unidade_obj, "sigla")) else None
         unidade_txt = f" ({sigla})" if sigla else ""
-        codigo_txt = f"{material.codigo} - " if material.codigo else ""
+        codigo_sox = parse_dados_json(material.dados_adicionais).get("codigo_sox")
+        codigo_txt = f"{codigo_sox} - " if codigo_sox else ""
         results.append({'id': f"material:{material.id}", 'text_sort': material.nome.lower(), 'text': f"[M] {codigo_txt}{material.nome}{unidade_txt}",'tipo': 'material'})
 
     results.sort(key=lambda x: x['text_sort'])
@@ -1407,11 +1410,12 @@ def exportar_excel():
                     qtd_componente = float(componente.quantidade or 0)
                     if estoque.material_id and estoque.material:
                         material = estoque.material
+                        extras = parse_dados_json(material.dados_adicionais)
                         dados_componentes.append({
                             'ID Sfortanks': estoque.id,
                             'Tipo': 'Material',
                             'Nome': material.nome,
-                            'Código Alterdata': material.codigo_erp or '',
+                            'Código Alterdata': extras.get("codigo_alterdata") or '',
                             'Quantidade': qtd_componente,
                             'Unidade': material.unidade_obj.nome if (material.unidade_obj and hasattr(material.unidade_obj, 'nome')) else '',
                         })
@@ -1436,11 +1440,12 @@ def exportar_excel():
                         )
                         for mat in materiais_expandidos:
                             material_obj = Materiais.query.get(mat['material_id'])
+                            extras = parse_dados_json(material_obj.dados_adicionais) if material_obj else {}
                             dados_componentes.append({
                                 'ID Sfortanks': f"material:{mat['material_id']}",
                                 'Tipo': '↳ Material',
                                 'Nome': f"    {mat['material_nome']}",
-                                'Código Alterdata': (material_obj.codigo_erp if material_obj else ''),
+                                'Código Alterdata': (extras.get("codigo_alterdata") if material_obj else ''),
                                 'Quantidade': float(mat['quantidade'] or 0),
                                 'Unidade': mat.get('unidade') or '',
                             })

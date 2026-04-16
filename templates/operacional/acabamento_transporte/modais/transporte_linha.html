@@ -2,10 +2,7 @@
 <div class="modal fade" id="modalTransporteLinha" tabindex="-1" aria-labelledby="modalTransporteLinhaLabel" aria-hidden="true">
   <div class="modal-dialog">
     <div class="modal-content">
-      <style>
-        #modalTransporteLinha .ui-autocomplete { z-index: 10000 !important; }
-      </style>
-      <form id="formTransporteLinha" method="post" action="{{ url_for('acabamento_transporte.transporte') }}">
+            <form id="formTransporteLinha" method="post" action="{{ url_for('acabamento_transporte.transporte') }}">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="transporte-tanque_ids[]" id="transporte_linha-tanque_id" value="">
         <input type="hidden" name="transporte-peca_ids[]" id="transporte_linha-peca_id" value="">

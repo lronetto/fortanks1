@@ -23,7 +23,7 @@ if str(PROJECT_ROOT) not in sys.path:
 from dotenv import load_dotenv
 load_dotenv(PROJECT_ROOT / ".env")
 
-from PyPDF2 import PdfReader, PdfWriter
+from pypdf import PdfReader, PdfWriter
 from pdf2image import convert_from_bytes
 
 from utils.utils import validar_chave_acesso, extrair_chave_do_pdf

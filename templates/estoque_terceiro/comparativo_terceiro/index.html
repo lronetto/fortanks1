@@ -2,6 +2,10 @@
 
 {% block title %}Comparativo de Estoques{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/estoque.css') }}">
+{% endblock %}
+
 {% block content %}
 {% include 'estoque_terceiro/partials/estilos_inline.html' %}
 <div class="container-fluid">

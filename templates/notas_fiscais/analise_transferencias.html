@@ -2,15 +2,30 @@
 
 {% block title %}Análise de Transferências de Itens{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/notas_fiscais.css') }}">
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
-    <h1 class="h3 mb-2 text-gray-800">Análise de Transferências de Itens</h1>
-    <p class="mb-4">Visualize as transferências de itens entre emitentes e destinatários, com filtros por período e código do item.</p>
+
+    <!-- Header -->
+    <div class="nf-page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+            <h1 class="nf-page-title">
+                <i class="fas fa-exchange-alt me-2" style="color:var(--nf-amber);"></i>Análise de Transferências
+            </h1>
+            <p class="nf-page-subtitle">Transferências de itens entre emitentes e destinatários, com filtros por período e código.</p>
+        </div>
+        <a href="{{ url_for('nota_fiscal.index') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left me-1"></i> Voltar
+        </a>
+    </div>
 
     <!-- Filtros -->
-    <div class="card shadow mb-4">
-        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-            <h6 class="m-0 font-weight-bold text-primary">Filtros</h6>
+    <div class="card nf-filter-card mb-4">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <span class="card-title-text"><i class="fas fa-filter me-2"></i>Filtros</span>
         </div>
         <div class="card-body">
             <form method="GET" action="">
@@ -70,21 +85,23 @@
                         </div>
                     </div>
                     <div class="col-md-3 d-flex align-items-end">
-                        <button type="submit" class="btn btn-primary mr-2">
-                            <i class="fas fa-search"></i> Filtrar
-                        </button>
-                        <a href="?" class="btn btn-secondary mr-2">
-                            <i class="fas fa-sync"></i> Limpar
-                        </a>
-                        <button type="button" class="btn btn-info mr-2" id="btn-modal-cnpj">
-                            <i class="fas fa-table"></i> Análise por CNPJ
-                        </button>
-                        <button type="button" class="btn btn-success mr-2" id="btn-exportar-excel">
-                            <i class="fas fa-file-excel"></i> Exportar Excel
-                        </button>
-                        <button type="button" class="btn btn-danger" id="btn-exportar-pdf">
-                            <i class="fas fa-file-pdf"></i> Exportar PDF
-                        </button>
+                        <div class="btn-bar">
+                            <button type="submit" class="btn btn-primary btn-sm">
+                                <i class="fas fa-search me-1"></i> Filtrar
+                            </button>
+                            <a href="?" class="btn btn-outline-secondary btn-sm">
+                                <i class="fas fa-times me-1"></i> Limpar
+                            </a>
+                            <button type="button" class="btn btn-info btn-sm" id="btn-modal-cnpj">
+                                <i class="fas fa-table me-1"></i> Por CNPJ
+                            </button>
+                            <button type="button" class="btn btn-success btn-sm" id="btn-exportar-excel">
+                                <i class="fas fa-file-excel me-1"></i> Excel
+                            </button>
+                            <button type="button" class="btn btn-danger btn-sm" id="btn-exportar-pdf">
+                                <i class="fas fa-file-pdf me-1"></i> PDF
+                            </button>
+                        </div>
                     </div>
                 </div>
             </form>
@@ -92,9 +109,9 @@
     </div>
 
     <!-- Tabela de Transferências -->
-    <div class="card shadow mb-4">
-        <div class="card-header py-3 d-flex flex-row align-items-center justify-content-between">
-            <h6 class="m-0 font-weight-bold text-primary">Transferências de Itens</h6>
+    <div class="card nf-table-card mb-4">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <span class="card-title-text"><i class="fas fa-exchange-alt me-2"></i>Transferências de Itens</span>
         </div>
         <div class="card-body">
             <div id="tabela-transferencias-ajax">

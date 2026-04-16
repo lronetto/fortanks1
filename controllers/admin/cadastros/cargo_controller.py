@@ -4,16 +4,10 @@ from datetime import datetime
 
 from models.database import db
 from models.cargo import Cargo
+from utils.decorators import criar_verificacao_permissao
 
 cargo_bp = Blueprint('cargo', __name__)
-
-# Middleware para verificar se o usuário tem permissão
-@cargo_bp.before_request
-@login_required
-def verificar_permissao():
-    if not current_user.is_admin:
-        flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
-        return redirect(url_for('dashboard.index'))
+cargo_bp.before_request(login_required(criar_verificacao_permissao('admin')))
 
 @cargo_bp.route('/')
 @login_required

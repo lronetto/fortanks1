@@ -1,28 +1,4 @@
-<!-- Modal de Redosagem -->
-<style>
-    /* Garantir que o modal de redosagem apareça acima de outros modais sem desabilitá-los */
-    #modalRedosagem {
-        z-index: 1065 !important;
-    }
-    #modalRedosagem.show {
-        z-index: 1065 !important;
-    }
-    body.modal-open #modalRedosagem {
-        z-index: 1065 !important;
-    }
-    /* Não adicionar backdrop adicional - usar o backdrop do modal pai */
-    #modalRedosagem + .modal-backdrop {
-        display: none !important;
-    }
-    /* Garantir que o modal de redosagem seja clicável mesmo com backdrop do modal pai */
-    #modalRedosagem .modal-dialog {
-        pointer-events: auto !important;
-    }
-    #modalRedosagem .modal-content {
-        pointer-events: auto !important;
-    }
-</style>
-<div class="modal fade" id="modalRedosagem" tabindex="-1" aria-labelledby="modalRedosagemLabel" aria-hidden="true" data-bs-backdrop="false">
+<!-- Modal de Redosagem --><div class="modal fade" id="modalRedosagem" tabindex="-1" aria-labelledby="modalRedosagemLabel" aria-hidden="true" data-bs-backdrop="false">
     <div class="modal-dialog modal-xl">
         <div class="modal-content">
             <div class="modal-header">

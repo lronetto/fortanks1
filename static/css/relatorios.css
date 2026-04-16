@@ -1,0 +1,154 @@
+/* ============================================================
+   relatorios — Módulo de relatórios e análises
+   ============================================================ */
+
+/* ── Dashboard Mensal Analítico ──────────────────────────────── */
+.chart-header {
+    padding: 10px 15px;
+    background-color: #f8f9fc;
+    border-bottom: 1px solid #e3e6f0;
+    border-top-left-radius: 5px;
+    border-top-right-radius: 5px;
+}
+.chart-body {
+    padding: 15px;
+    min-height: 350px;
+}
+
+.financial-summary {
+    display: flex;
+    flex-direction: row;
+    justify-content: space-between;
+    gap: 15px;
+    margin-bottom: 20px;
+    overflow-x: auto;
+    width: 100%;
+}
+.financial-card {
+    flex: 1 1 0;
+    width: 33%;
+    min-width: 200px;
+    padding: 20px;
+    border-radius: 5px;
+    box-shadow: 0 0.15rem 1.75rem 0 rgba(58, 59, 69, 0.15);
+    text-align: center;
+    transition: transform 0.2s;
+    cursor: pointer;
+}
+.financial-card:hover       { transform: translateY(-5px); }
+.financial-card-value       { font-size: 1.5rem; font-weight: bold; margin-top: 10px; }
+.financial-card-title       { font-size: 0.875rem; color: #6c757d; }
+.card-receita { background-color: #f0fff4; border-left: 4px solid #38a169; }
+.card-custo   { background-color: #fff5f5; border-left: 4px solid #e53e3e; }
+.card-saldo   { background-color: #e6f7ff; border-left: 4px solid #17a2b8; }
+.text-positive { color: #38a169; }
+.text-negative { color: #e53e3e; }
+.loading-overlay {
+    position: absolute;
+    top: 0; left: 0;
+    width: 100%; height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgba(255, 255, 255, 0.8);
+    z-index: 1000;
+}
+
+/* Tabela hierárquica de plano de contas */
+.grupo-plano-conta { cursor: pointer; border-bottom: 1px solid #e3e6f0; }
+.detalhe-contas-container td {
+    border-top: none !important;
+    padding-top: 0 !important;
+    padding-bottom: 0 !important;
+}
+.detalhe-contas-container .table {
+    margin-left: 2rem !important;
+    margin-bottom: 0 !important;
+    background-color: #fdfdfd;
+}
+.detalhe-contas-container .table > tbody > tr:nth-of-type(odd) > * {
+    background-color: rgba(0, 0, 0, 0.03);
+}
+.linha-pai { cursor: pointer; background-color: #f8f9fc !important; }
+.linha-pai:hover { background-color: #e9ecef !important; }
+.toggle-icon {
+    transition: transform 0.2s ease-in-out;
+    display: inline-block;
+    width: 1em;
+    text-align: center;
+}
+.toggle-icon.rotated,
+.toggle-detalhes.rotated { transform: rotate(90deg); }
+
+/* ── Visualizar Dados Analíticos ──────────────────────────────── */
+.filtros-container {
+    background-color: #f8f9fc;
+    border-radius: 0.35rem;
+    padding: 1rem;
+    margin-bottom: 1rem;
+}
+.filtro-collapse { padding: 0.5rem; }
+.table-container { overflow-x: auto; }
+.data-table th  { white-space: nowrap; font-size: 0.9rem; }
+.data-table td  { font-size: 0.85rem; }
+.pagination-container { margin-top: 1rem; }
+.total-container {
+    font-size: 1.2rem;
+    font-weight: bold;
+    text-align: right;
+    margin-top: 1rem;
+}
+
+/* ── Capacidade de Produção ───────────────────────────────────── */
+.badge-progress  { font-size: 0.85rem; padding: 0.4em 0.6em; }
+.btn-detalhes    { cursor: pointer; }
+.produto-composto-item {
+    border-left: 3px solid var(--primary-color, #007bff);
+    padding-left: 10px;
+    margin-bottom: 10px;
+}
+.tabela-componentes-capacidade {
+    max-height: 50vh;
+    overflow-y: auto;
+    overflow-x: auto;
+    border: 1px solid #dee2e6;
+    border-radius: 0.25rem;
+}
+.info-box {
+    background-color: #e8f4f8;
+    border-left: 4px solid #17a2b8;
+    padding: 0.75rem 1rem;
+    border-radius: 0.25rem;
+    margin-bottom: 1rem;
+}
+#analiseCapacidadeModal .modal-dialog {
+    max-width: 80%;
+    margin: 1rem auto;
+}
+#tabela-componentes-capacidade { margin-bottom: 0; }
+#tabela-componentes-capacidade thead th {
+    position: sticky;
+    top: 0;
+    background-color: #f8f9fa;
+    z-index: 10;
+    border-bottom: 2px solid #dee2e6;
+    white-space: nowrap;
+    padding: 0.5rem;
+    font-size: 0.85rem;
+    font-weight: 600;
+}
+#tabela-componentes-capacidade tbody td {
+    white-space: nowrap;
+    padding: 0.5rem;
+    font-size: 0.9rem;
+}
+
+/* ── Relatório de Notas (cards com borda colorida) ────────────── */
+.relatorio-notas .card {
+    border-width: 2px;
+    transition: transform 0.2s ease-in-out, box-shadow 0.2s ease-in-out;
+}
+.relatorio-notas .card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}

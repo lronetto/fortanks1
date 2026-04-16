@@ -4,7 +4,7 @@ Pipeline reembolso (tipo 3): PDF com várias páginas separadas por página.
 import io
 import logging
 
-from PyPDF2 import PdfReader
+from pypdf import PdfReader
 
 from utils.utils import separar_pdf_por_paginas
 

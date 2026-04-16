@@ -3,8 +3,6 @@ from datetime import datetime
 from sqlalchemy.orm import defer
 from sqlalchemy import func
 
-from dotenv import load_dotenv
-import os
 import json
 from flask_login import current_user
 import base64
@@ -30,9 +28,7 @@ from .constants import (
 from .movimentacao_estoque import determinar_movimentacoes_estoque
 
 logger = logging.getLogger(__name__)
-load_dotenv()
-ARQUIVEI_API_ID = os.getenv('ARQUIVEI_API_ID')
-ARQUIVEI_API_KEY = os.getenv('ARQUIVEI_API_KEY')
+from models.nota_fiscal.constants import ARQUIVEI_API_ID, ARQUIVEI_API_KEY
 
 # Nota Fiscal
 #tipo 0 - NFe

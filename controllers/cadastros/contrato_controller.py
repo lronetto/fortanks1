@@ -16,8 +16,10 @@ from models.dados_analiticos import (
 )
 from models.tanque import Tanques
 from models.nota_fiscal import NotaFiscal, NotaFiscalItem, CFOPS_VENDA
+from utils.decorators import criar_verificacao_permissao
 
 contrato_bp = Blueprint('contrato', __name__)
+contrato_bp.before_request(login_required(criar_verificacao_permissao('gerente')))
 
 
 def _float_form_br(form, field: str, default: float = 0.0) -> float:
@@ -269,14 +271,6 @@ def _sum_executado_por_planos(centro_custo_id, plano_conta_ids: list) -> float:
     )
     return float(q.scalar() or 0)
 
-
-# Middleware para verificar se o usuário tem permissão
-@contrato_bp.before_request
-@login_required
-def verificar_permissao():
-    if not current_user.is_gerente_ou_superior:
-        flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
-        return redirect(url_for('dashboard.index'))
 
 @contrato_bp.route('/')
 def index():

@@ -8,6 +8,7 @@ from models.centro_custo import CentroCusto
 from models.usuario import Usuario
 from models.colaborador import Colaborador
 from utils.email_utils import enviar_email
+from utils.material_imagem_upload import parse_dados_json
 
 # Importar WeasyPrint (requer instalação: pip install WeasyPrint)
 # e instalação de dependências de sistema (Pango, Cairo, etc.)
@@ -197,7 +198,7 @@ def api_materiais():
     if search:
         query = query.filter(
             db.or_(
-                Materiais.codigo.like(f'%{search}%'),
+                Materiais.dados_adicionais.like(f'%{search}%'),
                 Materiais.nome.like(f'%{search}%')
             )
         )
@@ -429,7 +430,7 @@ def get_dados_solicitacao(id):
             'material_id': item.material_id,
             'material': {
                 'nome': item.material.nome,
-                'codigo': item.material.codigo if item.material.codigo else '',
+                'codigo': parse_dados_json(item.material.dados_adicionais).get("codigo_sox") or '',
                 'unidade_obj': {
                     'nome': item.material.unidade_obj.nome if item.material.unidade_obj else ''
                 }

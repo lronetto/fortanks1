@@ -105,7 +105,7 @@ def index():
                     'nome': tabela,
                     'total_registros': 0,
                     'tamanho_mb': 0.0,
-                    'erro': str(e)
+                    'erro': 'Erro ao carregar informações.'
                 })
         
         # Calcular totais gerais
@@ -123,9 +123,9 @@ def index():
                             total_tabelas=len(tabelas_info))
     
     except Exception as e:
-        logger.error(f"Erro ao carregar página de admin: {str(e)}")
+        logger.error(f"Erro ao carregar página de admin: {str(e)}", exc_info=True)
         from flask import flash
-        flash(f'Erro ao carregar informações do banco de dados: {str(e)}', 'error')
+        flash('Erro ao carregar informações do banco de dados.', 'error')
         return render_template('admin/index.html',
                             tabelas_info=[],
                             uploads_por_tipo={},

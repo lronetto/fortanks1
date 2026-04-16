@@ -6,7 +6,7 @@ from datetime import datetime
 
 from flask import flash, jsonify, make_response, redirect, request, send_file, url_for
 from flask_login import current_user, login_required
-from PyPDF2 import PdfMerger
+from pypdf import PdfWriter
 from sqlalchemy import case, func
 
 from models.arquivei import Arquivei
@@ -241,7 +241,7 @@ def exportar_pdf_originais():
         if not nota_ids:
             return jsonify({"success": False, "message": "Nenhuma nota fiscal selecionada."}), 400
 
-        merger = PdfMerger()
+        writer = PdfWriter()
         adicionados = 0
         erros = []
 
@@ -291,7 +291,7 @@ def exportar_pdf_originais():
                     continue
             if pdf_bytes:
                 try:
-                    merger.append(io.BytesIO(pdf_bytes))
+                    writer.append(io.BytesIO(pdf_bytes))
                     adicionados += 1
                 except Exception as e:
                     erros.append(f"Nota {nota.numero_nf}: erro ao juntar PDF - {e}")
@@ -304,8 +304,8 @@ def exportar_pdf_originais():
             }), 400
 
         pdf_buffer = io.BytesIO()
-        merger.write(pdf_buffer)
-        merger.close()
+        writer.write(pdf_buffer)
+        writer.close()
         pdf_buffer.seek(0)
 
         nome_arquivo = f"notas_fiscais_originais_{datetime.now().strftime('%Y%m%d_%H%M%S')}.pdf"

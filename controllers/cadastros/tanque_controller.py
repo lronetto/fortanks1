@@ -12,15 +12,10 @@ from models.database import db
 from models.tanque import Tanques, TanquesPecas, TanquesGrupos
 from models.contrato import Contrato
 from models.material import Materiais
-tanque_bp = Blueprint('tanque', __name__)
+from utils.decorators import criar_verificacao_permissao
 
-# Middleware para verificar se o usuário tem permissão
-@tanque_bp.before_request
-@login_required
-def verificar_permissao():
-    if not current_user.is_gerente_ou_superior:
-        flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
-        return redirect(url_for('dashboard.index'))
+tanque_bp = Blueprint('tanque', __name__)
+tanque_bp.before_request(login_required(criar_verificacao_permissao('gerente')))
 
 @tanque_bp.route('/')
 def index():

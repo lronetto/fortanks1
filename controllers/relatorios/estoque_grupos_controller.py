@@ -10,6 +10,7 @@ import io
 import pandas as pd
 from weasyprint import HTML, CSS
 import os
+from utils.material_imagem_upload import parse_dados_json
 
 # Configuração do logger
 logger = logging.getLogger(__name__)
@@ -115,7 +116,7 @@ def index():
                
                 itens_grupo.append({
                     'material_id': material.id,
-                    'codigo': material.codigo_erp or '',
+                    'codigo': str(parse_dados_json(material.dados_adicionais).get("codigo_alterdata") or ''),
                     'nome': material.nome,
                     'categoria': material.categoria or '',
                     'unidade': material.get_unidade_nome() or '',
@@ -214,8 +215,9 @@ def exportar_excel():
                         localizacoes.append(estoque.localizacao)
                 
                 # Só adicionar se tiver quantidade ou se não tiver filtro de localização
+                extras = parse_dados_json(material.dados_adicionais)
                 dados_excel.append({
-                    'codigo_alterdata': str(material.codigo_erp).replace(".0", "") if material.codigo_erp else '',
+                    'codigo_alterdata': str(extras.get("codigo_alterdata") or '').replace(".0", ""),
                     'nome': material.nome,
                     'unidade': material.get_unidade_nome() or '',
                     'estoque': float(quantidade_total),
@@ -313,7 +315,7 @@ def exportar_pdf():
                 if quantidade_total_material > 0 or not localizacao_filtro:
                     itens_grupo.append({
                         'material_id': material.id,
-                        'codigo': material.codigo or '',
+                        'codigo': str(parse_dados_json(material.dados_adicionais).get("codigo_sox") or ''),
                         'nome': material.nome,
                         'categoria': material.categoria or '',
                         'unidade': material.get_unidade_nome() or '',

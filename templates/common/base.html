@@ -22,77 +22,23 @@
     <!-- Custom CSS -->
     <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 
-    <!-- Estilos adicionais para submenus aninhados e responsividade -->
+    <!-- Sobrescreve tokens Bootstrap com a paleta Fortanks (antes do style.css) -->
     <style>
-        #sidebar ul ul li a {
-            padding-left: 35px;
-            font-size: 0.9em;
-        }
-
-        #sidebar ul ul {
-            margin-top: 5px;
-            margin-bottom: 5px;
-        }
-
-        #sidebar ul li.active ul {
-            display: block;
-        }
-
-        #sidebar ul li.active>a {
-            color: #fff;
-            background: #3a72ab;
-        }
-
-        /* Melhoria de toque para dispositivos móveis */
-        @media (max-width: 768px) {
-
-            .nav-link,
-            .dropdown-item,
-            #sidebar a {
-                padding: 12px 15px;
-                /* Áreas de toque maiores para dedos */
-            }
-
-            #sidebar.active+#content {
-                margin-left: 0;
-            }
-
-            #content {
-                transition: margin-left 0.3s;
-                width: 100% !important;
-            }
-
-            #sidebarCollapse {
-                position: fixed;
-                top: 10px;
-                left: 10px;
-                z-index: 1050;
-                display: block;
-                background: #3a72ab;
-                color: white;
-                border-radius: 4px;
-                width: 40px;
-                height: 40px;
-                text-align: center;
-                line-height: 40px;
-                padding: 0;
-                margin: 0;
-            }
-
-            .navbar-brand {
-                margin-left: 50px;
-            }
-
-            /* Garantir que o conteúdo esteja visível quando o menu estiver fechado */
-            #content {
-                margin-left: 0 !important;
-                padding-left: 0 !important;
-            }
-
-            /* Manter o botão sempre visível */
-            .navbar .container-fluid {
-                padding-left: 50px;
-            }
+        :root {
+            --bs-primary:         #2563eb;
+            --bs-primary-rgb:     37, 99, 235;
+            --bs-success:         #059669;
+            --bs-success-rgb:     5, 150, 105;
+            --bs-danger:          #dc2626;
+            --bs-danger-rgb:      220, 38, 38;
+            --bs-warning:         #d97706;
+            --bs-warning-rgb:     217, 119, 6;
+            --bs-info:            #0891b2;
+            --bs-info-rgb:        8, 145, 178;
+            --bs-secondary:       #64748b;
+            --bs-secondary-rgb:   100, 116, 139;
+            --bs-link-color:      #2563eb;
+            --bs-link-hover-color:#1d4ed8;
         }
     </style>
     {% block extra_css %}{% endblock %}
@@ -121,101 +67,90 @@
        <script src="{{ url_for('static', filename='js/ft-table.js') }}"></script>
    
        <script>
-        // Verifica se há preferência de tema salva
-      
-   
-   
         (function () {
-            // Aplicar tema imediatamente na carga da página
+            // Aplicar tema imediatamente — antes do render para evitar flash
             let initialPageTheme = localStorage.getItem('theme') || 'light';
             document.documentElement.setAttribute('data-bs-theme', initialPageTheme);
-    
-            $(document).ready(function () {
-                // --- Início da lógica do tema ---
-                const themeIconElement = document.getElementById('theme-icon');
-                const themeToggleButton = document.getElementById('theme-toggle');
-    
-                // Atualizar o ícone na carga da página com base no tema já aplicado
-                if (themeIconElement) {
-                    if (initialPageTheme === 'dark') {
-                        themeIconElement.classList.remove('fa-sun');
-                        themeIconElement.classList.add('fa-moon');
-                    } else {
-                        themeIconElement.classList.remove('fa-moon');
-                        themeIconElement.classList.add('fa-sun');
-                    }
+
+            function applyThemeUI(theme) {
+                const icon  = document.getElementById('theme-icon');
+                const label = document.getElementById('theme-label');
+                if (!icon) return;
+                if (theme === 'dark') {
+                    icon.classList.replace('fa-sun', 'fa-moon');
+                    if (label) label.textContent = 'Escuro';
+                } else {
+                    icon.classList.replace('fa-moon', 'fa-sun');
+                    if (label) label.textContent = 'Claro';
                 }
-    
-                // Lógica para alternar o tema ao clicar no botão
-                if (themeToggleButton) {
-                    themeToggleButton.addEventListener('click', function () {
-                        let currentTheme = document.documentElement.getAttribute('data-bs-theme');
-                        let newTheme = currentTheme === 'dark' ? 'light' : 'dark';
-    
-                        document.documentElement.setAttribute('data-bs-theme', newTheme);
-                        localStorage.setItem('theme', newTheme);
-    
-                        // Ajustar ícone
-                        if (themeIconElement) {
-                            if (newTheme === 'dark') {
-                                themeIconElement.classList.remove('fa-sun');
-                                themeIconElement.classList.add('fa-moon');
-                            } else {
-                                themeIconElement.classList.remove('fa-moon');
-                                themeIconElement.classList.add('fa-sun');
-                            }
-                        }
+            }
+
+            $(document).ready(function () {
+                // --- Tema ---
+                applyThemeUI(initialPageTheme);
+
+                const btn = document.getElementById('theme-toggle');
+                if (btn) {
+                    btn.addEventListener('click', function () {
+                        const current = document.documentElement.getAttribute('data-bs-theme');
+                        const next    = current === 'dark' ? 'light' : 'dark';
+                        document.documentElement.setAttribute('data-bs-theme', next);
+                        localStorage.setItem('theme', next);
+                        applyThemeUI(next);
                     });
                 }
-                // --- Fim da lógica do tema ---
+                // --- Fim tema ---
 
                 // Encontrar o item de menu ativo atual
                 const activeItem = $('#sidebar .active');
                    
                    // Se houver um item ativo, verificar se ele está dentro de um submenu
                    if (activeItem.length > 0) {
-                       // Encontrar o submenu pai e abri-lo
-                       activeItem.parents('.collapse').addClass('show');
-                       
-                       // Adicionar a classe active ao item do menu principal correspondente
-                       activeItem.parents('.collapse').prev('.dropdown-toggle').parent().addClass('active');
+                       // Abrir todos os submenus pai e marcar aria-expanded
+                       activeItem.parents('.collapse').addClass('show').each(function () {
+                           $(this).prev('.sidebar-link').attr('aria-expanded', 'true').parent().addClass('active');
+                       });
                    }
                    
                    // Manter os comportamentos específicos existentes
-                   if (window.location.pathname.includes('/pecas')) {
-                       $('#concretagemSubmenu').addClass('show');
-                       $('#concretagemSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                   // Helper: abre um submenu e marca o li pai como active
+                   function abrirSubmenu(id) {
+                       var $sub = $('#' + id);
+                       if ($sub.length) {
+                           $sub.addClass('show');
+                           $sub.prev('.sidebar-link').attr('aria-expanded', 'true').parent().addClass('active');
+                       }
                    }
-   
-                   // Auto-abrir o menu Operacional (concretagem / tanques — equipamentos ficam no menu principal)
+
+                   if (window.location.pathname.includes('/pecas')) {
+                       abrirSubmenu('concretagemSubmenu');
+                   }
+
+                   // Auto-abrir o menu Operacional (concretagem / tanques)
                    if (window.location.pathname.includes('/concretagens') ||
                        window.location.pathname.includes('/tanques')) {
-                       $('#operacionalSubmenu').addClass('show');
-                       $('#operacionalSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                       abrirSubmenu('operacionalSubmenu');
                    }
-                   
+
                    // Auto-abrir o submenu de concretagem se estiver em uma página relacionada
                    if (window.location.pathname.includes('/concretagens') ||
                        window.location.pathname.includes('/tanques') ||
                        window.location.pathname.includes('/pecas')) {
-                       $('#concretagemSubmenu').addClass('show');
-                       $('#concretagemSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                       abrirSubmenu('concretagemSubmenu');
                    }
-   
+
                    // Auto-abrir o submenu de equipamentos se estiver em uma página relacionada
                    if (window.location.pathname.includes('/equipamentos') ||
                        window.location.pathname.includes('/checklists')) {
-                       $('#equipamentosSubmenu').addClass('show');
-                       $('#equipamentosSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                       abrirSubmenu('equipamentosSubmenu');
                    }
-   
+
                    // Auto-abrir o submenu de Cadastro Operacional se estiver em uma página relacionada
                    if (window.location.pathname.includes('/produto-composto') ||
                        window.location.pathname.includes('/certificados')) {
-                       $('#cadastroOperacionalSubmenu').addClass('show');
-                       $('#cadastroOperacionalSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                       abrirSubmenu('cadastroOperacionalSubmenu');
                    }
-   
+
                    // Auto-abrir o submenu Admin se estiver em uma página relacionada
                    if (window.location.pathname.includes('/centro-custo') ||
                        window.location.pathname.includes('/departamentos') ||
@@ -226,9 +161,8 @@
                        window.location.pathname.includes('/admin/permissoes') ||
                        window.location.pathname.includes('/admin/logs') ||
                        (window.location.pathname === '/admin' || window.location.pathname === '/admin/')) {
-                       $('#adminCadastrosSubmenu').addClass('show');
-                       $('#adminCadastrosSubmenu').prev('.dropdown-toggle').parent().addClass('active');
-                       
+                       abrirSubmenu('adminCadastrosSubmenu');
+
                        // Auto-abrir submenu interno de Cadastros Admin
                        if (window.location.pathname.includes('/centro-custo') ||
                            window.location.pathname.includes('/departamentos') ||
@@ -236,15 +170,15 @@
                            window.location.pathname.includes('/plano-conta') ||
                            window.location.pathname.includes('/conversao-unidade') ||
                            window.location.pathname.includes('/admin/unidades')) {
-                           $('#adminCadastrosSubmenuInner').addClass('show');
+                           abrirSubmenu('adminCadastrosSubmenuInner');
                        }
-                       
+
                        // Auto-abrir submenu interno de Permissões
                        if (window.location.pathname.includes('/admin/permissoes')) {
-                           $('#adminPermissoesSubmenu').addClass('show');
+                           abrirSubmenu('adminPermissoesSubmenu');
                        }
                    }
-                   
+
                    // Auto-abrir o submenu de Cadastros se estiver em uma página relacionada
                    if (window.location.pathname.includes('/usuario') ||
                        window.location.pathname.includes('/contrato') ||
@@ -254,56 +188,50 @@
                        window.location.pathname.includes('/tanques') ||
                        window.location.pathname.includes('/pecas') ||
                        window.location.pathname.includes('/tracos')) {
-                       $('#cadastrosSubmenu').addClass('show');
-                       $('#cadastrosSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                       abrirSubmenu('cadastrosSubmenu');
                    }
 
                    // Auto-abrir o submenu de Materiais se estiver em uma página relacionada
                    if (window.location.pathname.includes('/material') ||
                        window.location.pathname.includes('/grupos-materiais')) {
-                       $('#materiaisSubmenu').addClass('show');
-                       $('#materiaisSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                       abrirSubmenu('materiaisSubmenu');
                    }
-   
+
                    // Auto-abrir o submenu de segurança se estiver em uma página relacionada
-                   if (window.location.pathname.includes('/seguranca') || 
+                   if (window.location.pathname.includes('/seguranca') ||
                        window.location.pathname.includes('/epis')) {
-                       $('#segurancaSubmenu').addClass('show');
-                       $('#segurancaSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                       abrirSubmenu('segurancaSubmenu');
                    }
-   
+
                    // Auto-abrir o submenu de estoque se estiver em uma página relacionada
-                   if (window.location.pathname.includes('/estoque') || 
+                   if (window.location.pathname.includes('/estoque') ||
                        window.location.pathname.includes('/movimentacoes')) {
-                       $('#estoqueSubmenu').addClass('show');
-                       $('#estoqueSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                       abrirSubmenu('estoqueSubmenu');
                    }
-                   
+
                    // Auto-abrir o submenu de inventário se estiver em uma página relacionada
                    if (window.location.pathname.includes('/inventario')) {
-                       $('#inventarioSubmenu').addClass('show');
-                       $('#inventarioSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                       abrirSubmenu('inventarioSubmenu');
                    }
-                   
+
                    // Auto-abrir o submenu de relatórios se estiver em uma página relacionada
                    if (window.location.pathname.includes('/relatorios') ||
                        window.location.pathname.includes('/dados-analiticos')) {
-                       $('#relatoriosSubmenu').addClass('show');
-                       $('#relatoriosSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                       abrirSubmenu('relatoriosSubmenu');
                    }
-                   
+
                    // Auto-abrir o submenu de DataBook se estiver em uma página relacionada
                    if (window.location.pathname.includes('/relatorios/databook')) {
-                       $('#databookSubmenu').addClass('show');
-                       $('#databookSubmenu').prev('.dropdown-toggle').parent().addClass('active');
+                       abrirSubmenu('databookSubmenu');
                    }
                    
    
-                   // Em dispositivos móveis, fechar automaticamente o sidebar ao clicar em um link
+                   // Em dispositivos móveis, fechar automaticamente o sidebar ao clicar em links de navegação
                    if (window.innerWidth <= 768) {
                        $('#sidebar a').click(function () {
-                           if (!$(this).hasClass('dropdown-toggle')) {
+                           if (!$(this).attr('data-bs-toggle')) {
                                $('#sidebar').removeClass('active');
+                               if (overlay) $(overlay).removeClass('active');
                            }
                        });
                    }
@@ -428,12 +356,22 @@
                    e.preventDefault();
                    e.stopPropagation();
                    sidebar.classList.toggle('active');
+                   content.classList.toggle('active');
                    ajustarLayout();
                });
    
                // Fechar sidebar ao clicar no overlay
                if (overlay) {
                    overlay.addEventListener('click', function () {
+                       sidebar.classList.remove('active');
+                       ajustarLayout();
+                   });
+               }
+
+               // Fechar sidebar ao clicar no botão X (mobile)
+               const sidebarClose = document.getElementById('sidebarClose');
+               if (sidebarClose) {
+                   sidebarClose.addEventListener('click', function () {
                        sidebar.classList.remove('active');
                        ajustarLayout();
                    });
@@ -451,6 +389,7 @@
            });
        </script>
 
+    {% block head %}{% endblock %}
 </head>
 
 <body>
@@ -460,94 +399,493 @@
 
         <!-- Sidebar -->
         <nav id="sidebar" class="sidebar">
+
+            <!-- Cabeçalho -->
             <div class="sidebar-header">
                 <div class="logo">
-                    <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Logo" class="img-fluid">
+                    <img src="{{ url_for('static', filename='img/logo.png') }}" alt="Fortanks">
                 </div>
-                <!-- Adicionando botão de fechar na sidebar para mobile -->
-                <button type="button" id="sidebarClose" class="btn d-md-none">
+                <button type="button" id="sidebarClose" class="btn d-md-none" aria-label="Fechar menu">
                     <i class="fas fa-times"></i>
                 </button>
             </div>
 
-            <ul class="list-unstyled components">
+            <!-- Navegação -->
+            <ul class="list-unstyled components" id="sidebarMenu">
+
+                <!-- Dashboard -->
                 <li class="{{ is_active('dashboard') }}">
-                    <a href="{{ url_for('dashboard.index') }}">
-                        <i class="fas fa-tachometer-alt"></i> Dashboard
+                    <a href="{{ url_for('dashboard.index') }}" class="sidebar-link">
+                        <span class="sb-icon"><i class="fas fa-tachometer-alt"></i></span>
+                        <span class="sb-label">Dashboard</span>
                     </a>
                 </li>
 
-                <!-- Módulo de Relatórios -->
-                <li class="{{ is_active('relatorios') }}">
-                    <a href="#relatoriosSubmenu" data-bs-toggle="collapse" aria-expanded="false"
-                        class="dropdown-toggle">
-                        <i class="fas fa-file-alt"></i> Relatórios
+                <!-- ── PRODUÇÃO ─────────────────────────────────────── -->
+                <li class="sidebar-section-label">Produção</li>
+
+                <!-- Operacional -->
+                {% if current_user.is_permissao('operacional') %}
+                <li class="{{ is_active('operacional') }}">
+                    <a href="#operacionalSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="sidebar-link">
+                        <span class="sb-icon"><i class="fas fa-industry"></i></span>
+                        <span class="sb-label">Operacional</span>
+                        <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
                     </a>
-                    <ul class="collapse list-unstyled" id="relatoriosSubmenu">
+                    <ul class="collapse list-unstyled sb-submenu" id="operacionalSubmenu">
+                        <li class="{{ is_active('concretagem') }}">
+                            <a href="#concretagemSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-cubes"></i></span>
+                                <span class="sb-label">Concretagem</span>
+                                <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
+                            </a>
+                            <ul class="collapse list-unstyled sb-submenu" id="concretagemSubmenu">
+                                <li class="{{ is_active('usinagem_concreto') }}">
+                                    <a href="{{ url_for('usinagem_concreto.listar_usinagens') }}" class="sidebar-link sb-sublink">
+                                        <span class="sb-icon"><i class="fas fa-cut"></i></span>
+                                        <span class="sb-label">Usinagem de Concreto</span>
+                                    </a>
+                                </li>
+                                {% if current_user.colaborador.departamento_id in [4,7] %}
+                                <li class="{{ is_active('concretagem') }}">
+                                    <a href="{{ url_for('concretagem.index') }}" class="sidebar-link sb-sublink">
+                                        <span class="sb-icon"><i class="fas fa-cubes"></i></span>
+                                        <span class="sb-label">Concretagens</span>
+                                    </a>
+                                </li>
+                                <li class="{{ is_active('usinagem_concreto.listar_rompimentos') }}">
+                                    <a href="{{ url_for('usinagem_concreto.listar_rompimentos') }}" class="sidebar-link sb-sublink">
+                                        <span class="sb-icon"><i class="fas fa-chart-line"></i></span>
+                                        <span class="sb-label">Rompimentos de CP</span>
+                                    </a>
+                                </li>
+                                {% endif %}
+                            </ul>
+                        </li>
+                        <li>
+                            <a href="{{ url_for('acabamento_transporte.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-paint-roller"></i></span>
+                                <span class="sb-label">Acabamento / Transporte</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                {% endif %}
+
+                <!-- Cadastro Operacional -->
+                {% if current_user.is_permissao('cadastro_operacional') %}
+                <li class="{{ is_active('cadastro_operacional') }}">
+                    <a href="#cadastroOperacionalSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="sidebar-link">
+                        <span class="sb-icon"><i class="fas fa-clipboard-list"></i></span>
+                        <span class="sb-label">Cadastro Operacional</span>
+                        <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
+                    </a>
+                    <ul class="collapse list-unstyled sb-submenu" id="cadastroOperacionalSubmenu">
+                        <li class="{{ is_active('produto-composto') }}">
+                            <a href="{{ url_for('produto_composto.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-boxes"></i></span>
+                                <span class="sb-label">Produtos Compostos</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('certificado') }}">
+                            <a href="{{ url_for('certificado.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-certificate"></i></span>
+                                <span class="sb-label">Certificados</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                {% endif %}
+
+                <!-- Cronograma -->
+                {% if current_user.is_permissao('cronograma') %}
+                <li class="{{ is_active('cronograma') }}">
+                    <a href="#cronogramaSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="sidebar-link">
+                        <span class="sb-icon"><i class="fas fa-calendar-alt"></i></span>
+                        <span class="sb-label">Cronograma</span>
+                        <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
+                    </a>
+                    <ul class="collapse list-unstyled sb-submenu" id="cronogramaSubmenu">
+                        <li>
+                            <a href="{{ url_for('cronograma.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-project-diagram"></i></span>
+                                <span class="sb-label">Por projeto</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ url_for('cronograma.matriz_semanal') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-table"></i></span>
+                                <span class="sb-label">Matriz semanal</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ url_for('cronograma.calendario') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-calendar-day"></i></span>
+                                <span class="sb-label">Calendário</span>
+                            </a>
+                        </li>
+                        <li>
+                            <a href="{{ url_for('cronograma.linhas_base') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-history"></i></span>
+                                <span class="sb-label">Linhas de base</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                {% endif %}
+
+                <!-- ── ESTOQUE & FISCAL ────────────────────────────── -->
+                <li class="sidebar-section-label">Estoque &amp; Fiscal</li>
+
+                <!-- Materiais -->
+                {% if current_user.is_permissao('material') %}
+                <li class="{{ is_active('material') }} {{ is_active('grupo_material') }} {{ is_active('grupo_material.index') }}">
+                    <a href="#materiaisSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="sidebar-link">
+                        <span class="sb-icon"><i class="fas fa-boxes"></i></span>
+                        <span class="sb-label">Materiais</span>
+                        <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
+                    </a>
+                    <ul class="collapse list-unstyled sb-submenu" id="materiaisSubmenu">
+                        <li class="{{ is_active('material') }}">
+                            <a href="{{ url_for('material.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-box"></i></span>
+                                <span class="sb-label">Cadastro de Materiais</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('grupo_material') }} {{ is_active('grupo_material.index') }}">
+                            <a href="{{ url_for('grupo_material.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-layer-group"></i></span>
+                                <span class="sb-label">Grupos de Materiais</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                {% endif %}
+
+                <!-- Estoque -->
+                {% if current_user.is_permissao('estoque') %}
+                <li class="{{ is_active('estoque') }} {{ is_active('estoque.movimentacoes') }}">
+                    <a href="#estoqueSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="sidebar-link">
+                        <span class="sb-icon"><i class="fas fa-warehouse"></i></span>
+                        <span class="sb-label">Estoque</span>
+                        <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
+                    </a>
+                    <ul class="collapse list-unstyled sb-submenu" id="estoqueSubmenu">
+                        <li class="{{ is_active('estoque.index') }}">
+                            <a href="{{ url_for('estoque.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-boxes"></i></span>
+                                <span class="sb-label">Itens em Estoque</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('estoque.movimentacoes') }}">
+                            <a href="{{ url_for('estoque.movimentacoes') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-exchange-alt"></i></span>
+                                <span class="sb-label">Movimentações</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('estoque-terceiro/lista') }}">
+                            <a href="{{ url_for('estoque_terceiro.lista') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-warehouse"></i></span>
+                                <span class="sb-label">Estoque de Terceiros</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('estoque-terceiro') }}">
+                            <a href="{{ url_for('estoque_terceiro.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-balance-scale"></i></span>
+                                <span class="sb-label">Comparativo (datas × sistema)</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('estoque-terceiro/comparativo-datas') }}">
+                            <a href="{{ url_for('estoque_terceiro.comparativo_datas') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-columns"></i></span>
+                                <span class="sb-label">Comparativo entre datas</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                {% endif %}
+
+                <!-- Inventário -->
+                {% if current_user.is_permissao('inventario') %}
+                <li class="{{ is_active('inventario') }}">
+                    <a href="#inventarioSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="sidebar-link">
+                        <span class="sb-icon"><i class="fas fa-clipboard-check"></i></span>
+                        <span class="sb-label">Inventário</span>
+                        <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
+                    </a>
+                    <ul class="collapse list-unstyled sb-submenu" id="inventarioSubmenu">
+                        <li class="{{ is_active('inventario') }}">
+                            <a href="{{ url_for('inventario.gerenciar_inventario') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-cog"></i></span>
+                                <span class="sb-label">Gerenciar Inventário</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                {% endif %}
+
+                <!-- Notas Fiscais -->
+                {% if current_user.is_permissao('notas_fiscais') %}
+                <li class="{{ is_active('nota_fiscal') }}">
+                    <a href="#notasFiscaisSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="sidebar-link">
+                        <span class="sb-icon"><i class="fas fa-file-invoice"></i></span>
+                        <span class="sb-label">Notas Fiscais</span>
+                        <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
+                    </a>
+                    <ul class="collapse list-unstyled sb-submenu" id="notasFiscaisSubmenu">
+                        <li class="{{ is_active('nota_fiscal.index') }}">
+                            <a href="{{ url_for('nota_fiscal.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-list"></i></span>
+                                <span class="sb-label">Listar Notas Fiscais</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('nota_fiscal.analise') }}">
+                            <a href="{{ url_for('nota_fiscal.analise') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-chart-pie"></i></span>
+                                <span class="sb-label">Análise de Notas</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('nota_fiscal.analise_transferencias') }}">
+                            <a href="{{ url_for('nota_fiscal.analise_transferencias') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-random"></i></span>
+                                <span class="sb-label">Análise de Transferências</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('nota_fiscal.protocolos_index') }}">
+                            <a href="{{ url_for('nota_fiscal.protocolos_index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-folder-open"></i></span>
+                                <span class="sb-label">Protocolos</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                {% endif %}
+
+                <!-- Pedidos de Compra -->
+                {% if current_user.is_permissao('pedido_compra') %}
+                <li class="{{ is_active('pedido_compra') }}">
+                    <a href="{{ url_for('pedido_compra.index') }}" class="sidebar-link">
+                        <span class="sb-icon"><i class="fas fa-cart-shopping"></i></span>
+                        <span class="sb-label">Pedidos de Compra</span>
+                    </a>
+                </li>
+                {% endif %}
+
+                <!-- Reembolsos -->
+                {% if current_user.is_permissao('reembolsos') %}
+                <li class="{{ is_active('reembolso') }}">
+                    <a href="{{ url_for('reembolso.index') }}" class="sidebar-link">
+                        <span class="sb-icon"><i class="fas fa-money-bill-wave"></i></span>
+                        <span class="sb-label">Reembolsos</span>
+                    </a>
+                </li>
+                {% endif %}
+
+                <!-- ── RH & SEGURANÇA ──────────────────────────────── -->
+                <li class="sidebar-section-label">RH &amp; Segurança</li>
+
+                <!-- Equipamentos -->
+                {% if current_user.is_permissao('equipamentos') %}
+                <li class="{{ is_active('equipamento') }} {{ is_active('equipamento.checklists') }} {{ is_active('equipamento.checklists_pendentes') }} {{ is_active('equipamento.realizar_checklist') }} {{ is_active('equipamento.emprestimos') }}">
+                    <a href="#equipamentosSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="sidebar-link">
+                        <span class="sb-icon"><i class="fas fa-tools"></i></span>
+                        <span class="sb-label">Equipamentos</span>
+                        <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
+                    </a>
+                    <ul class="collapse list-unstyled sb-submenu" id="equipamentosSubmenu">
+                        <li class="{{ is_active('equipamento') }}">
+                            <a href="{{ url_for('equipamento.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-tools"></i></span>
+                                <span class="sb-label">Listar Equipamentos</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('equipamento.emprestimos') }}">
+                            <a href="{{ url_for('equipamento.emprestimos') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-people-carry"></i></span>
+                                <span class="sb-label">Empréstimos</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('equipamento.checklists') }}">
+                            <a href="{{ url_for('equipamento.checklists') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-list-alt"></i></span>
+                                <span class="sb-label">Modelos de Checklist</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('equipamento.checklists_pendentes') }}">
+                            <a href="{{ url_for('equipamento.checklists_pendentes') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-clipboard-check"></i></span>
+                                <span class="sb-label">Checklists Pendentes</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('equipamento.realizar_checklist') }}">
+                            <a href="{{ url_for('equipamento.realizar_checklist') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-tasks"></i></span>
+                                <span class="sb-label">Novo Checklist</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                {% endif %}
+
+                <!-- Segurança -->
+                <li class="{{ is_active('seguranca.epis_index') }} {{ is_active('seguranca.entregas_index') }} {{ is_active('seguranca.relatorios') }}">
+                    <a href="#segurancaSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="sidebar-link">
+                        <span class="sb-icon"><i class="fas fa-shield-alt"></i></span>
+                        <span class="sb-label">Segurança</span>
+                        <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
+                    </a>
+                    <ul class="collapse list-unstyled sb-submenu" id="segurancaSubmenu">
+                        <li class="{{ is_active('seguranca.epis_index') }}">
+                            <a href="{{ url_for('seguranca.epis_index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-helmet-safety"></i></span>
+                                <span class="sb-label">EPIs</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('seguranca.entregas_index') }}">
+                            <a href="{{ url_for('seguranca.entregas_index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-box-open"></i></span>
+                                <span class="sb-label">Entregas de EPIs</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+
+                <!-- PLR -->
+                {% if current_user.is_permissao('PLR') %}
+                <li class="{{ is_active('plr') }}">
+                    <a href="#plrSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="sidebar-link">
+                        <span class="sb-icon"><i class="fas fa-award"></i></span>
+                        <span class="sb-label">PLR</span>
+                        <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
+                    </a>
+                    <ul class="collapse list-unstyled sb-submenu" id="plrSubmenu">
+                        <li class="{{ is_active('plr.avaliacoes_index') }}">
+                            <a href="{{ url_for('plr.avaliacoes_index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-clipboard-list"></i></span>
+                                <span class="sb-label">Avaliações</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('plr.efetivos_index') }}">
+                            <a href="{{ url_for('plr.efetivos_index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-users"></i></span>
+                                <span class="sb-label">Efetivos</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('plr.assiduidade_index') }}">
+                            <a href="{{ url_for('plr.assiduidade_index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-clipboard-check"></i></span>
+                                <span class="sb-label">Assiduidade</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('plr.relatorio_planilha') }}">
+                            <a href="{{ url_for('plr.relatorio_planilha') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-file-excel"></i></span>
+                                <span class="sb-label">Relatório (Cálculo PLR)</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('plr.cargos_salarios_index') }}">
+                            <a href="{{ url_for('plr.cargos_salarios_index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-money-bill"></i></span>
+                                <span class="sb-label">Cargos × Salário</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                {% endif %}
+
+                <!-- Minhas Solicitações -->
+                <li class="{{ is_active('solicitacao') }}">
+                    <a href="{{ url_for('solicitacao.index') }}" class="sidebar-link">
+                        <span class="sb-icon"><i class="fas fa-list-check"></i></span>
+                        <span class="sb-label">Minhas Solicitações</span>
+                    </a>
+                </li>
+
+                <!-- ── DADOS & SISTEMA ─────────────────────────────── -->
+                <li class="sidebar-section-label">Dados &amp; Sistema</li>
+
+                <!-- Relatórios -->
+                <li class="{{ is_active('relatorios') }}">
+                    <a href="#relatoriosSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="sidebar-link">
+                        <span class="sb-icon"><i class="fas fa-chart-bar"></i></span>
+                        <span class="sb-label">Relatórios</span>
+                        <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
+                    </a>
+                    <ul class="collapse list-unstyled sb-submenu" id="relatoriosSubmenu">
                         {% if current_user.is_permissao('relatorios_notas') %}
                         <li class="{{ is_active('relatorios_notas') }}">
-                            <a href="{{ url_for('relatorios_notas.index') }}">
-                                <i class="fas fa-file-invoice-dollar"></i> Notas Fiscais
+                            <a href="{{ url_for('relatorios_notas.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-file-invoice-dollar"></i></span>
+                                <span class="sb-label">Notas Fiscais</span>
                             </a>
                         </li>
                         {% endif %}
                         {% if current_user.is_permissao('relatorios_acabamento_pecas') %}
                         <li class="{{ is_active('relatorios_acabamento_pecas') }}">
-                            <a href="{{ url_for('relatorios_acabamento_pecas.index') }}">
-                                <i class="fas fa-paint-roller"></i> Acabamento de Peças
+                            <a href="{{ url_for('relatorios_acabamento_pecas.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-paint-roller"></i></span>
+                                <span class="sb-label">Acabamento de Peças</span>
                             </a>
                         </li>
                         {% endif %}
                         {% if current_user.is_permissao('relatorios_concretagem_pecas') %}
                         <li class="{{ is_active('relatorios_concretagem_pecas') }}">
-                            <a href="{{ url_for('relatorios_concretagem_pecas.index') }}">
-                                <i class="fas fa-cube"></i> Concretagem de Peças
+                            <a href="{{ url_for('relatorios_concretagem_pecas.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-cube"></i></span>
+                                <span class="sb-label">Concretagem de Peças</span>
                             </a>
                         </li>
                         {% endif %}
                         {% if current_user.is_permissao('relatorios_usinagem') %}
                         <li class="{{ is_active('relatorios/usinagem') }}">
-                            <a href="{{ url_for('relatorios_usinagem.index') }}">
-                                <i class="fas fa-cogs"></i> Usinagem
+                            <a href="{{ url_for('relatorios_usinagem.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-cogs"></i></span>
+                                <span class="sb-label">Usinagem</span>
                             </a>
                         </li>
                         {% endif %}
                         {% if current_user.is_permissao('relatorios_tanques') %}
                         <li class="{{ is_active('relatorios_tanques') }}">
-                            <a href="{{ url_for('relatorios_tanques.index') }}">
-                                <i class="fas fa-water"></i> Tanques
+                            <a href="{{ url_for('relatorios_tanques.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-water"></i></span>
+                                <span class="sb-label">Tanques</span>
                             </a>
                         </li>
                         {% endif %}
                         {% if current_user.is_permissao('relatorios_capacidade_producao') %}
                         <li class="{{ is_active('relatorios_capacidade_producao') }}">
-                            <a href="{{ url_for('relatorios_capacidade_producao.index') }}">
-                                <i class="fas fa-industry"></i> Capacidade de Produção
+                            <a href="{{ url_for('relatorios_capacidade_producao.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-industry"></i></span>
+                                <span class="sb-label">Capacidade de Produção</span>
                             </a>
                         </li>
                         {% endif %}
                         {% if current_user.is_permissao('relatorios_estoque_grupos') %}
                         <li class="{{ is_active('relatorios_estoque_grupos.index') }}">
-                            <a href="{{ url_for('relatorios_estoque_grupos.index') }}">
-                                <i class="fas fa-chart-bar"></i> Estoque por Grupo
+                            <a href="{{ url_for('relatorios_estoque_grupos.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-chart-bar"></i></span>
+                                <span class="sb-label">Estoque por Grupo</span>
                             </a>
                         </li>
                         {% endif %}
                         {% if current_user.is_permissao('dados_analiticos') %}
                         <li class="{{ is_active('dados_analiticos') }}">
-                            <a href="#dadosAnaliticosSubmenu" data-bs-toggle="collapse" aria-expanded="false"
-                                class="dropdown-toggle">
-                                <i class="fas fa-chart-line"></i> Dados Analiticos
+                            <a href="#dadosAnaliticosSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-chart-line"></i></span>
+                                <span class="sb-label">Dados Analíticos</span>
+                                <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
                             </a>
-                            <ul class="collapse list-unstyled" id="dadosAnaliticosSubmenu">
+                            <ul class="collapse list-unstyled sb-submenu" id="dadosAnaliticosSubmenu">
                                 <li>
-                                    <a href="{{ url_for('dados_analiticos.dashboard_mensal') }}">
-                                        <i class="fas fa-chart-area"></i> Dashboard
+                                    <a href="{{ url_for('dados_analiticos.dashboard_mensal') }}" class="sidebar-link sb-sublink">
+                                        <span class="sb-icon"><i class="fas fa-chart-area"></i></span>
+                                        <span class="sb-label">Dashboard</span>
                                     </a>
                                 </li>
                                 <li>
-                                    <a href="{{ url_for('dados_analiticos.index') }}">
-                                        <i class="fas fa-chart-line"></i> Listagem de Dados
+                                    <a href="{{ url_for('dados_analiticos.index') }}" class="sidebar-link sb-sublink">
+                                        <span class="sb-icon"><i class="fas fa-table"></i></span>
+                                        <span class="sb-label">Listagem de Dados</span>
                                     </a>
                                 </li>
                             </ul>
@@ -555,19 +893,22 @@
                         {% endif %}
                         {% if current_user.is_permissao('relatorios_databook') %}
                         <li class="{{ is_active('relatorios_databook') }}">
-                            <a href="#databookSubmenu" data-bs-toggle="collapse" aria-expanded="false"
-                                class="dropdown-toggle">
-                                <i class="fas fa-book"></i> DataBook
+                            <a href="#databookSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-book"></i></span>
+                                <span class="sb-label">DataBook</span>
+                                <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
                             </a>
-                            <ul class="collapse list-unstyled" id="databookSubmenu">
+                            <ul class="collapse list-unstyled sb-submenu" id="databookSubmenu">
                                 <li class="{{ is_active('databook_concretagem.index') }}">
-                                    <a href="{{ url_for('databook_concretagem.index') }}">
-                                        <i class="fas fa-clipboard-check"></i> Relatório de Concretagem
+                                    <a href="{{ url_for('databook_concretagem.index') }}" class="sidebar-link sb-sublink">
+                                        <span class="sb-icon"><i class="fas fa-clipboard-check"></i></span>
+                                        <span class="sb-label">Rel. Concretagem</span>
                                     </a>
                                 </li>
                                 <li class="{{ is_active('databook_inspecao.index') }}">
-                                    <a href="{{ url_for('databook_inspecao.index') }}">
-                                        <i class="fas fa-clipboard-list"></i> Relatório de Inspeção
+                                    <a href="{{ url_for('databook_inspecao.index') }}" class="sidebar-link sb-sublink">
+                                        <span class="sb-icon"><i class="fas fa-clipboard-list"></i></span>
+                                        <span class="sb-label">Rel. Inspeção</span>
                                     </a>
                                 </li>
                             </ul>
@@ -575,482 +916,178 @@
                         {% endif %}
                     </ul>
                 </li>
-                <!-- Módulo Admin -->
-                {% if current_user.is_permissao('admin') %}
-                <li class="{{ is_active('admin') }}">
-                    <a href="#adminCadastrosSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
-                        <i class="fas fa-user-shield"></i> Admin
-                    </a>
-                    <ul class="collapse list-unstyled" id="adminCadastrosSubmenu">
-                        <!-- Link para Resumo do Banco de Dados -->
-                        <li class="{{ is_active('admin.index') }}">
-                            <a href="{{ url_for('admin.index') }}">
-                                <i class="fas fa-database"></i> Resumo do Banco de Dados
-                            </a>
-                        </li>
-                        <!-- Submenu Cadastros -->
-                        <li>
-                            <a href="#adminCadastrosSubmenuInner" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
-                                <i class="fas fa-edit"></i> Cadastros
-                            </a>
-                            <ul class="collapse list-unstyled" id="adminCadastrosSubmenuInner">
-                                <li class="{{ is_active('centro-custo') }}">
-                                    <a href="{{ url_for('centro_custo.index') }}">
-                                        <i class="fas fa-building"></i> Centros de Custo
-                                    </a>
-                                </li>
-                                <li class="{{ is_active('departamentos') }}">
-                                    <a href="{{ url_for('departamento.index') }}">
-                                        <i class="fas fa-building"></i> Departamentos
-                                    </a>
-                                </li>
-                                <li class="{{ is_active('cargos') }}">
-                                    <a href="{{ url_for('cargo.index') }}">
-                                        <i class="fas fa-id-badge"></i> Cargos
-                                    </a>
-                                </li>
-                                <li class="{{ is_active('plano-conta') }}">
-                                    <a href="{{ url_for('plano_conta.index') }}">
-                                        <i class="fas fa-list-ol"></i> Plano de Contas
-                                    </a>
-                                </li>
-                                <li class="{{ is_active('conversao-unidade') }}">
-                                    <a href="{{ url_for('conversao_unidade.index') }}">
-                                        <i class="fas fa-exchange-alt"></i> Conversão de Unidades
-                                    </a>
-                                </li>
-                                <li class="{{ is_active('admin/unidades') }}">
-                                    <a href="{{ url_for('unidade.index') }}">
-                                        <i class="fas fa-ruler"></i> Unidades
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-                        <!-- Submenu Permissões -->
-                        <li>
-                            <a href="#adminPermissoesSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
-                                <i class="fas fa-shield-alt"></i> Permissões
-                            </a>
-                            <ul class="collapse list-unstyled" id="adminPermissoesSubmenu">
-                                <li class="{{ is_active('admin/permissoes') }}">
-                                    <a href="{{ url_for('admin.permissoes_index') }}">
-                                        <i class="fas fa-key"></i> Permissões
-                                    </a>
-                                </li>
-                                <li class="{{ is_active('admin/permissoes/modulos') }}">
-                                    <a href="{{ url_for('admin.permissoes_modulos') }}">
-                                        <i class="fas fa-cubes"></i> Módulos
-                                    </a>
-                                </li>
-                            </ul>
-                        </li>
-                        <!-- Link para Logs -->
-                        <li class="{{ is_active('uploads') }}">
-                            <a href="{{ url_for('uploads.index') }}">
-                                <i class="fas fa-folder-open"></i> Uploads
-                            </a>
-                        </li>
-                        <li class="{{ is_active('admin/logs') }}">
-                            <a href="{{ url_for('admin.logs') }}">
-                                <i class="fas fa-file-alt"></i> Logs
-                            </a>
-                        </li>
-                    </ul>
-                </li>
-                {% endif %}
 
-                <!-- Novo Módulo de Cadastros -->
+                <!-- Cadastros -->
                 <li class="{{ is_active('cadastros') }}">
-                    <a href="#cadastrosSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
-                        <i class="fas fa-edit"></i> Cadastros
+                    <a href="#cadastrosSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="sidebar-link">
+                        <span class="sb-icon"><i class="fas fa-address-card"></i></span>
+                        <span class="sb-label">Cadastros</span>
+                        <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
                     </a>
-                    <ul class="collapse list-unstyled" id="cadastrosSubmenu">
+                    <ul class="collapse list-unstyled sb-submenu" id="cadastrosSubmenu">
                         {% if current_user.is_permissao('colaboradores') %}
                         <li class="{{ is_active('colaborador') }}">
-                            <a href="{{ url_for('colaborador.index') }}">
-                                <i class="fas fa-user-tie"></i> Colaboradores
+                            <a href="{{ url_for('colaborador.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-user-tie"></i></span>
+                                <span class="sb-label">Colaboradores</span>
                             </a>
                         </li>
-                        
                         {% endif %}
                         {% if current_user.is_permissao('usuarios') %}
                         <li class="{{ is_active('usuario') }}">
-                            <a href="{{ url_for('usuario.index') }}">
-                                <i class="fas fa-users"></i> Usuários
+                            <a href="{{ url_for('usuario.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-users"></i></span>
+                                <span class="sb-label">Usuários</span>
                             </a>
                         </li>
                         {% endif %}
-                        {% if current_user.is_permissao('contrato') %}                          
+                        {% if current_user.is_permissao('contrato') %}
                         <li class="{{ is_active('contrato') }}">
-                            <a href="{{ url_for('contrato.index') }}">
-                                <i class="fas fa-file-contract"></i> Contratos
+                            <a href="{{ url_for('contrato.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-file-contract"></i></span>
+                                <span class="sb-label">Contratos</span>
                             </a>
                         </li>
                         {% endif %}
                         {% if current_user.is_permissao('clientes') %}
                         <li class="{{ is_active('cliente') }}">
-                            <a href="{{ url_for('cliente.index') }}">
-                                <i class="fas fa-building"></i> Clientes
+                            <a href="{{ url_for('cliente.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-building"></i></span>
+                                <span class="sb-label">Clientes</span>
                             </a>
                         </li>
                         {% endif %}
                         {% if current_user.is_permissao('fornecedores') %}
                         <li class="{{ is_active('fornecedor') }}">
-                            <a href="{{ url_for('fornecedor.index') }}">
-                                <i class="fas fa-truck-field"></i> Fornecedores
+                            <a href="{{ url_for('fornecedor.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-truck"></i></span>
+                                <span class="sb-label">Fornecedores</span>
                             </a>
                         </li>
                         {% endif %}
-
                         {% if current_user.is_permissao('tanques') %}
                         <li class="{{ is_active('tanque') }}">
-                            <a href="{{ url_for('tanque.index') }}">
-                                <i class="fas fa-water"></i> Tanques
+                            <a href="{{ url_for('tanque.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-water"></i></span>
+                                <span class="sb-label">Tanques</span>
                             </a>
                         </li>
                         <li class="{{ is_active('peca') }}">
-                            <a href="{{ url_for('peca.index') }}">
-                                <i class="fas fa-cogs"></i> Peças de Tanques
+                            <a href="{{ url_for('peca.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-cog"></i></span>
+                                <span class="sb-label">Peças de Tanques</span>
                             </a>
                         </li>
                         {% endif %}
-                       
                     </ul>
                 </li>
 
-                <!-- Módulo Materiais -->
-                {% if current_user.is_permissao('material') %}
-                <li class="{{ is_active('material') }} {{ is_active('grupo_material') }} {{ is_active('grupo_material.index') }}">
-                    <a href="#materiaisSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
-                        <i class="fas fa-boxes"></i> Materiais
+                <!-- Admin -->
+                {% if current_user.is_permissao('admin') %}
+                <li class="{{ is_active('admin') }}">
+                    <a href="#adminCadastrosSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="sidebar-link">
+                        <span class="sb-icon"><i class="fas fa-user-shield"></i></span>
+                        <span class="sb-label">Admin</span>
+                        <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
                     </a>
-                    <ul class="collapse list-unstyled" id="materiaisSubmenu">
-                        <li class="{{ is_active('material') }}">
-                            <a href="{{ url_for('material.index') }}">
-                                <i class="fas fa-box"></i> Cadastro de Materiais
-                            </a>
-                        </li>
-                        <li class="{{ is_active('grupo_material') }} {{ is_active('grupo_material.index') }}">
-                            <a href="{{ url_for('grupo_material.index') }}">
-                                <i class="fas fa-layer-group"></i> Cadastro de Grupos de Materiais
-                            </a>
-                        </li>
-                    </ul>
-                </li>
-                {% endif %}
-
-                <!-- Equipamentos (menu principal) -->
-                {% if current_user.is_permissao('equipamentos') %}
-                <li class="{{ is_active('equipamento') }} {{ is_active('equipamento.checklists') }} {{ is_active('equipamento.checklists_pendentes') }} {{ is_active('equipamento.realizar_checklist') }} {{ is_active('equipamento.emprestimos') }}">
-                    <a href="#equipamentosSubmenu" data-bs-toggle="collapse" aria-expanded="false"
-                        class="dropdown-toggle">
-                        <i class="fas fa-tools"></i> Equipamentos
-                    </a>
-                    <ul class="collapse list-unstyled" id="equipamentosSubmenu">
-                        <li class="{{ is_active('equipamento') }}">
-                            <a href="{{ url_for('equipamento.index') }}">
-                                <i class="fas fa-tools"></i> Listar Equipamentos
-                            </a>
-                        </li>
-                        <li class="{{ is_active('equipamento.emprestimos') }}">
-                            <a href="{{ url_for('equipamento.emprestimos') }}">
-                                <i class="fas fa-people-carry"></i> Empréstimos a colaboradores
-                            </a>
-                        </li>
-                        <li class="{{ is_active('equipamento.checklists') }}">
-                            <a href="{{ url_for('equipamento.checklists') }}">
-                                <i class="fas fa-list-alt"></i> Modelos de Checklist
-                            </a>
-                        </li>
-                        <li class="{{ is_active('equipamento.checklists_pendentes') }}">
-                            <a href="{{ url_for('equipamento.checklists_pendentes') }}">
-                                <i class="fas fa-clipboard-check"></i> Checklists Pendentes
-                            </a>
-                        </li>
-                        <li class="{{ is_active('equipamento.realizar_checklist') }}">
-                            <a href="{{ url_for('equipamento.realizar_checklist') }}">
-                                <i class="fas fa-tasks"></i> Realizar Novo Checklist
-                            </a>
-                        </li>
-                    </ul>
-                </li>
-                {% endif %}
-
-                {% if current_user.is_permissao('cronograma') %}
-                <li class="{{ is_active('cronograma') }}">
-                    <a href="#cronogramaSubmenu" data-bs-toggle="collapse" aria-expanded="false"
-                        class="dropdown-toggle">
-                        <i class="fas fa-calendar-alt"></i> Cronograma
-                    </a>
-                    <ul class="collapse list-unstyled" id="cronogramaSubmenu">
-                        <li>
-                            <a href="{{ url_for('cronograma.index') }}">
-                                <i class="fas fa-project-diagram"></i> Por projeto
+                    <ul class="collapse list-unstyled sb-submenu" id="adminCadastrosSubmenu">
+                        <li class="{{ is_active('admin.index') }}">
+                            <a href="{{ url_for('admin.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-database"></i></span>
+                                <span class="sb-label">Resumo do Banco</span>
                             </a>
                         </li>
                         <li>
-                            <a href="{{ url_for('cronograma.matriz_semanal') }}">
-                                <i class="fas fa-table"></i> Matriz semanal (previsto / real)
+                            <a href="#adminCadastrosSubmenuInner" data-bs-toggle="collapse" aria-expanded="false" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-edit"></i></span>
+                                <span class="sb-label">Cadastros</span>
+                                <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
                             </a>
+                            <ul class="collapse list-unstyled sb-submenu" id="adminCadastrosSubmenuInner">
+                                <li class="{{ is_active('centro-custo') }}">
+                                    <a href="{{ url_for('centro_custo.index') }}" class="sidebar-link sb-sublink">
+                                        <span class="sb-icon"><i class="fas fa-building"></i></span>
+                                        <span class="sb-label">Centros de Custo</span>
+                                    </a>
+                                </li>
+                                <li class="{{ is_active('departamentos') }}">
+                                    <a href="{{ url_for('departamento.index') }}" class="sidebar-link sb-sublink">
+                                        <span class="sb-icon"><i class="fas fa-sitemap"></i></span>
+                                        <span class="sb-label">Departamentos</span>
+                                    </a>
+                                </li>
+                                <li class="{{ is_active('cargos') }}">
+                                    <a href="{{ url_for('cargo.index') }}" class="sidebar-link sb-sublink">
+                                        <span class="sb-icon"><i class="fas fa-id-badge"></i></span>
+                                        <span class="sb-label">Cargos</span>
+                                    </a>
+                                </li>
+                                <li class="{{ is_active('plano-conta') }}">
+                                    <a href="{{ url_for('plano_conta.index') }}" class="sidebar-link sb-sublink">
+                                        <span class="sb-icon"><i class="fas fa-list-ol"></i></span>
+                                        <span class="sb-label">Plano de Contas</span>
+                                    </a>
+                                </li>
+                                <li class="{{ is_active('conversao-unidade') }}">
+                                    <a href="{{ url_for('conversao_unidade.index') }}" class="sidebar-link sb-sublink">
+                                        <span class="sb-icon"><i class="fas fa-exchange-alt"></i></span>
+                                        <span class="sb-label">Conversão de Unidades</span>
+                                    </a>
+                                </li>
+                                <li class="{{ is_active('admin/unidades') }}">
+                                    <a href="{{ url_for('unidade.index') }}" class="sidebar-link sb-sublink">
+                                        <span class="sb-icon"><i class="fas fa-ruler"></i></span>
+                                        <span class="sb-label">Unidades</span>
+                                    </a>
+                                </li>
+                            </ul>
                         </li>
                         <li>
-                            <a href="{{ url_for('cronograma.calendario') }}">
-                                <i class="fas fa-calendar-day"></i> Calendário
+                            <a href="#adminPermissoesSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-shield-alt"></i></span>
+                                <span class="sb-label">Permissões</span>
+                                <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
+                            </a>
+                            <ul class="collapse list-unstyled sb-submenu" id="adminPermissoesSubmenu">
+                                <li class="{{ is_active('admin/permissoes') }}">
+                                    <a href="{{ url_for('admin.permissoes_index') }}" class="sidebar-link sb-sublink">
+                                        <span class="sb-icon"><i class="fas fa-key"></i></span>
+                                        <span class="sb-label">Permissões</span>
+                                    </a>
+                                </li>
+                                <li class="{{ is_active('admin/permissoes/modulos') }}">
+                                    <a href="{{ url_for('admin.permissoes_modulos') }}" class="sidebar-link sb-sublink">
+                                        <span class="sb-icon"><i class="fas fa-cubes"></i></span>
+                                        <span class="sb-label">Módulos</span>
+                                    </a>
+                                </li>
+                            </ul>
+                        </li>
+                        <li class="{{ is_active('uploads') }}">
+                            <a href="{{ url_for('uploads.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-folder-open"></i></span>
+                                <span class="sb-label">Uploads</span>
                             </a>
                         </li>
-                        <li>
-                            <a href="{{ url_for('cronograma.linhas_base') }}">
-                                <i class="fas fa-history"></i> Linhas de base
+                        <li class="{{ is_active('admin/logs') }}">
+                            <a href="{{ url_for('admin.logs') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-scroll"></i></span>
+                                <span class="sb-label">Logs</span>
                             </a>
                         </li>
                     </ul>
                 </li>
                 {% endif %}
 
-                <!-- Módulo Operacional -->
-                {% if current_user.is_permissao('operacional') %}
-                    <li class="{{ is_active('operacional') }}">
-                        <a href="#operacionalSubmenu" data-bs-toggle="collapse" aria-expanded="false"
-                            class="dropdown-toggle">
-                            <i class="fas fa-industry"></i> Operacional
-                        </a>
-                        <ul class="collapse list-unstyled" id="operacionalSubmenu">
-                            <li class="{{ is_active('concretagem') }}">
-                                <a href="#concretagemSubmenu" data-bs-toggle="collapse" aria-expanded="false"
-                                    class="dropdown-toggle">
-                                    <i class="fas fa-cubes"></i> Concretagem
-                                </a>
-                                <ul class="collapse list-unstyled" id="concretagemSubmenu">
-                                    <li class="{{ is_active('usinagem_concreto') }}">
-                                        <a href="{{ url_for('usinagem_concreto.listar_usinagens') }}">
-                                            <i class="fas fa-cut"></i> Usinagem de Concreto
-                                        </a>
-                                    </li>
-                                    {% if current_user.colaborador.departamento_id in [4,7] %}
-                                    <li class="{{ is_active('concretagem') }}">
-                                        <a href="{{ url_for('concretagem.index') }}">
-                                            <i class="fas fa-cubes"></i> Concretagens
-                                        </a>
-                                    </li>
-                                    
-                                    <li class="{{ is_active('usinagem_concreto.listar_rompimentos') }}">
-                                        <a href="{{ url_for('usinagem_concreto.listar_rompimentos') }}">
-                                            <i class="fas fa-chart-line"></i> Rompimentos de CP
-                                        </a>
-                                    </li>
-
-                                    {% endif %}
-                                </ul>
-                            </li>
-                            
-                            <li>
-                                <a href="{{ url_for('acabamento_transporte.index') }}">
-                                    <i class="fas fa-paint-roller"></i> <i class="fas fa-truck"></i> Acabamento/Transporte de Peças
-                                </a>
-                            </li>
-                            <!-- Outros submódulos operacionais podem ser adicionados aqui -->
-                        </ul>
-                    </li>
-                    {% endif %}
-                <!-- Módulo de Cadastro Operacional -->
-                {% if current_user.is_permissao('cadastro_operacional') %}
-                    <li class="{{ is_active('cadastro_operacional') }}">
-                        <a href="#cadastroOperacionalSubmenu" data-bs-toggle="collapse" aria-expanded="false"
-                            class="dropdown-toggle">
-                            <i class="fas fa-clipboard-list"></i> Cadastro Operacional
-                        </a>
-                        <ul class="collapse list-unstyled" id="cadastroOperacionalSubmenu">
-                            <li class="{{ is_active('produto-composto') }}">
-                                <a href="{{ url_for('produto_composto.index') }}">
-                                    <i class="fas fa-boxes"></i> Produtos Compostos
-                                </a>
-                            </li>
-                            <li class="{{ is_active('certificado') }}">
-                                <a href="{{ url_for('certificado.index') }}">
-                                    <i class="fas fa-certificate"></i> Certificados
-                                </a>
-                            </li>
-                            
-                        </ul>
-                    </li>
-                {% endif %}
-                
-                <!-- Módulo de Segurança -->
-                <li class="{{ is_active('seguranca.epis_index') }} {{ is_active('seguranca.entregas_index') }} {{ is_active('seguranca.relatorios') }}">
-                    <a href="#segurancaSubmenu" data-bs-toggle="collapse" aria-expanded="false"
-                        class="dropdown-toggle">
-                        <i class="fas fa-shield-alt"></i> Segurança
-                    </a>
-                    <ul class="collapse list-unstyled" id="segurancaSubmenu">
-                        <li class="{{ is_active('seguranca.epis_index') }}">
-                            <a href="{{ url_for('seguranca.epis_index') }}">
-                                <i class="fas fa-helmet-safety"></i> EPIs
-                            </a>
-                        </li>
-                        <li class="{{ is_active('seguranca.entregas_index') }}">
-                            <a href="{{ url_for('seguranca.entregas_index') }}">
-                                <i class="fas fa-helmet-safety"></i> Entregas de EPIs
-                            </a>
-                        </li>
-                        
-                        
-                    </ul>
-                </li>
-
-
-                <!-- Outros módulos podem ser adicionados aqui -->
-                <li class="{{ is_active('solicitacao') }}">
-                    <a href="{{ url_for('solicitacao.index') }}">
-                        <i class="fas fa-list"></i> Minhas Solicitações
-                    </a>
-                </li>
-                {% if current_user.is_permissao('reembolsos') %}
-                <!-- Módulo de Reembolso -->
-                <li class="{{ is_active('reembolso') }}">
-                    <a href="{{ url_for('reembolso.index') }}">
-                        <i class="fas fa-money-bill-wave"></i> Reembolsos
-                    </a>
-                </li>
-                {% endif %}
-                {% if current_user.is_permissao('pedido_compra') %}
-                <li class="{{ is_active('pedido_compra') }}">
-                    <a href="{{ url_for('pedido_compra.index') }}">
-                        <i class="fas fa-cart-shopping"></i> Pedidos de Compra
-                    </a>
-                </li>
-                {% endif %}
-                {% if current_user.is_permissao('PLR') %}
-                <li class="{{ is_active('plr') }}">
-                    <a href="#plrSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="dropdown-toggle">
-                        <i class="fas fa-award"></i> PLR
-                    </a>
-                    <ul class="collapse list-unstyled" id="plrSubmenu">
-                        <li class="{{ is_active('plr.avaliacoes_index') }}">
-                            <a href="{{ url_for('plr.avaliacoes_index') }}">
-                                <i class="fas fa-clipboard-list"></i> Avaliações
-                            </a>
-                        </li>
-                        <li class="{{ is_active('plr.efetivos_index') }}">
-                            <a href="{{ url_for('plr.efetivos_index') }}">
-                                <i class="fas fa-users"></i> Efetivos
-                            </a>
-                        </li>
-                        <!-- <li class="{{ is_active('plr.relatorio_avaliacao') }}">
-                            <a href="{{ url_for('plr.relatorio_avaliacao') }}">
-                                <i class="fas fa-chart-bar"></i> Relatório de Avaliação
-                            </a>
-                        </li> -->
-                        <li class="{{ is_active('plr.assiduidade_index') }}">
-                            <a href="{{ url_for('plr.assiduidade_index') }}">
-                                <i class="fas fa-clipboard-check"></i> Assiduidade
-                            </a>
-                        </li>
-                        <li class="{{ is_active('plr.relatorio_planilha') }}">
-                            <a href="{{ url_for('plr.relatorio_planilha') }}">
-                                <i class="fas fa-file-excel"></i> Relatório Planilha (Cálculo PLR)
-                            </a>
-                        </li>
-                        
-                        <!-- <li class="{{ is_active('plr.modelos_index') }}">
-                            <a href="{{ url_for('plr.modelos_index') }}">
-                                <i class="fas fa-cog"></i> Modelos de PLR
-                            </a>
-                        </li> -->
-                        <li class="{{ is_active('plr.cargos_salarios_index') }}">
-                            <a href="{{ url_for('plr.cargos_salarios_index') }}">
-                                <i class="fas fa-money-bill"></i> Cargos x Salário
-                            </a>
-                        </li>
-                    </ul>
-                </li>
-                {% endif %}
-                <!-- Módulo de Estoque -->
-                {% if current_user.is_permissao('estoque') %}
-                <li class="{{ is_active('estoque') }} {{ is_active('estoque.movimentacoes') }}">
-                    <a href="#estoqueSubmenu" data-bs-toggle="collapse" aria-expanded="false"
-                        class="dropdown-toggle">
-                        <i class="fas fa-warehouse"></i> Estoque
-                    </a>
-                    <ul class="collapse list-unstyled" id="estoqueSubmenu">
-                        <li class="{{ is_active('estoque.index') }}">
-                            <a href="{{ url_for('estoque.index') }}">
-                                <i class="fas fa-boxes"></i> Itens em Estoque
-                            </a>
-                        </li>
-                        <li class="{{ is_active('estoque.movimentacoes') }}">
-                            <a href="{{ url_for('estoque.movimentacoes') }}">
-                                <i class="fas fa-exchange-alt"></i> Movimentações
-                            </a>
-                        </li>
-                        <li class="{{ is_active('estoque-terceiro') }}">
-                            <a href="{{ url_for('estoque_terceiro.index') }}">
-                                <i class="fas fa-balance-scale"></i> Comparativo (datas × sistema)
-                            </a>
-                        </li>
-                        <li class="{{ is_active('estoque-terceiro/comparativo-datas') }}">
-                            <a href="{{ url_for('estoque_terceiro.comparativo_datas') }}">
-                                <i class="fas fa-columns"></i> Comparativo entre datas
-                            </a>
-                        </li>
-                    </ul>
-                </li>
-                {% endif %}
-                <!-- Módulo de Inventário -->
-                {% if current_user.is_permissao('inventario') %}
-                <li class="{{ is_active('inventario') }}">
-                    <a href="#inventarioSubmenu" data-bs-toggle="collapse" aria-expanded="false"
-                        class="dropdown-toggle">
-                        <i class="fas fa-clipboard-check"></i> Inventário
-                    </a>
-                    <ul class="collapse list-unstyled" id="inventarioSubmenu">
-                        
-                        <li class="{{ is_active('inventario') }}">
-                            <a href="{{ url_for('inventario.gerenciar_inventario') }}">
-                                <i class="fas fa-cog"></i> Gerenciar Inventário
-                            </a>
-                        </li>
-                    </ul>
-                </li>
-                {% endif %}
-                {% if current_user.is_permissao('notas_fiscais') %}
-                <!-- Módulo de Notas Fiscais -->
-                <li class="{{ is_active('nota_fiscal') }}">
-                    <a href="#notasFiscaisSubmenu" data-bs-toggle="collapse" aria-expanded="false"
-                        class="dropdown-toggle">
-                        <i class="fas fa-file-invoice"></i> Notas Fiscais
-                    </a>
-                    <ul class="collapse list-unstyled" id="notasFiscaisSubmenu">
-                        <li class="{{ is_active('nota_fiscal.index') }}">
-                            <a href="{{ url_for('nota_fiscal.index') }}">
-                                <i class="fas fa-list"></i> Listar Notas Fiscais
-                            </a>
-                        </li>
-                        <li class="{{ is_active('nota_fiscal.analise') }}">
-                            <a href="{{ url_for('nota_fiscal.analise') }}">
-                                <i class="fas fa-chart-pie"></i> Análise de Notas Fiscais
-                            </a>
-                        </li>
-                        <li class="{{ is_active('nota_fiscal.analise_transferencias') }}">
-                            <a href="{{ url_for('nota_fiscal.analise_transferencias') }}">
-                                <i class="fas fa-random"></i> Análise de Transferências
-                            </a>
-                        </li>
-                        <li class="{{ is_active('nota_fiscal.protocolos_index') }}">
-                            <a href="{{ url_for('nota_fiscal.protocolos_index') }}">
-                                <i class="fas fa-folder-open"></i> Protocolos
-                            </a>
-                        </li>
-                    </ul>
-                </li>
-                {% endif %}
-                
             </ul>
 
+            <!-- Rodapé do sidebar -->
             <div class="sidebar-footer">
-                <button id="theme-toggle" class="btn btn-sm">
+                <button id="theme-toggle" class="btn btn-sm" title="Alternar tema claro/escuro">
                     <i class="fas fa-sun" id="theme-icon"></i>
+                    <span class="sb-label" id="theme-label">Claro</span>
                 </button>
-                <span>v1.0.0</span>
+                <span class="sb-version">v1.0.0</span>
             </div>
         </nav>
 

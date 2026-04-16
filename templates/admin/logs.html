@@ -2,6 +2,10 @@
 
 {% block title %}Logs do Sistema{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/admin.css') }}">
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <h1 class="h3 mb-2 text-gray-800">Logs do Sistema</h1>
@@ -208,67 +212,7 @@
 </div>
 {% endblock %}
 
-{% block scripts %}
-<style>
-.json-viewer {
-    font-family: 'Courier New', monospace;
-    font-size: 0.9em;
-    line-height: 1.6;
-}
-
-.json-item {
-    margin-left: 20px;
-}
-
-.json-toggle {
-    cursor: pointer;
-    user-select: none;
-    display: inline-block;
-    width: 16px;
-    text-align: center;
-    margin-right: 4px;
-    color: #666;
-    font-weight: bold;
-}
-
-.json-toggle:hover {
-    color: #007bff;
-}
-
-.json-key {
-    color: #d73a49;
-    font-weight: bold;
-}
-
-.json-string {
-    color: #28a745;
-}
-
-.json-number {
-    color: #ffc107;
-    font-weight: bold;
-}
-
-.json-boolean {
-    color: #17a2b8;
-    font-weight: bold;
-}
-
-.json-null {
-    color: #6c757d;
-    font-weight: bold;
-}
-
-.json-collapsed {
-    display: none;
-}
-
-.json-bracket {
-    color: #333;
-    font-weight: bold;
-}
-</style>
-<script>
+{% block scripts %}<script>
 document.addEventListener('DOMContentLoaded', function() {
     // Variável para armazenar o texto original (sem formatação HTML)
     let textoOriginalJSON = '';

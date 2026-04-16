@@ -1,0 +1,14 @@
+/* ============================================================
+   seguranca — EPIs, entregas e controles de segurança
+   ============================================================ */
+
+/* Badges de status de entrega */
+.badge-pendente  { background-color: #f8c146; color: #212529; }
+.badge-devolvido { background-color: #28a745; color: #fff; }
+
+/* Cards de entrega com hover */
+.card-entrega { transition: transform 0.2s ease, box-shadow 0.2s ease; }
+.card-entrega:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.1);
+}

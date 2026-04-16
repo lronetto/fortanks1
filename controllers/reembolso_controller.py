@@ -24,7 +24,7 @@ from models import PlanoConta
 from models.dados_analiticos import PL_CUSTO,PL_0202,PL_0207,PL_0209
 import requests
 import base64
-from PyPDF2 import PdfReader, PdfWriter
+from pypdf import PdfReader, PdfWriter
 import tempfile
 import os
 import zipfile

@@ -28,6 +28,48 @@
       ],
       "method": "copy",
       "global": false
+    },
+    "docs-writer": {
+      "name": "docs-writer",
+      "source": "local",
+      "contentHash": "c49827c59d2e27d313731dfd36314cfde0e8dbf15be0e8f813d2f8b751546b0c",
+      "installedAt": "2026-04-15T23:34:37.456Z",
+      "updatedAt": "2026-04-15T23:34:37.473Z",
+      "agents": [
+        "cursor",
+        "claude-code",
+        "windsurf"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "legacy-migration-planner": {
+      "name": "legacy-migration-planner",
+      "source": "local",
+      "contentHash": "e73e55256768767436943c8948da0d6a0667282c7195a47119841b5e76263d02",
+      "installedAt": "2026-04-15T23:35:01.701Z",
+      "updatedAt": "2026-04-15T23:35:01.724Z",
+      "agents": [
+        "cursor",
+        "claude-code",
+        "windsurf"
+      ],
+      "method": "copy",
+      "global": false
+    },
+    "coding-guidelines": {
+      "name": "coding-guidelines",
+      "source": "local",
+      "contentHash": "28a414c715d3c41aae28a25e2f109813ec3f246f76b5567c1e7d6a128cd289ff",
+      "installedAt": "2026-04-15T23:36:07.860Z",
+      "updatedAt": "2026-04-15T23:36:07.878Z",
+      "agents": [
+        "cursor",
+        "claude-code",
+        "windsurf"
+      ],
+      "method": "copy",
+      "global": false
     }
   }
 }

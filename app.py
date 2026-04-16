@@ -41,7 +41,7 @@ from models.permissoes import Permissao
 # Isso carregará e configurará todos os modelos
 from models import configure_mappers
 from models.database import db, init_db
-from config.config import Config
+from config.config import DevelopmentConfig, ProductionConfig, TestingConfig
 from flask import Flask, render_template, redirect, url_for, flash, request, session, jsonify
 from flask_login import LoginManager, login_required, current_user, login_user, logout_user
 import os
@@ -85,8 +85,15 @@ if not os.path.exists(log_dir):
 # Criar a aplicação Flask
 app = Flask(__name__, template_folder='templates', static_folder='static')
 
+flask_env = (os.environ.get('FLASK_ENV') or 'production').lower().strip()
+if flask_env == 'development':
+    app.config.from_object(DevelopmentConfig)
+elif flask_env == 'testing':
+    app.config.from_object(TestingConfig)
+else:
+    app.config.from_object(ProductionConfig)
 
-if not app.config.get('DEBUG'):
+if not app.config.get('DEBUG') and not app.config.get('TESTING'):
     sslify = SSLify(app)
 
 
@@ -103,29 +110,24 @@ def adicionar_headers_seguranca(response):
 
 
 # Configurar o logger da aplicação
-if False:
-    # Configurar o handler para arquivo
-    file_handler = RotatingFileHandler(
-        os.path.join(log_dir, 'fortanks.log'),
-        maxBytes=10240000,  # 10MB
-        backupCount=10
-    )
-    file_handler.setFormatter(logging.Formatter(
-        '[%(asctime)s] %(levelname)s in %(module)s: %(message)s'
-    ))
-    file_handler.setLevel(logging.INFO)
-    app.logger.addHandler(file_handler)
+log_formatter = logging.Formatter('[%(asctime)s] %(levelname)s in %(module)s: %(message)s')
 
-    # Configurar o handler para console
-    console_handler = logging.StreamHandler(sys.stdout)
-    console_handler.setFormatter(logging.Formatter(
-        '[%(asctime)s] %(levelname)s in %(module)s: %(message)s'
-    ))
-    console_handler.setLevel(logging.INFO)
-    app.logger.addHandler(console_handler)
+file_handler = RotatingFileHandler(
+    os.path.join(log_dir, 'fortanks.log'),
+    maxBytes=10240000,  # 10MB
+    backupCount=10
+)
+file_handler.setFormatter(log_formatter)
+file_handler.setLevel(logging.INFO)
+app.logger.addHandler(file_handler)
 
-    app.logger.setLevel(logging.INFO)
-    app.logger.info('Fortanks startup')
+console_handler = logging.StreamHandler(sys.stdout)
+console_handler.setFormatter(log_formatter)
+console_handler.setLevel(logging.INFO)
+app.logger.addHandler(console_handler)
+
+app.logger.setLevel(logging.INFO)
+app.logger.info('Fortanks startup')
 
 # Configurar o logger do módulo
 logger = app.logger
@@ -136,7 +138,6 @@ logger.info("Iniciando aplicação Flask...")
 # Criar a aplicação Flask
 logger.info("Criando instância da aplicação Flask...")
 
-app.config.from_object(Config)
 CORS(app, origins=[
     'https://sfortanks.com:8043',
     'http://localhost:5000',
@@ -255,11 +256,6 @@ app.register_blueprint(upload_bp, url_prefix='/admin/uploads')
 app.register_blueprint(pedido_compra_bp, url_prefix='/pedido_compra')
 logger.info("Blueprints registrados com sucesso!")
 
-# Registrar comandos CLI
-#logger.info("Registrando comandos CLI...")
-#from commands.estoque_commands import register_commands as register_estoque_commands
-#register_estoque_commands(app)
-#logger.info("Comandos CLI registrados com sucesso!")
 @app.before_request
 def verificar_permissao():
     # Excluir rotas de autenticação e estáticas do login_required
@@ -278,11 +274,6 @@ def verificar_permissao():
         from flask import redirect, url_for
         return redirect(url_for('auth.login', next=request.url))
    
-    #return permissao.permissao
-    if False:
-        if not Permissao.verificar_permissao_completa(current_user, request.path, 'visualizar'):
-            flash('Acesso restrito. Você não tem permissão para acessar esta área.', 'danger')
-            return None
 @app.route('/')
 def index():
     return redirect(url_for('auth.login'))

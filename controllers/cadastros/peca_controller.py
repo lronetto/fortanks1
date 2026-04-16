@@ -24,6 +24,8 @@ import tempfile
 import pandas as pd
 from models.logs import Logs
 import logging
+
+logger = logging.getLogger(__name__)
 from models.permissoes import Permissao
 from datetime import timedelta
 from utils.utils import (
@@ -332,7 +334,7 @@ def api_pecas():
             'recordsTotal': 0,
             'recordsFiltered': 0,
             'data': [],
-            'error': str(e)
+            'error': 'Erro ao carregar dados de peças.'
         }), 500
 
 @peca.route('/api/pecas/estatisticas')
@@ -469,7 +471,7 @@ def api_pecas_estatisticas():
             'transportadas': 0,
             'produzidas': 0,
             'percas': 0,
-            'error': str(e)
+            'error': 'Erro ao carregar estatísticas.'
         }), 500
 
 
@@ -567,7 +569,7 @@ def exportar_excel():
     except Exception as e:
         import traceback
         current_app.logger.error(f'Erro ao exportar Excel: {str(e)}\n{traceback.format_exc()}')
-        return jsonify({'success': False, 'message': str(e)}), 500
+        return jsonify({'success': False, 'message': 'Erro ao gerar exportação. Tente novamente.'}), 500
 
 
 @peca.route('/tanque/<int:tanque_id>')
@@ -697,7 +699,7 @@ def marcar_produzida(id):
         logging.error(f'Erro ao marcar peça como produzida: {str(e)}', exc_info=True)
         return jsonify({
             'success': False,
-            'message': str(e)
+            'message': 'Erro ao registrar produção. Tente novamente.'
         }), 500
 
 @peca.route('/excluir/<int:id>', methods=['POST'])
@@ -754,7 +756,8 @@ def acabamento():
             peca.save()
             return jsonify({'success': True})
         except Exception as e:
-            return jsonify({'success': False, 'message': str(e)}), 500
+            logging.error(f'Erro ao registrar acabamento: {str(e)}', exc_info=True)
+            return jsonify({'success': False, 'message': 'Erro ao registrar acabamento. Tente novamente.'}), 500
     # GET: retorna o modal
     tanques = Tanques.query.order_by(Tanques.nome).all()
     csrf_token = generate_csrf()
@@ -791,7 +794,8 @@ def transporte():
                 peca.save()
             return jsonify({'success': True, 'pecas_afetadas': [p.id for p in pecas]})
         except Exception as e:
-            return jsonify({'success': False, 'message': str(e)}), 500
+            logging.error(f'Erro ao registrar transporte: {str(e)}', exc_info=True)
+            return jsonify({'success': False, 'message': 'Erro ao registrar transporte. Tente novamente.'}), 500
     # GET: retorna o modal
     tanques = Tanques.query.order_by(Tanques.nome).all()
     csrf_token = generate_csrf()
@@ -834,7 +838,7 @@ def api_filtros():
             'success': False,
             'contratos': [],
             'tanques': [],
-            'error': str(e)
+            'error': 'Erro ao carregar filtros.'
         }), 500
 
 @peca.route('/api/tanques-por-projeto')
@@ -1077,7 +1081,8 @@ def vinculacao_produto_composto():
             
         except Exception as e:
             db.session.rollback()
-            return jsonify({'success': False, 'message': f'Erro ao processar vinculação: {str(e)}'}), 500
+            current_app.logger.error(f'Erro ao processar vinculação: {str(e)}', exc_info=True)
+            return jsonify({'success': False, 'message': 'Erro ao processar vinculação. Tente novamente.'}), 500
     
     # GET: retorna o modal
     contratos = Contrato.query.order_by(Contrato.nome).all()
@@ -1323,7 +1328,8 @@ def api_vinculacao_por_id(id):
         
         return jsonify({'success': True, 'vinculacao': vinculacao_json})
     except Exception as e:
-        return jsonify({'success': False, 'message': f'Erro ao buscar vinculação: {str(e)}'}), 500
+        current_app.logger.error(f'Erro ao buscar vinculação: {str(e)}', exc_info=True)
+        return jsonify({'success': False, 'message': 'Erro ao buscar vinculação.'}), 500
 
 @peca.route('/vinculacao-produto-composto/<int:id>/excluir', methods=['POST'])
 def excluir_vinculacao(id):
@@ -1333,7 +1339,8 @@ def excluir_vinculacao(id):
         vinculacao.delete()
         return jsonify({'success': True, 'message': 'Vinculação excluída com sucesso!'})
     except Exception as e:
-        return jsonify({'success': False, 'message': f'Erro ao excluir vinculação: {str(e)}'}), 500
+        current_app.logger.error(f'Erro ao excluir vinculação: {str(e)}', exc_info=True)
+        return jsonify({'success': False, 'message': 'Erro ao excluir vinculação. Tente novamente.'}), 500
 
 @peca.route('/api/resumo-concretagem', methods=['GET'])
 def api_resumo_concretagem():
@@ -1423,10 +1430,10 @@ def api_resumo_concretagem():
         
     except Exception as e:
         import traceback
+        current_app.logger.error(f'Erro ao buscar resumo: {str(e)}\n{traceback.format_exc()}')
         return jsonify({
             'success': False,
-            'message': f'Erro ao buscar resumo: {str(e)}',
-            'traceback': traceback.format_exc()
+            'message': 'Erro ao buscar resumo de concretagem.'
         }), 500
 
 def _processar_componentes_recursivo( produto_composto, quantidade_pecas, data_movimento, produto_composto_id, 
@@ -1455,7 +1462,7 @@ def _processar_componentes_recursivo( produto_composto, quantidade_pecas, data_m
         
         # DEBUG: Verificar cálculo de quantidade
         if log:
-            print(f"  Componente: estoque_id={estoque_id}, quantidade_por_peca={quantidade_por_peca}, quantidade_pecas={quantidade_pecas}, quantidade_total={quantidade_total}")
+            logger.debug(f"  Componente: estoque_id={estoque_id}, quantidade_por_peca={quantidade_por_peca}, quantidade_pecas={quantidade_pecas}, quantidade_total={quantidade_total}")
         
         # Buscar o estoque
         estoque = Estoque.query.get(estoque_id)
@@ -1575,7 +1582,7 @@ def processar_producao(log=True,total=True,usinagem=True):
     """Processa a produção de peças concretadas, consumindo estoque baseado no produto composto vinculado
     Otimizado para agrupar por vinculação (produto composto) e por dia"""
     try:
-        print("Processando produção...")
+        logger.debug("Processando produção...")
         if total:
             EstoqueMovimentacoes.query.filter(EstoqueMovimentacoes.origem_tipo.like('%producao_peca%')).delete()
             EstoqueMovimentacoes.query.filter(EstoqueMovimentacoes.origem_tipo.like('%usinagem_concreto%')).delete()
@@ -1618,10 +1625,10 @@ def processar_producao(log=True,total=True,usinagem=True):
     except Exception as e:
         import traceback
         db.session.rollback()
+        current_app.logger.error(f'Erro ao processar produção: {str(e)}\n{traceback.format_exc()}')
         return jsonify({
             'success': False,
-            'message': f'Erro ao processar produção: {str(e)}',
-            'traceback': traceback.format_exc()
+            'message': 'Erro ao processar produção. Tente novamente.'
         }), 500
 
     
@@ -1701,7 +1708,7 @@ def processar_producao_manual(log, usuario_id=1,total=True,_usinagem=True):
             ).first()
             if not vinculacao:
                 nomes_pecas_grupo = [p.nome or f"Peça {p.id}" for p in pecas_grupo]
-                print(f"Peças {', '.join(nomes_pecas_grupo)} sem vinculação de produto composto (Tanque: {tanque_id}, Tipo: {tipo_peca})")
+                logger.debug(f"Peças {', '.join(nomes_pecas_grupo)} sem vinculação de produto composto (Tanque: {tanque_id}, Tipo: {tipo_peca})")
                 continue
             
             produto_composto = ProdutoComposto.query.get(vinculacao.produto_composto_id)
@@ -1713,7 +1720,7 @@ def processar_producao_manual(log, usuario_id=1,total=True,_usinagem=True):
             todas_pecas_processadas.extend(nomes_pecas_grupo)
             
             if log:
-                print(f"Processando grupo: Tanque {tanque_id}, Tipo {tipo_peca}, {quantidade_grupo} peça(s) dia: {dia_date}")
+                logger.debug(f"Processando grupo: Tanque {tanque_id}, Tipo {tipo_peca}, {quantidade_grupo} peça(s) dia: {dia_date}")
             
             produtos_processados = set()  # isolado por grupo para não pular composições entre grupos
             try:
@@ -1760,7 +1767,7 @@ def processar_producao_manual(log, usuario_id=1,total=True,_usinagem=True):
                 log=log,
             )
 
-        print(f"Materiais necessários: {len(materiais_necessarios)}")
+        logger.debug(f"Materiais necessários: {len(materiais_necessarios)}")
         if materiais_necessarios:
             # Processar materiais agrupados
             for info in materiais_necessarios.values():
@@ -1770,7 +1777,7 @@ def processar_producao_manual(log, usuario_id=1,total=True,_usinagem=True):
                     produto_id = info['produto_id']
                     
                     if log:
-                        print(f"  -> Componente material: {estoque.material.nome} - Quantidade total agrupada: {quantidade_total}")
+                        logger.debug(f"  -> Componente material: {estoque.material.nome} - Quantidade total agrupada: {quantidade_total}")
                     
                     mov = EstoqueMovimentacoes()
                     mov.remover(
@@ -1853,11 +1860,10 @@ def importar_inspecao():
     except Exception as e:
         import traceback
         db.session.rollback()
-        logging.error(f"Erro ao processar arquivo: {str(e)}", exc_info=True)
+        logging.error(f"Erro ao processar arquivo: {str(e)}\n{traceback.format_exc()}", exc_info=True)
         return jsonify({
             'success': False,
-            'message': f'Erro ao processar arquivo: {str(e)}',
-            'traceback': traceback.format_exc()
+            'message': 'Erro ao processar arquivo. Tente novamente.'
         }), 500
 
 def processar_arquivo_inspecao(xlsx_path):
@@ -1887,7 +1893,7 @@ def processar_arquivo_inspecao(xlsx_path):
     df_series = pd.read_excel(xlsx_path, sheet_name='series', engine='openpyxl')
     df_alongamentos = pd.read_excel(xlsx_path, sheet_name='ALONG', engine='openpyxl')
     
-    print(f"Processando {len(df_series)} series")
+    logger.debug(f"Processando {len(df_series)} series")
     series = []
     for index, row in df_series.iterrows():
         serie = {
@@ -1919,7 +1925,7 @@ def processar_arquivo_inspecao(xlsx_path):
         series.append(serie)
         
     pecas = []
-    print(f"Processando {len(df)} peças")
+    logger.debug(f"Processando {len(df)} peças")
     for index, row in df.iterrows():
         peca = {
             'concretagem': None,
@@ -2045,7 +2051,7 @@ def processar_arquivo_inspecao(xlsx_path):
         pecas.append(peca)
         log['total_pecas'] += 1
     alongamentos = []
-    print(f"Processando {len(df_alongamentos)} alongamentos")
+    logger.debug(f"Processando {len(df_alongamentos)} alongamentos")
     for index, row in df_alongamentos.iloc[3:].iterrows():
         if get_value_datetime(row, 1) is None:
             continue
@@ -2082,10 +2088,10 @@ def processar_arquivo_inspecao(xlsx_path):
                 'certificado': get_value_str(row, 29),
             }
             alongamento['cordoalhas']['bobinas'].append(bobina)
-        print(f"Alongamento: {alongamento['concretagem']}")
+        logger.debug(f"Alongamento: {alongamento['concretagem']}")
         for peca in pecas:
             if peca['concretagem'] == alongamento['concretagem']:
-                print(f"Peca: {peca['nome']} - Alongamento: {alongamento['concretagem']} - Data: {peca['data_concretagem'].date()} - {alongamento['data_concretagem'].date()}")
+                logger.debug(f"Peca: {peca['nome']} - Alongamento: {alongamento['concretagem']} - Data: {peca['data_concretagem'].date()} - {alongamento['data_concretagem'].date()}")
                 alongamento['pista'] = peca['qualidade']['pista']
                 pecaa = {
                     'nome': peca['nome'],
@@ -2118,7 +2124,7 @@ def processar_arquivo_inspecao(xlsx_path):
             usinagem.nota = serie['nota']
             usinagem.save()
             atualizadas += 1
-    print(f"Total de séries novas: {novas} e atualizadas: {atualizadas}")
+    logger.debug(f"Total de séries novas: {novas} e atualizadas: {atualizadas}")
     atualizadas = 0
     novas = 0
     if True:
@@ -2141,7 +2147,7 @@ def processar_arquivo_inspecao(xlsx_path):
                 concretagem.pecas = json.dumps(alongamento['pecas'])
                 concretagem.save()
                 atualizadas += 1
-        print(f"Total de concretagens novas: {novas} e atualizadas: {atualizadas}")
+        logger.debug(f"Total de concretagens novas: {novas} e atualizadas: {atualizadas}")
     atualizadas = 0
     novas = 0
     # Processar peças
@@ -2185,7 +2191,7 @@ def processar_arquivo_inspecao(xlsx_path):
                 peca_existe.numero_tanque = peca['numero_tanque']
                 peca_existe.save()
                 atualizadas += 1
-    print(f"Total de peças novas: {novas} e atualizadas: {atualizadas}")
+    logger.debug(f"Total de peças novas: {novas} e atualizadas: {atualizadas}")
 
     # Agrupar peças por concretagem para ConcretoConcretagens (alongamentos em branco quando não houver)
     from collections import defaultdict
@@ -2244,7 +2250,7 @@ def processar_arquivo_inspecao(xlsx_path):
             concretagem.save()
             atualizadas_conc += 1
 
-    print(f"Total de concretagens (agrupadas por peças) novas: {novas_conc} e atualizadas: {atualizadas_conc}")
+    logger.debug(f"Total de concretagens (agrupadas por peças) novas: {novas_conc} e atualizadas: {atualizadas_conc}")
     # Salvar log
     Logs(local='importar_inspecao', data=datetime.now(), texto=json.dumps(log))
     db.session.commit()

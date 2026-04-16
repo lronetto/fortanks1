@@ -6,6 +6,7 @@ from flask import render_template, redirect, url_for, request, flash, jsonify, s
 from flask_login import login_required, current_user
 from models.material import Materiais
 from models.unidade import Unidades, UnidadesConversao, get_conversao_unidade
+from utils.material_imagem_upload import parse_dados_json
 from models.colaborador import Colaborador
 from models.concreto import (
     ConcretoUsinagensRompimentos,
@@ -133,7 +134,7 @@ def api_materiais_traco(produto_composto_id):
                 materiais.append({
                     'material_id': material.id,
                     'material_nome': material.nome,
-                    'material_codigo': material.codigo or '',
+                    'material_codigo': parse_dados_json(material.dados_adicionais).get("codigo_sox") or '',
                     'quantidade_base': quantidade_base,  # Quantidade por m³ (sempre)
                     'quantidade_redosada_total': quantidade_redosada_total,  # Quantidade total redosada (se houver)
                     'unidade_id': material.unidade_id,

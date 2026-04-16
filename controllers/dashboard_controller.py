@@ -18,6 +18,7 @@ from models.concreto import ConcretoConcretagens, ConcretoConcretagensTanques, C
 from models.unidade import Unidades
 from models.dados_analiticos import DadoAnalitico
 from models.epi import Epi, EpiEntregas
+from utils.decorators import require_departamento
 from models.produto_composto import ProdutoComposto, ProdutoCompostoItem
 from models.colaborador import Colaborador
 from models.dados_analiticos import PL_CUSTO, PL_RECOP
@@ -557,6 +558,7 @@ def card_resumo_placas(agrupar_por_grupo=False, data_ate=None):
 
 @dashboard_bp.route('/api/resumo-placas')
 @login_required
+@require_departamento([4])
 def api_resumo_placas():
     """
     API para retornar resumo de placas com opção de agrupar por grupo e data até.
@@ -570,9 +572,6 @@ def api_resumo_placas():
             data_ate = datetime.strptime(data_ate_str, '%Y-%m-%d').date()
         except ValueError:
             data_ate = date.today()
-
-    if not (current_user.colaborador and current_user.colaborador.departamento_id == 4):
-        return jsonify({'success': False, 'error': 'Acesso negado'}), 403
 
     try:
         dados = card_resumo_placas(agrupar_por_grupo=agrupar_por_grupo, data_ate=data_ate)
@@ -715,14 +714,12 @@ def solicitacoes_pendentes():
 
 @dashboard_bp.route('/api/dados-analiticos')
 @login_required
+@require_departamento([4])
 def api_dados_analiticos():
     """
     Retorna dados analíticos (custo e receita realizada) para um centro de custo específico ou todos.
     Aceita 'cc_id' como query parameter. cc_id=0 para todos.
     """
-    if not (current_user.colaborador and current_user.colaborador.departamento_id == 4):
-        return jsonify({'erro': 'Acesso não autorizado para este recurso.'}), 403
-
     try:
         centro_custo_id_str = request.args.get('cc_id', '0') # Default para '0' se não fornecido
         centro_custo_id = int(centro_custo_id_str)

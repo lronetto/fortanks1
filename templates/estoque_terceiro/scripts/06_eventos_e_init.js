@@ -14,7 +14,21 @@
 
     // Evento de mudança no filtro de tipos (backend filtra, então recarrega via AJAX)
     $('#filtro_tipos').on('change', function() {
+        atualizarEstadoFiltroTodosTipos();
         agendarReloadTabela('filtro_tipos');
+    });
+
+    // Checkbox para selecionar/desmarcar todos os tipos disponíveis
+    $('#filtro_todos_tipos').on('change', function() {
+        const select = $('#filtro_tipos');
+        if ($(this).is(':checked')) {
+            const todos = select.find('option').map(function() { return String($(this).val()); }).get();
+            select.val(todos);
+        } else {
+            select.val([]);
+        }
+        atualizarEstadoFiltroTodosTipos();
+        agendarReloadTabela('filtro_todos_tipos');
     });
     
     // Filtros aplicados no frontend: só redesenha a tabela (sem nova requisição ao backend)
@@ -43,11 +57,13 @@
     $('#btnLimparFiltros').on('click', function() {
         $('#filtro_data').val('');
         $('#filtro_sped').prop('checked', false);
+        $('#filtro_todos_tipos').prop('checked', false).prop('indeterminate', false);
         $('#filtro_tipos').val([]);
         $('#filtro_quantidade_zero').prop('checked', false);
         $('#chkComparativoOcultarZeros').prop('checked', false);
         $('#filtro_sem_material_sistema').prop('checked', false);
         $('#filtro_ter_os_dois').prop('checked', false);
+        atualizarEstadoFiltroTodosTipos();
         if (table) table.draw(false);
     });
 
@@ -79,27 +95,55 @@
         aoa.push(headers);
         rows.forEach(function (row) {
             const ut = row.unidade_terceiro != null ? String(row.unidade_terceiro).replace(/<[^>]*>/g, '').trim() : '';
+            const us = row.unidade_sistema != null ? String(row.unidade_sistema).trim() : '';
+            const fatorConversao = parseFloat(row.fator_conversao);
+            const possuiConversaoTerceiro = !!row.unidade_convertida
+                && Number.isFinite(fatorConversao)
+                && fatorConversao > 0
+                && Math.abs(fatorConversao - 1) > 1e-9;
+            const convSistemaParaUnidadeTerceiro = function (valor) {
+                const n = parseFloat(valor) || 0;
+                return possuiConversaoTerceiro ? (n / fatorConversao) : n;
+            };
+
+            const estoqueSistemaExport = convSistemaParaUnidadeTerceiro(row.estoque_sistema);
+            const estoqueTerceiroExport = possuiConversaoTerceiro
+                ? (parseFloat(row.estoque_terceiro_original) || 0)
+                : (parseFloat(row.estoque_terceiro) || 0);
+            const consumoFuturoExport = convSistemaParaUnidadeTerceiro(row.consumo_futuro);
+            const estoqueFuturoExport = convSistemaParaUnidadeTerceiro(row.estoque_futuro);
+            const estoqueTerceiroFuturoExport = estoqueTerceiroExport - consumoFuturoExport;
+            const diferencaExport = estoqueTerceiroExport - estoqueSistemaExport;
+            const diferencaFuturaExport = estoqueTerceiroExport - estoqueFuturoExport;
+            const diferencaFuturaTerceiroExport = estoqueTerceiroFuturoExport - estoqueFuturoExport;
+            const diferencaPercentualExport = estoqueSistemaExport !== 0
+                ? ((diferencaExport / estoqueSistemaExport) * 100)
+                : (estoqueTerceiroExport !== 0 ? 100 : 0);
+            const unidadeSistemaExport = possuiConversaoTerceiro && ut
+                ? (us ? (us + ' (conv. p/ ' + ut + ')') : ut)
+                : us;
+
             aoa.push([
                 formatarCodigoErpInteiro(row.codigo_erp),
                 row.material_nome != null ? String(row.material_nome) : '',
-                row.unidade_sistema != null ? String(row.unidade_sistema) : '',
+                unidadeSistemaExport,
                 ut,
-                parseFloat(row.estoque_sistema) || 0,
-                parseFloat(row.estoque_terceiro) || 0,
+                estoqueSistemaExport,
+                estoqueTerceiroExport,
                 parseFloat(row.valor_unitario) || 0,
                 parseFloat(row.valor_sistema) || 0,
                 parseFloat(row.valor_terceiro) || 0,
-                parseFloat(row.diferenca) || 0,
-                parseFloat(row.diferenca_percentual) || 0,
+                diferencaExport,
+                diferencaPercentualExport,
                 parseFloat(row.valor_diferenca) || 0,
-                parseFloat(row.consumo_futuro) || 0,
-                parseFloat(row.estoque_futuro) || 0,
-                parseFloat(row.estoque_terceiro_futuro) || 0,
-                parseFloat(row.diferenca_futura) || 0,
+                consumoFuturoExport,
+                estoqueFuturoExport,
+                estoqueTerceiroFuturoExport,
+                diferencaFuturaExport,
                 parseFloat(row.valor_estoque_futuro_sistema) || 0,
                 parseFloat(row.valor_estoque_futuro_terceiro) || 0,
                 parseFloat(row.diferenca_valor_futuro) || 0,
-                parseFloat(row.diferenca_futura_terceiro) || 0,
+                diferencaFuturaTerceiroExport,
                 row.material_id != null && row.material_id !== '' ? row.material_id : ''
             ]);
         });

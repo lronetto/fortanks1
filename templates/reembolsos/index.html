@@ -2,6 +2,10 @@
 
 {% block title %}Meus Reembolsos{% endblock %}
 
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/reembolsos.css') }}">
+{% endblock %}
+
 {% block content %}
 <div class="container-fluid">
     <div class="d-flex justify-content-between align-items-center mb-4">
