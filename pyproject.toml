@@ -63,7 +63,7 @@ dependencies = [
     "pandocfilters==1.5.1",
     "parso==0.8.6",
     "pdf2image>=1.17.0",
-    "pdfminer-six>=20260107",
+    "pdfminer-six==20240706",
     "pickleshare==0.7.5",
     "pipreqs==0.5.0",
     "platformdirs==4.9.4",
