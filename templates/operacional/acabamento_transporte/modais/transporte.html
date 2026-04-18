@@ -1,5 +1,5 @@
 <div class="modal fade" id="modalTransporte" tabindex="-1" aria-labelledby="modalTransporteLabel" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down modal-lg modal-dialog-centered">
+  <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down modal-lg">
     <div class="modal-content ft-modal-transporte">
       <form id="formTransporte" method="post" action="{{ url_for('acabamento_transporte.transporte') }}" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
