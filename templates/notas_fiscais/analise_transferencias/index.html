@@ -1,0 +1,211 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Análise de Transferências de Itens{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/notas_fiscais.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+
+    <!-- Header -->
+    <div class="nf-page-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <div>
+            <h1 class="nf-page-title">
+                <i class="fas fa-exchange-alt me-2" style="color:var(--nf-amber);"></i>Análise de Transferências
+            </h1>
+            <p class="nf-page-subtitle">Transferências de itens entre emitentes e destinatários, com filtros por período e código.</p>
+        </div>
+        <a href="{{ url_for('nota_fiscal.index') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left me-1"></i> Voltar
+        </a>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card nf-filter-card mb-4">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <span class="card-title-text"><i class="fas fa-filter me-2"></i>Filtros</span>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="">
+                <div class="row">
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="data_inicio">Data Início</label>
+                            <input type="date" name="data_inicio" id="data_inicio" class="form-control" value="{{ filtro_data_inicio.strip() if filtro_data_inicio and filtro_data_inicio.strip()|length == 10 else '' }}">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="data_fim">Data Fim</label>
+                            <input type="date" name="data_fim" id="data_fim" class="form-control" value="{{ filtro_data_fim.strip() if filtro_data_fim and filtro_data_fim.strip()|length == 10 else '' }}">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="codigo_item">Código do Item</label>
+                            <input type="text" name="codigo_item" id="codigo_item" class="form-control" placeholder="Código do item" value="{{ filtro_codigo_item }}">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="nome_item">Nome do Item</label>
+                            <input type="text" name="nome_item" id="nome_item" class="form-control" placeholder="Nome do item" value="{{ filtro_nome_item }}">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="cnpj_emitente">CNPJ Emitente(s)</label>
+                            <select name="cnpj_emitente" id="cnpj_emitente" class="form-control select2" multiple>
+                                {% for cnpj in cnpjs_emitentes %}
+                                    <option value="{{ cnpj }}" {% if cnpj in filtro_cnpj_emitente %}selected{% endif %}>{{ cnpj }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="cnpj_destinatario">CNPJ Destinatário(s)</label>
+                            <select name="cnpj_destinatario" id="cnpj_destinatario" class="form-control select2" multiple>
+                                {% for cnpj in cnpjs_destinatarios %}
+                                    <option value="{{ cnpj }}" {% if cnpj in filtro_cnpj_destinatario %}selected{% endif %}>{{ cnpj }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="form-group">
+                            <label for="material_id">Material Vinculado</label>
+                            <select name="material_id" id="material_id" class="form-control select2" multiple>
+                                {% for material in materiais %}
+                                    <option value="{{ material.id }}" {% if filtro_material_id and material.id|string in filtro_material_id %}selected{% endif %}>{{ material.nome }}{% if material.codigo %} ({{ material.codigo }}){% endif %}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                    </div>
+                    <div class="col-md-3 d-flex align-items-end">
+                        <div class="btn-bar">
+                            <button type="submit" class="btn btn-primary btn-sm">
+                                <i class="fas fa-search me-1"></i> Filtrar
+                            </button>
+                            <a href="?" class="btn btn-outline-secondary btn-sm">
+                                <i class="fas fa-times me-1"></i> Limpar
+                            </a>
+                            <button type="button" class="btn btn-info btn-sm" id="btn-modal-cnpj">
+                                <i class="fas fa-table me-1"></i> Por CNPJ
+                            </button>
+                            <button type="button" class="btn btn-success btn-sm" id="btn-exportar-excel">
+                                <i class="fas fa-file-excel me-1"></i> Excel
+                            </button>
+                            <button type="button" class="btn btn-danger btn-sm" id="btn-exportar-pdf">
+                                <i class="fas fa-file-pdf me-1"></i> PDF
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Tabela de Transferências -->
+    <div class="card nf-table-card mb-4">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <span class="card-title-text"><i class="fas fa-exchange-alt me-2"></i>Transferências de Itens</span>
+        </div>
+        <div class="card-body">
+            <div id="tabela-transferencias-ajax">
+                {% include 'notas_fiscais/analise_transferencias/partials/tabela_transferencias.html' %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Incluir Modal de Análise por CNPJ -->
+{% include 'notas_fiscais/analise_transferencias/modais/analise_transferencias_cnpj.html' %}
+{% endblock %}
+
+{% block scripts %}
+    {{ super() }}
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            $('.select2').select2({
+                width: '100%',
+                placeholder: 'Selecione',
+                allowClear: true,
+                language: 'pt-BR'
+            });
+            // AJAX do filtro e paginação
+            // Delegação para garantir funcionamento após atualização da tabela
+            $('#tabela-transferencias-ajax').on('click', '.pagination a', function(e) {
+                e.preventDefault();
+                // Preservar filtros e enviar a página clicada
+                let href = $(this).attr('href') || '';
+                let params = new URLSearchParams(href.split('?')[1] || '');
+                let page = params.get('page');
+                let formParams = $('form').serialize();
+                if (page) {
+                    formParams += (formParams ? '&' : '') + 'page=' + encodeURIComponent(page);
+                }
+                carregarTabelaAjax(formParams);
+            });
+            function carregarTabelaAjax(params) {
+                let url = '/notas-fiscais/analise-transferencias/ajax'
+                $.ajax({
+                    url: url,
+                    type: 'POST',
+                    data: params,
+                    contentType: 'application/x-www-form-urlencoded',
+                    headers: {
+                        'X-CSRF-Token': '{{ csrf_token() }}',
+                        'X-Requested-With': 'XMLHttpRequest'
+                    },
+                    success: function(data) {
+                       // console.log(data);
+                        $('#tabela-transferencias-ajax').html(data);
+                    },
+                    error: function(xhr, status, error) {
+                        console.error('Erro ao carregar tabela:', error);
+                    }
+                });
+            }
+            $('form').on('submit', function(e) {
+                e.preventDefault();
+                carregarTabelaAjax($(this).serialize());
+               
+            });
+            
+            
+            // Exportar Excel
+            $('#btn-exportar-excel').on('click', function() {
+                // Coletar todos os filtros do formulário
+                let formData = $('form').serialize();
+                let url = '/notas-fiscais/analise-transferencias/exportar-excel?' + formData;
+                
+                // Abrir em nova aba para download
+                window.open(url, '_blank');
+            });
+            
+            // Exportar PDF
+            $('#btn-exportar-pdf').on('click', function() {
+                // Coletar todos os filtros do formulário
+                let formData = $('form').serialize();
+                let url = '/notas-fiscais/analise-transferencias/exportar-pdf?' + formData;
+                
+                // Abrir em nova aba para download
+                window.open(url, '_blank');
+            });
+            
+            // Abrir modal de análise por CNPJ
+            $('#btn-modal-cnpj').on('click', function() {
+                if (typeof window.abrirModalAnaliseCNPJ === 'function') {
+                    window.abrirModalAnaliseCNPJ();
+                } else {
+                    console.error('Função abrirModalAnaliseCNPJ não encontrada');
+                }
+            });
+        });
+    </script>
+{% endblock %} 

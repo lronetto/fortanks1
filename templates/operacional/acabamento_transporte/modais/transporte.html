@@ -1,18 +1,17 @@
 <div class="modal fade" id="modalTransporte" tabindex="-1" aria-labelledby="modalTransporteLabel" aria-hidden="true">
-  <div class="modal-dialog">
-    <div class="modal-content">
-            <form id="formTransporte" method="post" action="{{ url_for('acabamento_transporte.transporte') }}">
+  <div class="modal-dialog modal-dialog-scrollable modal-fullscreen-sm-down modal-lg modal-dialog-centered">
+    <div class="modal-content ft-modal-transporte">
+      <form id="formTransporte" method="post" action="{{ url_for('acabamento_transporte.transporte') }}" enctype="multipart/form-data">
         <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
         <input type="hidden" name="peca_ids" id="peca_ids">
-        <div class="modal-header">
+        <div class="modal-header border-bottom">
           <h5 class="modal-title" id="modalTransporteLabel">Registrar Transporte</h5>
           <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
         </div>
-        <div class="modal-body">
+        <div class="modal-body ft-modal-transporte-body">
           <div class="mb-3">
             <label for="transporte-tanque_id" class="form-label">Tanque</label>
             <select class="form-select" id="transporte-tanque_id" name="transporte-tanque_ids[]" required>
-                <!-- As opções serão carregadas via AJAX pelo select2 -->
             </select>
           </div>
           <div class="mb-3">
@@ -26,23 +25,22 @@
           <div class="mb-3">
             <label for="transporte-peca_id" class="form-label">Peça(s) (pesquise pelo nome)</label>
             <select class="form-select" id="transporte-peca_id" name="transporte-peca_ids[]" required style="width: 100%" multiple>
-                <!-- As opções serão carregadas via AJAX pelo select2 -->
             </select>
           </div>
           <div class="mb-3">
             <label for="nota_fiscal" class="form-label">Nota Fiscal (venda matriz)</label>
-            <input type="text" class="form-control" id="nota_fiscal" name="nota_fiscal" required placeholder="Digite o número da NF para buscar" autocomplete="off">
+            <input type="text" class="form-control" id="nota_fiscal" name="nota_fiscal" required placeholder="Digite o número da NF para buscar" autocomplete="off" inputmode="numeric">
             <input type="hidden" id="nota_fiscal_chave" name="nota_fiscal_chave" value="">
             <small class="text-muted">Busca por notas de venda emitidas pela matriz.</small>
           </div>
           <div class="mb-3">
             <label for="cte_frete" class="form-label">CT-e / Frete (vinculado à NF)</label>
-            <input type="text" class="form-control" id="cte_frete" placeholder="Selecione a nota acima para carregar CT-e" autocomplete="off" readonly>
+            <input type="text" class="form-control" id="cte_frete" name="cte_frete" placeholder="Selecione a nota acima para carregar CT-e" autocomplete="off" readonly>
             <small class="text-muted">CT-e vinculado à nota fiscal selecionada. Ao selecionar, placa e transportadora são preenchidos.</small>
           </div>
           <div class="mb-3">
             <label for="placa_carreta" class="form-label">Placa da Carreta</label>
-            <input type="text" class="form-control" id="placa_carreta" name="placa_carreta" required>
+            <input type="text" class="form-control text-uppercase" id="placa_carreta" name="placa_carreta" required autocomplete="off" autocapitalize="characters">
           </div>
           <div class="mb-3">
             <label for="data_transporte" class="form-label">Data do Transporte</label>
@@ -50,13 +48,46 @@
           </div>
           <div class="mb-3">
             <label for="transportadora" class="form-label">Transportadora</label>
-            <input type="text" class="form-control" id="transportadora" name="transportadora" required>
+            <input type="text" class="form-control" id="transportadora" name="transportadora" required autocomplete="organization">
           </div>
-          
+
+          <div class="mb-3 ft-transporte-foto">
+            <label class="form-label">Foto do transporte <span class="text-muted fw-normal">(opcional)</span></label>
+            <input type="file" id="transporte-foto-input" name="foto_transporte" accept="image/*" capture="environment" class="d-none">
+            <div class="d-flex flex-wrap align-items-center gap-2">
+              <button type="button" class="btn btn-outline-secondary btn-sm flex-grow-1 flex-sm-grow-0" id="transporte-foto-btn" aria-label="Tirar ou escolher foto">
+                <i class="fas fa-camera me-1"></i><span class="d-none d-sm-inline">Tirar ou </span>adicionar foto
+              </button>
+              <button type="button" class="btn btn-outline-danger btn-sm d-none" id="transporte-foto-remover">
+                <i class="fas fa-times me-1"></i>Remover foto
+              </button>
+            </div>
+            <div id="transporte-foto-preview-wrap" class="mt-2 d-none text-center">
+              <img id="transporte-foto-preview" class="ft-transporte-foto-thumb img-fluid rounded border mx-auto d-block" alt="">
+            </div>
+          </div>
+
+          <div class="mb-3">
+            <label for="transporte-observacao" class="form-label">Observação</label>
+            <textarea class="form-control" id="transporte-observacao" name="observacao" rows="2" placeholder="Observações sobre o envio ou a carga" maxlength="4000"></textarea>
+          </div>
+
+          <div class="mb-0">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="1" id="transporte-enviar-whatsapp" name="enviar_whatsapp">
+              <label class="form-check-label" for="transporte-enviar-whatsapp">
+                Enviar pelo WhatsApp
+              </label>
+              <span class="badge bg-secondary ms-1 align-middle">em breve</span>
+            </div>
+            <small class="text-muted d-block mt-1">A flag é salva no cadastro; o envio automático será configurado posteriormente.</small>
+          </div>
         </div>
-        <div class="modal-footer">
-          <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
-          <button type="submit" class="btn btn-primary">Salvar</button>
+        <div class="modal-footer flex-column flex-sm-row gap-2 border-top">
+          <button type="button" class="btn btn-secondary order-2 order-sm-1 w-100 w-sm-auto" data-bs-dismiss="modal">Cancelar</button>
+          <button type="submit" class="btn btn-primary order-1 order-sm-2 w-100 w-sm-auto">
+            <i class="fas fa-save me-1"></i>Salvar
+          </button>
         </div>
       </form>
     </div>
@@ -64,10 +95,49 @@
 </div>
 <script>
 $(function() {
+  function transporteLimparFoto() {
+    var $inp = $('#transporte-foto-input');
+    $inp.val('');
+    $('#transporte-foto-preview-wrap').addClass('d-none');
+    $('#transporte-foto-preview').removeAttr('src');
+    $('#transporte-foto-remover').addClass('d-none');
+  }
+
+  $('#transporte-foto-btn').on('click', function() {
+    $('#transporte-foto-input').trigger('click');
+  });
+
+  $('#transporte-foto-input').on('change', function() {
+    var f = this.files && this.files[0];
+    if (!f || !f.type || f.type.indexOf('image/') !== 0) {
+      transporteLimparFoto();
+      return;
+    }
+    var r = new FileReader();
+    r.onload = function(ev) {
+      $('#transporte-foto-preview').attr('src', ev.target.result);
+      $('#transporte-foto-preview-wrap').removeClass('d-none');
+      $('#transporte-foto-remover').removeClass('d-none');
+    };
+    r.readAsDataURL(f);
+  });
+
+  $('#transporte-foto-remover').on('click', function() {
+    transporteLimparFoto();
+  });
+
   $('#formTransporte').on('submit', function(e) {
     e.preventDefault();
-    var form = $(this);
-    $.post(form.attr('action'), form.serialize())
+    var form = this;
+    var fd = new FormData(form);
+    $.ajax({
+      url: $(form).attr('action'),
+      type: 'POST',
+      data: fd,
+      processData: false,
+      contentType: false,
+      headers: { 'X-CSRFToken': $('input[name="csrf_token"]', form).val() }
+    })
       .done(function(resp) {
         if (resp.success) {
           alert('Transporte registrado com sucesso!');
@@ -82,8 +152,9 @@ $(function() {
   });
 
   $('#transportadora').on('focus', function() {
-    var tanque_ids = $('#tanque_ids').val();
-    if (!tanque_ids || tanque_ids.length === 0) return;
+    var tval = $('#transporte-tanque_id').val();
+    var tanque_ids = tval ? (Array.isArray(tval) ? tval : [tval]) : [];
+    if (!tanque_ids.length) return;
     $.ajax({
       url: '{{ url_for("acabamento_transporte.api_transportadoras") }}',
       method: 'POST',
@@ -102,7 +173,6 @@ $(function() {
     placeholder: 'Pesquise a peça pelo nome',
     allowClear: true,
     multiple: true,
-    width: '100%',
     scrollAfterSelect: true,
     dropdownAutoWidth: true,
     ajax: {
@@ -111,11 +181,13 @@ $(function() {
       dataType: 'json',
       delay: 250,
       data: function(params) {
+        var tval = $('#transporte-tanque_id').val();
+        var csv = Array.isArray(tval) ? tval.join(',') : (tval || '');
         return {
-          tanque_ids: [$('#transporte-tanque_ids').val()],
+          tanque_ids: csv,
           nome: params.term || '',
           apenas_concretadas: 1,
-          apenas_acabadas: 0,
+          apenas_acabadas: $('#transporte-apenasAcabadas').is(':checked') ? 1 : 0,
           nao_acabadas: 0
         };
       },
@@ -131,10 +203,14 @@ $(function() {
     minimumInputLength: 2
   });
 
+  $('#transporte-apenasAcabadas').on('change', function() {
+    $('#transporte-peca_id').val(null).trigger('change');
+  });
+
   $('#transporte-tanque_id').select2({
     dropdownParent: $('#modalTransporte'),
     theme: 'bootstrap-5',
-    placeholder: 'Pesquise a peça pelo nome',
+    placeholder: 'Selecione o(s) tanque(s)',
     allowClear: true,
     multiple: true,
     ajax: {
@@ -153,8 +229,8 @@ $(function() {
     }
   });
 
-  $('#tanque_id').on('change', function() {
-    $('#peca_id').val(null).trigger('change');
+  $('#transporte-tanque_id').on('change', function() {
+    $('#transporte-peca_id').val(null).trigger('change');
   });
 
   $('#nota_fiscal').autocomplete({
@@ -253,6 +329,9 @@ $(function() {
     $('#nota_fiscal_chave').val('');
     $('#cte_frete').val('').prop('readonly', true).attr('placeholder', 'Selecione a nota acima para carregar CT-e');
     if ($('#cte_frete').autocomplete('instance')) { $('#cte_frete').autocomplete('destroy'); }
+    $('#transporte-observacao').val('');
+    $('#transporte-enviar-whatsapp').prop('checked', false);
+    transporteLimparFoto();
   });
 });
-</script> 
+</script>

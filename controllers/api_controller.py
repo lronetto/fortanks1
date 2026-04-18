@@ -13,7 +13,7 @@ from models.material import Materiais
 
 api_bp = Blueprint('api', __name__, url_prefix='/api')
 
-# Registrar APIs por modelo (centralizadas em controllers/api/*)
+# Registrar APIs por modelo/domínio
 try:
     from controllers.api.nota_fiscal_api import register_api as register_nota_fiscal_api  # noqa: E402
     register_nota_fiscal_api(api_bp)

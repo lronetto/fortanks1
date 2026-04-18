@@ -103,7 +103,7 @@ def processar_upload(anexo, nota=None, filename=None, payload=None, tipo=None, d
 
                 dados_json_dua = json.dumps(dados_dict, ensure_ascii=False)
                 print(f"dados_adicionais: {dados_json_dua}")
-                up = Upload(
+                up = Upload.registrar(
                     pai="DUA",
                     pai_id=dados_adicionais["dua"]["nf_id"],
                     tipo=tipo,
@@ -113,7 +113,7 @@ def processar_upload(anexo, nota=None, filename=None, payload=None, tipo=None, d
                     dados_adicionais=dados_json_dua,
                 )
             else:
-                up = Upload(
+                up = Upload.registrar(
                     "NotaFiscal",
                     nota.id,
                     tipo,

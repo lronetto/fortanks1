@@ -114,7 +114,7 @@ def novo():
                     for file in files:
                         if file and file.filename:
                             try:
-                                Upload(pai='Certificado', pai_id=certificado_id, tipo=5, filename=file.filename, mimetype=file.content_type or 'application/octet-stream', blob=file.read())
+                                Upload.registrar(pai='Certificado', pai_id=certificado_id, tipo=5, filename=file.filename, mimetype=file.content_type or 'application/octet-stream', blob=file.read())
                             except Exception as e:
                                 import traceback
                                 traceback.print_exc()
@@ -235,7 +235,7 @@ def editar(id):
                     for file in files:
                         if file and file.filename:
                             try:
-                                Upload(pai='Certificado', pai_id=certificado.id, tipo=5, filename=file.filename, mimetype=file.content_type or 'application/octet-stream', blob=file.read())
+                                Upload.registrar(pai='Certificado', pai_id=certificado.id, tipo=5, filename=file.filename, mimetype=file.content_type or 'application/octet-stream', blob=file.read())
                             except Exception as e:
                                 import traceback
                                 traceback.print_exc()

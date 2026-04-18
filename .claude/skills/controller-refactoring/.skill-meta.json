@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "name": "controller-refactoring",
+  "description": "Refatoração de controllers Flask em pacotes routes/ + services/"
+}

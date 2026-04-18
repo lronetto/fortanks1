@@ -2,7 +2,7 @@ from decimal import Decimal
 from flask import Blueprint, render_template, request, redirect, url_for, flash, jsonify, send_file, abort, make_response, Response
 from markupsafe import Markup
 from flask_login import login_required, current_user
-from controllers.nota_fiscal_controller import api_get_dados_notas_fiscais
+from controllers.nota_fiscal import api_get_dados_notas_fiscais
 from models.nota_fiscal import CFOPS_COMPRA,CNPJS_MATRIZ_FILIAIS,CFOPS_TRANSFERENCIA
 from models.dados_analiticos import DadoAnalitico
 from models.reembolso import Reembolsos, ReembolsosDocumentos
@@ -164,7 +164,7 @@ def novo():
                             print(f'Processando anexo: {file_key}, filename: {file.filename}, doc.id: {doc.id}')
                             # Ler arquivo
                             file_content = file.read()
-                            # Criar Upload manualmente (sem usar __init__ que faz commit)
+                            # Criar Upload manualmente (um commit com o reembolso no fim)
                             upload = Upload()
                             upload.pai = 'ReembolsoDocumento'
                             upload.pai_id = doc.id
@@ -586,7 +586,7 @@ def salvar_avulso_individual(reembolso_id, avulso_id):
                         if upload_existente:
                            pass
                         else:
-                           Upload(pai='ReembolsosDocumentos', pai_id=doc.id, tipo=4, filename=file.filename, mimetype=file.content_type, blob=file_content)
+                           Upload.registrar(pai='ReembolsosDocumentos', pai_id=doc.id, tipo=4, filename=file.filename, mimetype=file.content_type, blob=file_content)
                     except Exception as e:
                         print(f'Erro ao criar/atualizar upload: {str(e)}')
                         import traceback
@@ -1239,27 +1239,16 @@ def editar(reembolso_id):
                             print(f'Processando anexo (editar): {file_key}, filename: {file.filename}, doc.id: {doc.id}')
                             # Ler arquivo
                             file_content = file.read()
-                            # Criar Upload usando o __init__ que faz save automático
-                            # O __init__ retorna True se criou ou False se já existe
                             try:
-                                upload_instance = Upload(
+                                upload_instance = Upload.registrar(
                                     pai='ReembolsosDocumentos',
                                     pai_id=doc.id,
                                     tipo=4,
                                     filename=file.filename,
                                     mimetype=file.content_type or 'application/octet-stream',
-                                    blob=file_content  # Passar bytes, o __init__ converte para base64
+                                    blob=file_content,
                                 )
-                                
-                                # O __init__ retorna True/False, mas o objeto self foi modificado
-                                # Buscar o upload criado ou existente
-                                upload = Upload.query.filter_by(
-                                    pai='ReembolsosDocumentos',
-                                    pai_id=doc.id,
-                                    tipo=4,
-                                    filename=file.filename,
-                                    mimetype=file.content_type or 'application/octet-stream'
-                                ).first()
+                                upload = upload_instance
                                 
                                 if upload:
                                     anexos_processados += 1
@@ -1487,8 +1476,7 @@ def adicionar_documentos_nota():
                 file_content = file.read()
                 file_base64 = base64.b64encode(file_content).decode('utf-8')
 
-                # Criar upload
-                upload = Upload(
+                Upload.registrar(
                     pai='NotasFiscais',
                     pai_id=nota_id,
                     tipo=2,
@@ -1496,7 +1484,6 @@ def adicionar_documentos_nota():
                     mimetype=file.content_type,
                     blob=file_base64
                 )
-                upload.save()
 
         return jsonify({'success': True})
     except Exception as e:

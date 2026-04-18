@@ -144,7 +144,7 @@ def process_foto_uploads(
             continue
         safe = secure_filename(f.filename) or "foto"
         unique_name = f"eq{equipamento_id}_{uuid.uuid4().hex[:12]}_{safe}"
-        Upload(
+        reg = Upload.registrar(
             pai=PAI_EQUIPAMENTO,
             pai_id=equipamento_id,
             tipo=TIPO_FOTO_EQUIPAMENTO,
@@ -152,12 +152,6 @@ def process_foto_uploads(
             mimetype=mt,
             blob=raw,
         )
-        reg = Upload.query.filter_by(
-            pai=PAI_EQUIPAMENTO,
-            pai_id=equipamento_id,
-            tipo=TIPO_FOTO_EQUIPAMENTO,
-            filename=unique_name,
-        ).first()
-        if reg:
+        if reg and reg.id:
             new_ids.append(reg.id)
     return new_ids

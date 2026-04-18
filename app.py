@@ -23,7 +23,7 @@ from controllers.cadastros import (
     tanque_bp,
     usuario_bp,
 )
-from controllers.nota_fiscal_controller import nota_fiscal_bp
+from controllers.nota_fiscal import nota_fiscal_bp
 from controllers.estoque_controller import estoque_bp
 from controllers.inventario_controller import inventario_bp
 from controllers.estoque_terceiro_controller import estoque_terceiro_bp
@@ -59,7 +59,7 @@ from controllers.upload_controller import upload_bp
 from controllers.pedido_compra_controller import pedido_compra_bp
 
 
-from controllers.relatorios.acabamento_pecas_controller import acabamento_pecas_bp
+from controllers.relatorios.acabamento_pecas import acabamento_pecas_bp
 from controllers.relatorios.concretagem_pecas_controller import concretagem_pecas_bp
 from controllers.relatorios.notas_controller import notas_bp
 from controllers.relatorios.tanques_controller import tanques_bp

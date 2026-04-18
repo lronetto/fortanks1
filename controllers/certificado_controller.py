@@ -1,1 +1,0 @@
-from controllers.cadastro_operacional.certificado_controller import *

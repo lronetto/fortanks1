@@ -1,0 +1,1098 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Notas Fiscais{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <!-- Cabeçalho -->
+    <div class="nf-page-header d-flex justify-content-between align-items-start flex-wrap gap-3">
+        <div>
+            <h1 class="nf-page-title">
+                <i class="fas fa-file-invoice me-2" style="font-size:1.3rem; color: var(--nf-amber);"></i>Gestão de Notas Fiscais
+            </h1>
+            <p class="nf-page-subtitle">Visualize e gerencie todas as notas fiscais do sistema.</p>
+        </div>
+        <div class="nf-btn-bar">
+            <button type="button" class="btn btn-primary btn-importar-arquivei">
+                <i class="fas fa-cloud-download-alt me-1"></i> Importar Arquivei
+            </button>
+            <button type="button" class="btn btn-outline-secondary" data-bs-toggle="modal" data-bs-target="#modalImportarXML">
+                <i class="fas fa-file-upload me-1"></i> Importar XML
+            </button>
+            {% if current_user.is_admin %}
+            <a href="{{ url_for('nota_fiscal.importar_todas_pendentes') }}" class="btn btn-warning" id="btnImportarTodasPendentes">
+                <i class="fas fa-file-import me-1"></i> Pendentes
+            </a>
+            <a href="{{ url_for('nota_fiscal.reprocessar_importacao') }}" class="btn btn-warning" id="btnReprocessarImportacao">
+                <i class="fas fa-sync-alt me-1"></i> Reprocessar
+            </a>
+            {% endif %}
+            <a href="{{ url_for('nota_fiscal.analise') }}" class="btn btn-info">
+                <i class="fas fa-chart-bar me-1"></i> Análise
+            </a>
+            <div class="dropdown">
+                <button class="btn btn-success dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+                    <i class="fas fa-file-export me-1"></i> Exportar
+                </button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li>
+                        <button class="dropdown-item" id="btnExportarExcel">
+                            <i class="fas fa-file-excel text-success me-2"></i> Excel
+                        </button>
+                    </li>
+                    <li>
+                        <button class="dropdown-item" id="btnExportarSped" title="Exportar CTE para SPED">
+                            <i class="fas fa-file-export text-primary me-2"></i> SPED (CTE)
+                        </button>
+                    </li>
+                    <li>
+                        <button class="dropdown-item" id="btnExportarZip">
+                            <i class="fas fa-file-archive text-warning me-2"></i> ZIP
+                        </button>
+                    </li>
+                    <li><hr class="dropdown-divider"></li>
+                    <li>
+                        <button class="dropdown-item" id="btnExportarPdf">
+                            <i class="fas fa-file-pdf text-danger me-2"></i> PDF (originais selecionados)
+                        </button>
+                    </li>
+                </ul>
+            </div>
+            <button type="button" class="btn btn-outline-secondary" id="btnVerificarCanceladas" title="Verifica no Arquivei se as notas do período do filtro foram canceladas">
+                <i class="fas fa-ban me-1"></i> Verificar canceladas
+            </button>
+        </div>
+    </div>
+
+    <!-- Filtros -->
+    <div class="card nf-filter-card mb-4">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <span class="card-title-text"><i class="fas fa-filter me-2"></i>Filtros</span>
+            <button type="button" class="btn btn-sm btn-outline-secondary" id="btnToggleFiltrosNotasFiscais" aria-expanded="true" aria-controls="collapseFiltrosNotasFiscais">
+                <i class="fas fa-eye-slash"></i> Ocultar
+            </button>
+        </div>
+        <div class="collapse show" id="collapseFiltrosNotasFiscais">
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('nota_fiscal.index') }}" class="row g-3" id="filtrosNotasFiscais">
+                <div class="col-md-3">
+                    <label for="busca" class="form-label">Busca</label>
+                    <input type="text" name="busca" id="busca" class="form-control" 
+                           placeholder="Número, emitente ou chave de acesso" value="{{ request.args.get('busca', '') }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="item_nome" class="form-label">Nome do Item</label>
+                    <input type="text" name="item_nome" id="item_nome" class="form-control"
+                           placeholder="Filtrar por nome de item" value="{{ request.args.get('item_nome', '') }}">
+                </div>
+                
+                <div class="col-md-3">
+                    <label for="emitente" class="form-label">Emitente</label>
+                    <select name="emitente" id="emitente" class="form-select">
+                        <option value="" {% if not request.args.get('emitente') %}selected{% endif %}>Todos</option>
+                        <option value="Terceiros" {% if request.args.get('emitente') == 'terceiros' %}selected{% endif %}>Terceiros</option>
+                        <option value="Matriz" {% if request.args.get('emitente') == 'Matriz' %}selected{% endif %}>Matriz</option>
+                        <option value="Filiais" {% if request.args.get('emitente') == 'Filiais' %}selected{% endif %}>Filiais</option>
+                        <option value="Matriz_Filiais" {% if request.args.get('emitente') == 'Matriz_Filiais' %}selected{% endif %}>Matriz e Filiais</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="destinatario" class="form-label">Destinatário</label>
+                    <select name="destinatario" id="destinatario" class="form-select">
+                        <option value="" {% if not request.args.get('destinatario') %}selected{% endif %}>Todos</option>
+                        <option value="Terceiros" {% if request.args.get('destinatario') == 'terceiros' %}selected{% endif %}>Terceiros</option>
+                        <option value="Matriz" {% if request.args.get('destinatario') == 'Matriz' %}selected{% endif %}>Matriz</option>
+                        <option value="Filiais" {% if request.args.get('destinatario') == 'Filiais' %}selected{% endif %}>Filiais</option>
+                        <option value="Matriz_Filiais" {% if request.args.get('destinatario') == 'Matriz_Filiais' %}selected{% endif %}>Matriz e Filiais</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="status_cancelada" class="form-label">Status</label>
+                    <select name="cancelada" id="status_cancelada" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="canceladas" {% if request.args.get('cancelada') == 'canceladas' %}selected{% endif %}>Canceladas</option>
+                        <option value="nao_canceladas" {% if request.args.get('cancelada', 'nao_canceladas') == 'nao_canceladas' %}selected{% endif %}>Não canceladas</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="status_importacao" class="form-label">Status de Importação</label>
+                    <select name="status_importacao" id="status_importacao" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="importadas" {% if status_importacao == 'importadas' %}selected{% endif %}>Importadas</option>
+                        <option value="parciais" {% if status_importacao == 'parciais' %}selected{% endif %}>Parcialmente Importadas</option>
+                        <option value="pendentes" {% if status_importacao == 'pendentes' %}selected{% endif %}>Pendentes</option>
+                    </select>
+                </div>
+                
+                <div class="col-md-3">
+                    <label for="status_pagamento" class="form-label">Status de Pagamento</label>
+                    <select name="status_pagamento" id="status_pagamento" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="pago" {% if request.args.get('status_pagamento') == 'pago' %}selected{% endif %}>Pago</option>
+                        <option value="nao_pago" {% if request.args.get('status_pagamento') == 'nao_pago' %}selected{% endif %}>Não Pago</option>
+                        <option value="com_faturamento" {% if request.args.get('status_pagamento') == 'com_faturamento' %}selected{% endif %}>Com Faturamento</option>
+                        <option value="vencido" {% if request.args.get('status_pagamento') == 'vencido' %}selected{% endif %}>Vencido</option>
+                        <option value="vencido_nao_pago" {% if request.args.get('status_pagamento') == 'vencido_nao_pago' %}selected{% endif %}>Vencido e Não Pago</option>
+
+
+
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="status_upload" class="form-label">Status Upload</label>
+                    <select name="status_upload" id="status_upload" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="1" {% if status_upload == '1' %}selected{% endif %}>Arquivei</option>
+                        <option value="2" {% if status_upload == '2' %}selected{% endif %}>Protocolo</option>
+                        <option value="3" {% if status_upload == '3' %}selected{% endif %}>Reembolso</option>
+                        <option value="4" {% if status_upload == '4' %}selected{% endif %}>Sem Protocolo</option>
+                        <option value="5" {% if status_upload == '5' %}selected{% endif %}>Nenhum</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="status_liberacao" class="form-label">Status de Liberação</label>
+                    <select name="status_liberacao" id="status_liberacao" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="liberada" {% if request.args.get('status_liberacao') == 'liberada' %}selected{% endif %}>Liberada</option>
+                        <option value="nao_liberada" {% if request.args.get('status_liberacao') == 'nao_liberada' %}selected{% endif %}>Não Liberada</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="data_emissao_inicio" class="form-label">Data Emissão (Início)</label>
+                    <input type="date" name="data_emissao_inicio" id="data_emissao_inicio" class="form-control" value="{{ request.args.get('data_emissao_inicio', '') }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="data_emissao_fim" class="form-label">Data Emissão (Fim)</label>
+                    <input type="date" name="data_emissao_fim" id="data_emissao_fim" class="form-control" value="{{ request.args.get('data_emissao_fim', '') }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="tipo_nfe" class="form-label">Tipo de NFe</label>
+                    <select name="tipo_nfe" id="tipo_nfe" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="0" {% if request.args.get('tipo_nfe', '') == '0' %}selected{% endif %}>Nota Fiscal</option>
+                        <option value="2" {% if request.args.get('tipo_nfe', '') == '2' %}selected{% endif %}>CTE</option>
+                        <option value="3" {% if request.args.get('tipo_nfe', '') == '3' %}selected{% endif %}>NFSe</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="tipo_operacao" class="form-label">Tipo de Operação</label>
+                    <select name="tipo_operacao" id="tipo_operacao" class="form-select">
+                        <option value="">Todos</option>
+                        <option value="compra" {% if request.args.get('tipo_operacao', '') == 'compra' %}selected{% endif %}>Compra</option>
+                        <option value="venda" {% if request.args.get('tipo_operacao', '') == 'venda' %}selected{% endif %}>Venda</option>
+                        <option value="transferencia" {% if request.args.get('tipo_operacao', '') == 'transferencia' %}selected{% endif %}>Transferência</option>
+                    </select>
+                </div>
+                <!-- Filtros extras para CTE -->
+                <div class="col-md-3 cte-extra-filtro" id="filtro-origem" style="display: none;">
+                    <label for="origem" class="form-label">Origem (Município)</label>
+                    <input type="text" name="origem" id="origem" class="form-control" placeholder="Município de origem" value="{{ origem|default('') }}">
+                </div>
+                <div class="col-md-3 cte-extra-filtro" id="filtro-destino" style="display: none;">
+                    <label for="destino" class="form-label">Destino (Município)</label>
+                    <input type="text" name="destino" id="destino" class="form-control" placeholder="Município de destino" value="{{ destino|default('') }}">
+                </div>
+                <div class="col-md-3 cte-extra-filtro" id="filtro-remetente" style="display: none;">
+                    <label for="remetente" class="form-label">Remetente</label>
+                    <input type="text" name="remetente" id="remetente" class="form-control" placeholder="Nome do remetente" value="{{ remetente|default('') }}">
+                </div>
+                
+                <div class="col-md-3">
+                    <label for="cnpj_emitente" class="form-label">CNPJ Emitente</label>
+                    <input type="text" name="cnpj_emitente" id="cnpj_emitente" class="form-control" placeholder="Digite o CNPJ do emitente" value="{{ request.args.get('cnpj_emitente', '') }}">
+                </div>
+                <div class="col-md-3">
+                    <label for="cnpj_destinatario" class="form-label">CNPJ Destinatário</label>
+                    <input type="text" name="cnpj_destinatario" id="cnpj_destinatario" class="form-control" placeholder="Digite o CNPJ do destinatário" value="{{ request.args.get('cnpj_destinatario', '') }}">
+                </div>
+                <div class="col-md-3 d-flex align-items-end">
+                    <div class="btn-group">
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-search"></i> Filtrar
+                        </button>
+                        <a href="{{ url_for('nota_fiscal.index') }}" class="btn btn-secondary">
+                            <i class="fas fa-sync"></i> Limpar
+                        </a>
+                    </div>
+                </div>
+            </form>
+        </div>
+        </div>
+    </div>
+
+
+    <!-- Incluir template de mensagens flash -->
+  
+
+    <!-- Lista de Notas Fiscais -->
+    <div class="card nf-table-card" data-ft-colvis="tabelaNotasFiscais">
+        <div class="card-header d-flex align-items-center justify-content-between">
+            <span class="card-title-text"><i class="fas fa-list me-2"></i>Notas Fiscais</span>
+            <div class="ft-col-toggle-placeholder"></div>
+        </div>
+        <div class="card-body">
+            <div class="ft-datatable-wrapper">
+                <table class="table table-bordered nf-datatable" id="tabelaNotasFiscais" style="width:100%">
+                    <thead>
+                        <tr>
+                            <th width="40"><input type="checkbox" class="form-check-input" id="selectAllNotas" title="Selecionar todos da página" aria-label="Selecionar todos"></th>
+                            <th class="col-numero-nf"><span class="th-wrap">Número<br>NF</span></th>
+                            <th>Tipo</th>
+                            <th>Data Emissão</th>
+                            <th>Data Vencimento</th>
+                            <th>Emitente</th>
+                            <th>Destinatário</th>
+                            <th>Fornecedor</th>
+                            <th>Valor Total</th>
+                            <th>Status</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <!-- Dados carregados via AJAX -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Incluir Modais -->
+{% include 'notas_fiscais/nota_fiscal/modais/documentos.html' %}
+{% include 'notas_fiscais/nota_fiscal/modais/importar_itens.html' %}
+{% include 'materiais/modais/novo_material.html' %}
+{% include 'notas_fiscais/nota_fiscal/modais/visualizar_itens.html' %}
+{% include 'notas_fiscais/nota_fiscal/modais/selecionar_material.html' %}
+{% include 'notas_fiscais/nota_fiscal/modais/conversao_unidades.html' %}
+{% include 'notas_fiscais/nota_fiscal/modais/importar_arquivei.html' %}
+{% include 'notas_fiscais/nota_fiscal/modais/importar_xml.html' %}
+{% include 'notas_fiscais/nota_fiscal/modais/exportar_zip.html' %}
+{% include 'notas_fiscais/nota_fiscal/modais/excluir_nota.html' %}
+{% include 'notas_fiscais/nota_fiscal/modais/liberar_nota.html' %}
+{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.3/dist/sweetalert2.min.css">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/notas_fiscais.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', filename='css/notas_fiscais.css') }}">
+{% endblock %}
+
+{% block extra_js %}
+<!-- SweetAlert2 para diálogos -->
+<script src="https://cdn.jsdelivr.net/npm/sweetalert2@11.7.3/dist/sweetalert2.all.min.js"></script>
+<!-- JavaScript específico das notas fiscais -->
+<script>
+// Função auxiliar para mostrar alertas
+function mostrarAlerta(titulo, mensagem, tipo, callback) {
+    const iconMap = {
+        'success': 'success',
+        'error': 'error',
+        'warning': 'warning',
+        'info': 'info'
+    };
+    
+    Swal.fire({
+        icon: iconMap[tipo] || 'info',
+        title: titulo,
+        text: mensagem,
+        confirmButtonText: 'OK'
+    }).then((result) => {
+        if (callback && typeof callback === 'function') {
+            callback();
+        }
+    });
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const LS_KEY_FILTROS = 'nf_notas_fiscais_filtros_hidden_v1';
+
+    function atualizarBotaoFiltrosNotasFiscais(estaOculto) {
+        const $btn = $('#btnToggleFiltrosNotasFiscais');
+        if (!$btn.length) return;
+        if (estaOculto) {
+            $btn.html('<i class="fas fa-eye"></i> Mostrar filtros');
+            $btn.attr('aria-expanded', 'false');
+        } else {
+            $btn.html('<i class="fas fa-eye-slash"></i> Ocultar filtros');
+            $btn.attr('aria-expanded', 'true');
+        }
+    }
+
+    // Estado inicial dos filtros (persistido)
+    try {
+        const filtrosHidden = localStorage.getItem(LS_KEY_FILTROS) === '1';
+        if (filtrosHidden) {
+            const el = document.getElementById('collapseFiltrosNotasFiscais');
+            if (el) bootstrap.Collapse.getOrCreateInstance(el, { toggle: false }).hide();
+        }
+        atualizarBotaoFiltrosNotasFiscais(filtrosHidden);
+    } catch (e) {
+        atualizarBotaoFiltrosNotasFiscais(false);
+    }
+
+    // Toggle filtros
+    $('#btnToggleFiltrosNotasFiscais').on('click', function() {
+        const el = document.getElementById('collapseFiltrosNotasFiscais');
+        if (!el) return;
+        const collapse = bootstrap.Collapse.getOrCreateInstance(el, { toggle: false });
+        const vaiOcultar = el.classList.contains('show'); // se está mostrando, vai ocultar
+        if (vaiOcultar) collapse.hide();
+        else collapse.show();
+        atualizarBotaoFiltrosNotasFiscais(vaiOcultar);
+        try { localStorage.setItem(LS_KEY_FILTROS, vaiOcultar ? '1' : '0'); } catch (e) {}
+    });
+
+    // Mostrar/ocultar filtros extras de CTE
+    function toggleCteFilters() {
+        var tipo = $('#tipo_nfe').val();
+        if (tipo === '2') {
+            $('.cte-extra-filtro').show();
+        } else {
+            $('.cte-extra-filtro').hide();
+        }
+    }
+    $('#tipo_nfe').on('change', toggleCteFilters);
+    toggleCteFilters(); // Executa ao carregar a página
+
+    // Exportar para Excel
+    $('#btnExportarExcel').on('click', function() {
+        params = $('#filtrosNotasFiscais').serialize();
+        url = "exportar-excel?" + params;
+        window.location.href = url;
+    });
+    // Exportar SPED (CTE - abas Dentro do Estado e Fora do Estado)
+    $('#btnExportarSped').on('click', function() {
+        params = $('#filtrosNotasFiscais').serialize();
+        url = "exportar-sped?" + params;
+        window.location.href = url;
+    });
+    $('#btnExportarZip').on('click', function() {
+        // Abrir modal ao invés de redirecionar
+        var modal = new bootstrap.Modal(document.getElementById('modalExportarZip'));
+        modal.show();
+    });
+
+    // Selecionar / desmarcar todos os checkboxes da página (DataTables)
+    $(document).on('change', '#selectAllNotas', function() {
+        var checked = this.checked;
+        $('#tabelaNotasFiscais').find('.nf-checkbox').each(function() {
+            this.checked = checked;
+        });
+    });
+
+    // Exportar PDF: junção dos PDFs originais (tipo 1) das notas selecionadas
+    $('#btnExportarPdf').on('click', function() {
+        var ids = [];
+        $('#tabelaNotasFiscais').find('.nf-checkbox:checked').each(function() {
+            var id = $(this).data('id') || $(this).val();
+            if (id) ids.push(id);
+        });
+        if (ids.length === 0) {
+            mostrarAlerta('Atenção', 'Selecione ao menos uma nota fiscal para exportar o PDF.', 'warning');
+            return;
+        }
+        var csrf = $('meta[name="csrf-token"]').attr('content') || $('input[name="csrf_token"]').first().val();
+        var formData = new FormData();
+        if (csrf) formData.append('csrf_token', csrf);
+        ids.forEach(function(id) { formData.append('ids[]', id); });
+        $.ajax({
+            url: '{{ url_for("nota_fiscal.exportar_pdf_originais") }}',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            xhrFields: { responseType: 'blob' },
+            success: function(blob, status, xhr) {
+                var contentType = xhr.getResponseHeader('Content-Type') || '';
+                if (contentType.indexOf('application/json') === 0) {
+                    var reader = new FileReader();
+                    reader.onload = function() {
+                        try {
+                            var json = JSON.parse(reader.result);
+                            mostrarAlerta('Erro', json.message || 'Erro ao exportar PDF.', 'error');
+                        } catch (e) {
+                            mostrarAlerta('Erro', 'Resposta inválida do servidor.', 'error');
+                        }
+                    };
+                    reader.readAsText(blob);
+                    return;
+                }
+                var nome = 'notas_fiscais_originais.pdf';
+                var disp = xhr.getResponseHeader('Content-Disposition');
+                if (disp && disp.indexOf('filename=') !== -1) {
+                    var m = disp.match(/filename="?([^";]+)"?/);
+                    if (m) nome = m[1].trim();
+                }
+                var url = window.URL.createObjectURL(blob);
+                var a = document.createElement('a');
+                a.href = url;
+                a.download = nome;
+                document.body.appendChild(a);
+                a.click();
+                window.URL.revokeObjectURL(url);
+                a.remove();
+            },
+            error: function(xhr) {
+                var msg = 'Erro ao exportar PDF.';
+                if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                else if (xhr.responseText) {
+                    try {
+                        var j = JSON.parse(xhr.responseText);
+                        if (j.message) msg = j.message;
+                    } catch (e) {}
+                }
+                mostrarAlerta('Erro', msg, 'error');
+            }
+        });
+    });
+    
+    // Verificar notas canceladas no período do filtro (consulta Arquivei)
+    $('#btnVerificarCanceladas').on('click', function() {
+        var dataInicio = $('#data_emissao_inicio').val();
+        var dataFim = $('#data_emissao_fim').val();
+        if (!dataInicio || !dataFim) {
+            mostrarAlerta('Período obrigatório', 'Informe Data Emissão (Início) e (Fim) nos filtros para verificar notas canceladas no período.', 'warning');
+            return;
+        }
+        var $btn = $('#btnVerificarCanceladas').prop('disabled', true);
+        var icon = $btn.find('i');
+        icon.removeClass('fa-ban').addClass('fa-spinner fa-spin');
+        $.ajax({
+            url: '{{ url_for("nota_fiscal.verificar_notas_canceladas") }}',
+            type: 'GET',
+            data: {
+                data_emissao_inicio: dataInicio,
+                data_emissao_fim: dataFim
+            },
+            success: function(response) {
+                if (response.success) {
+                    mostrarAlerta('Verificação concluída', response.message, 'success', function() {
+                        if (response.marcadas_canceladas > 0 && typeof table !== 'undefined') {
+                            table.ajax.reload();
+                        }
+                    });
+                } else {
+                    mostrarAlerta('Atenção', response.message, 'warning');
+                }
+            },
+            error: function(xhr) {
+                var msg = 'Erro ao verificar notas canceladas.';
+                if (xhr.responseJSON && xhr.responseJSON.message) msg = xhr.responseJSON.message;
+                else if (xhr.responseText) {
+                    try {
+                        var j = JSON.parse(xhr.responseText);
+                        if (j.message) msg = j.message;
+                    } catch (e) {}
+                }
+                mostrarAlerta('Erro', msg, 'error');
+            },
+            complete: function() {
+                $btn.prop('disabled', false);
+                icon.removeClass('fa-spinner fa-spin').addClass('fa-ban');
+            }
+        });
+    });
+
+    $('#btnReprocessarImportacao').on('click', function() {
+        $.ajax({    
+            url: '/notas-fiscais/reprocessar-importacao',
+            type: 'GET',  
+            success: function(response) {
+                console.log(response);
+                if (response.success) {
+                    mostrarAlerta('Sucesso', response.message, 'success');
+                    table.ajax.reload(); // Recarregar tabela após reprocessar
+                } else {
+                    mostrarAlerta('Erro', response.message, 'error');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Erro ao reprocessar importação:', error);
+                mostrarAlerta('Erro', 'Erro ao reprocessar importação: ' + error, 'error');
+            }
+        });
+    });
+
+    // ===== MODAL DE EXCLUSÃO DE NOTA FISCAL =====
+    // Abrir modal de exclusão (usando delegação de eventos para funcionar com DataTables)
+    $(document).on('click', '.excluir-nota', function() {
+        const notaId = $(this).data('id');
+        const numeroNota = $(this).data('numero');
+        
+        $('#excluir_nf_id').val(notaId);
+        $('#numeroNotaExcluir').text(numeroNota);
+        
+        // Abrir modal usando Bootstrap 5
+        const modal = new bootstrap.Modal(document.getElementById('modalExcluirNota'));
+        modal.show();
+    });
+
+    // Confirmar exclusão de nota fiscal
+    $('#btnConfirmarExclusao').on('click', function() {
+        const notaId = $('#excluir_nf_id').val();
+        
+        // Obter token CSRF da meta tag ou do formulário
+        let csrfToken = $('meta[name="csrf-token"]').attr('content');
+        if (!csrfToken) {
+            csrfToken = $('#formExcluirNota input[name="csrf_token"]').val();
+        }
+        if (!csrfToken) {
+            csrfToken = $('input[name="csrf_token"]').first().val();
+        }
+        
+        if (!notaId) {
+            mostrarAlerta('Erro', 'ID da nota fiscal não encontrado', 'error');
+            return;
+        }
+
+        if (!csrfToken) {
+            mostrarAlerta('Erro', 'Token CSRF não encontrado. Recarregue a página e tente novamente.', 'error');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('csrf_token', csrfToken);
+        formData.append('nf_id', notaId);
+        
+        $.ajax({
+            url: '/notas-fiscais/api/excluir',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(response) {
+                if (response.success) {
+                    const modalExcluir = bootstrap.Modal.getInstance(document.getElementById('modalExcluirNota'));
+                    if (modalExcluir) modalExcluir.hide();
+                    
+                    mostrarAlerta('Sucesso', response.message, 'success', function() {
+                        // Recarregar DataTables após exclusão
+                        table.ajax.reload();
+                    });
+                } else {
+                    mostrarAlerta('Erro', response.message, 'error');
+                }
+            },
+            error: function(xhr, status, error) {
+                console.error('Erro ao excluir nota fiscal:', error);
+                let errorMsg = 'Erro ao excluir nota fiscal';
+                if (xhr.responseJSON && xhr.responseJSON.message) {
+                    errorMsg = xhr.responseJSON.message;
+                } else if (xhr.responseText) {
+                    try {
+                        const errorResponse = JSON.parse(xhr.responseText);
+                        if (errorResponse.message) {
+                            errorMsg = errorResponse.message;
+                        }
+                    } catch (e) {
+                        // Ignorar erro de parse
+                    }
+                }
+                mostrarAlerta('Erro', errorMsg, 'error');
+            }
+        });
+    });
+
+    // Liberar nota fiscal: abre modal com tipo de item e integração com Pedido de Compra
+    $(document).on('click', '.liberar-nota', function() {
+        const notaId = $(this).data('id');
+        const numeroNota = $(this).data('numero');
+        const liberada = $(this).data('liberada') == 1;
+        
+        if (liberada) {
+            // Desliberar: confirmação direta com SweetAlert
+            Swal.fire({
+                title: 'Confirmar ação',
+                text: `Deseja realmente desliberar a nota fiscal ${numeroNota}?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Sim',
+                cancelButtonText: 'Não',
+                confirmButtonColor: '#3085d6',
+                cancelButtonColor: '#d33'
+            }).then((result) => {
+                if (result.isConfirmed) {
+                    enviarLiberacao(notaId, null, null, null, null, null);
+                }
+            });
+        } else {
+            // Liberar: abrir modal para preencher tipo de item e (opcionalmente) registrar entrada em Pedido de Compra
+            $('#liberar_nf_id').val(notaId);
+            $('#numeroNotaLiberar').text(numeroNota);
+            $('#tipo_item_liberacao').val('');
+
+            // Reset integração pedido
+            $('#pedido_numero_liberacao').val('');
+            $('#pedido_lista_liberacao').empty();
+            $('#pedido_id_liberacao').val('');
+            $('#pedido_item_id_liberacao').html('<option value="">Selecione o item...</option>').prop('disabled', true);
+            $('#quantidade_entrada_liberacao').val('').prop('disabled', true);
+            $('#btnAdicionarItemLiberacao').prop('disabled', true);
+            $('#tabelaItensLiberacao tbody').html('<tr id="linhaSemItensLiberacao"><td colspan="4" class="text-center text-muted">Nenhum item adicionado.</td></tr>');
+            $('#pedidoFornecedorInfo').text('');
+            $('#pedidoItemSaldoInfo').text('');
+            window.itensPedidoDisponiveisLiberacao = [];
+
+            const modal = new bootstrap.Modal(document.getElementById('modalLiberarNota'));
+            modal.show();
+
+            // Buscar dados da nota para identificar fornecedor (CNPJ emitente)
+            fetch(`/notas-fiscais/api/visualizar/${notaId}`)
+                .then(r => r.json())
+                .then(nf => {
+                    const cnpjEmitente = (nf.cnpj_emitente || '').toString();
+                    const nomeEmitente = (nf.nome_emitente || '').toString();
+                    if (!cnpjEmitente) {
+                        $('#pedidoFornecedorInfo').text(`Fornecedor NF: ${nomeEmitente || 'N/A'} (CNPJ não informado)`);
+                        return;
+                    }
+
+                    // Carregar pedidos disponíveis para o fornecedor (por CNPJ)
+                    fetch(`/pedido_compra/api/pedidos-disponiveis?cnpj=${encodeURIComponent(cnpjEmitente)}`)
+                        .then(r => r.json())
+                        .then(resp => {
+                            const listaEl = $('#pedido_lista_liberacao');
+                            listaEl.empty();
+                            if (!resp || !resp.success) {
+                                $('#pedidoFornecedorInfo').text(`Fornecedor NF: ${nomeEmitente} (${cnpjEmitente}) - erro ao carregar pedidos.`);
+                                return;
+                            }
+                            const pedidos = resp.pedidos || [];
+                            if (!pedidos.length) {
+                                $('#pedidoFornecedorInfo').text(`Fornecedor NF: ${nomeEmitente} (${cnpjEmitente}) - nenhum pedido com saldo encontrado. Você pode liberar sem pedido.`);
+                                return;
+                            }
+
+                            window.pedidosDisponiveisPorNumero = {};
+                            pedidos.forEach(p => {
+                                const numero = p.numero || '';
+                                if (!numero) return;
+                                const opt = document.createElement('option');
+                                opt.value = numero;
+                                listaEl.append(opt);
+                                window.pedidosDisponiveisPorNumero[numero] = p.id;
+                            });
+                            $('#pedidoFornecedorInfo').text(`Fornecedor NF: ${nomeEmitente} (${cnpjEmitente}). Digite o número do pedido (ou deixe em branco).`);
+                        })
+                        .catch(() => {
+                            $('#pedidoFornecedorInfo').text(`Fornecedor NF: ${nomeEmitente} (${cnpjEmitente}) - erro ao carregar pedidos.`);
+                        });
+                })
+                .catch(() => {
+                    $('#pedido_id_liberacao').html('<option value="">Erro ao carregar dados da NF</option>');
+                });
+        }
+    });
+
+    // Sempre que o número do pedido mudar, sincronizar o ID escondido
+    $('#pedido_numero_liberacao').on('change blur', function() {
+        const numero = ($(this).val() || '').trim();
+        const mapa = window.pedidosDisponiveisPorNumero || {};
+        const id = mapa[numero] || '';
+        $('#pedido_id_liberacao').val(id);
+        // Disparar fluxo de carregamento de itens
+        $(document).trigger('pedido-liberacao-id-change');
+    });
+
+    // Ao mudar o ID efetivo de pedido, carregar itens disponíveis (saldo > 0)
+    $(document).on('pedido-liberacao-id-change', function() {
+        const pedidoId = $('#pedido_id_liberacao').val();
+        $('#pedido_item_id_liberacao').html('<option value="">Carregando itens...</option>').prop('disabled', true);
+        $('#quantidade_entrada_liberacao').val('').prop('disabled', true);
+        $('#btnAdicionarItemLiberacao').prop('disabled', true);
+        $('#pedidoItemSaldoInfo').text('');
+        window.itensPedidoDisponiveisLiberacao = [];
+
+        if (!pedidoId) {
+            $('#pedido_item_id_liberacao').html('<option value="">Selecione o item...</option>').prop('disabled', true);
+            return;
+        }
+
+        fetch(`/pedido_compra/api/itens-disponiveis?pedido_id=${encodeURIComponent(pedidoId)}`)
+            .then(r => r.json())
+            .then(resp => {
+                if (!resp || !resp.success) {
+                    $('#pedido_item_id_liberacao').html('<option value="">Erro ao carregar itens</option>').prop('disabled', true);
+                    return;
+                }
+                const itens = resp.itens || [];
+                window.itensPedidoDisponiveisLiberacao = itens;
+                if (!itens.length) {
+                    $('#pedido_item_id_liberacao').html('<option value="">Sem itens com saldo</option>').prop('disabled', true);
+                    return;
+                }
+                let options = '<option value="">Selecione o item...</option>';
+                itens.forEach(i => {
+                    const label = `${i.material_nome || 'Material'} - Saldo: ${i.saldo} ${i.unidade || ''}`;
+                    options += `<option value="${i.id}" data-saldo="${i.saldo}" data-nome="${i.material_nome || 'Material'}" data-unidade="${i.unidade || ''}">${label}</option>`;
+                });
+                $('#pedido_item_id_liberacao').html(options).prop('disabled', false);
+            })
+            .catch(() => {
+                $('#pedido_item_id_liberacao').html('<option value="">Erro ao carregar itens</option>').prop('disabled', true);
+            });
+    });
+
+    // Ao escolher item, habilitar quantidade e mostrar saldo
+    $('#pedido_item_id_liberacao').on('change', function() {
+        const opt = $(this).find('option:selected');
+        const saldo = opt.data('saldo');
+        if (!opt.val()) {
+            $('#quantidade_entrada_liberacao').val('').prop('disabled', true);
+            $('#btnAdicionarItemLiberacao').prop('disabled', true);
+            $('#pedidoItemSaldoInfo').text('');
+            return;
+        }
+        $('#quantidade_entrada_liberacao').prop('disabled', false);
+        $('#btnAdicionarItemLiberacao').prop('disabled', false);
+        $('#pedidoItemSaldoInfo').text(`Saldo disponível: ${saldo}`);
+    });
+
+    $('#btnAdicionarItemLiberacao').on('click', function() {
+        const pedidoItemId = $('#pedido_item_id_liberacao').val();
+        const qtdEntradaRaw = $('#quantidade_entrada_liberacao').val();
+        const opt = $('#pedido_item_id_liberacao option:selected');
+        const saldo = parseFloat(opt.data('saldo') || 0);
+        const materialNome = (opt.data('nome') || 'Material').toString();
+        const unidade = (opt.data('unidade') || '').toString();
+        const qtdEntrada = parseFloat(qtdEntradaRaw);
+
+        if (!pedidoItemId) {
+            mostrarAlerta('Erro', 'Selecione um item do pedido.', 'error');
+            return;
+        }
+        if (!qtdEntradaRaw || isNaN(qtdEntrada) || qtdEntrada <= 0) {
+            mostrarAlerta('Erro', 'Informe uma quantidade de entrada válida.', 'error');
+            return;
+        }
+        if (qtdEntrada > saldo) {
+            mostrarAlerta('Erro', `Quantidade de entrada maior que o saldo disponível (${saldo}).`, 'error');
+            return;
+        }
+
+        const tbody = $('#tabelaItensLiberacao tbody');
+        $('#linhaSemItensLiberacao').remove();
+
+        const linha = `
+            <tr data-pedido-item-id="${pedidoItemId}" data-quantidade="${qtdEntrada}">
+                <td>${materialNome}${unidade ? ` (${unidade})` : ''}</td>
+                <td class="text-end">${saldo}</td>
+                <td class="text-end">${qtdEntrada}</td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-sm btn-outline-danger btn-remover-item-liberacao">
+                        Remover
+                    </button>
+                </td>
+            </tr>
+        `;
+        tbody.append(linha);
+
+        $('#pedido_item_id_liberacao').val('');
+        $('#quantidade_entrada_liberacao').val('').prop('disabled', true);
+        $('#btnAdicionarItemLiberacao').prop('disabled', true);
+        $('#pedidoItemSaldoInfo').text('');
+    });
+
+    $(document).on('click', '.btn-remover-item-liberacao', function() {
+        $(this).closest('tr').remove();
+        if (!$('#tabelaItensLiberacao tbody tr').length) {
+            $('#tabelaItensLiberacao tbody').html('<tr id="linhaSemItensLiberacao"><td colspan="4" class="text-center text-muted">Nenhum item adicionado.</td></tr>');
+        }
+    });
+
+    // Confirmar liberação (submit do modal)
+    $('#btnConfirmarLiberacao').on('click', function() {
+        const notaId = $('#liberar_nf_id').val();
+        const tipoItem = $('#tipo_item_liberacao').val();
+        if (!notaId) {
+            mostrarAlerta('Erro', 'ID da nota fiscal não encontrado.', 'error');
+            return;
+        }
+
+        const pedidoId = $('#pedido_id_liberacao').val();
+        const itensEntrada = [];
+        $('#tabelaItensLiberacao tbody tr[data-pedido-item-id]').each(function() {
+            itensEntrada.push({
+                pedido_item_id: $(this).data('pedido-item-id'),
+                quantidade_entrada: $(this).data('quantidade')
+            });
+        });
+
+        if (pedidoId && !itensEntrada.length) {
+            mostrarAlerta('Erro', 'Adicione ao menos um item do pedido com quantidade de entrada.', 'error');
+            return;
+        }
+
+        enviarLiberacao(notaId, tipoItem || null, null, pedidoId || null, itensEntrada, function() {
+            const modalLib = bootstrap.Modal.getInstance(document.getElementById('modalLiberarNota'));
+            if (modalLib) modalLib.hide();
+        });
+    });
+
+    function enviarLiberacao(nfId, tipoItem, pedidoCompra, pedidoId, itensEntrada, onSuccess) {
+        let csrfToken = $('meta[name="csrf-token"]').attr('content');
+        if (!csrfToken) csrfToken = $('input[name="csrf_token"]').first().val();
+        if (!csrfToken) {
+            mostrarAlerta('Erro', 'Token CSRF não encontrado. Recarregue a página e tente novamente.', 'error');
+            return;
+        }
+        const formData = new FormData();
+        formData.append('csrf_token', csrfToken);
+        formData.append('nf_id', nfId);
+        if (tipoItem != null) formData.append('tipo_item', tipoItem);
+        if (pedidoCompra != null) formData.append('pedido_compra', pedidoCompra);
+        if (pedidoId != null) formData.append('pedido_id', pedidoId);
+        if (Array.isArray(itensEntrada) && itensEntrada.length) {
+            formData.append('itens_entrada', JSON.stringify(itensEntrada));
+        }
+        $.ajax({
+            url: '/notas-fiscais/api/liberar',
+            type: 'POST',
+            data: formData,
+            processData: false,
+            contentType: false,
+            success: function(response) {
+                if (response.success) {
+                    if (typeof onSuccess === 'function') onSuccess();
+                    mostrarAlerta('Sucesso', response.message, 'success', function() {
+                        if (typeof table !== 'undefined') table.ajax.reload();
+                    });
+                } else {
+                    mostrarAlerta('Erro', response.message, 'error');
+                }
+            },
+            error: function(xhr) {
+                let errorMsg = 'Erro ao alterar status de liberação';
+                if (xhr.responseJSON && xhr.responseJSON.message) errorMsg = xhr.responseJSON.message;
+                else if (xhr.responseText) {
+                    try {
+                        const j = JSON.parse(xhr.responseText);
+                        if (j.message) errorMsg = j.message;
+                    } catch (e) {}
+                }
+                mostrarAlerta('Erro', errorMsg, 'error');
+            }
+        });
+    }
+    var TITULOS_NF = ['', 'Número NF', 'Tipo', 'Data Emissão', 'Data Vencimento', 'Emitente', 'Destinatário', 'Fornecedor', 'Valor Total', 'Status', 'Ações'];
+    let table = $('#tabelaNotasFiscais').DataTable(FT.dtOpcoes({
+        ajax: {
+            url: '/notas-fiscais/api/datatables',
+            type: 'GET',
+            data: function(d) {
+                let formData = $('#filtrosNotasFiscais').serializeArray();
+                formData.forEach(function(item) { d[item.name] = item.value; });
+            },
+            dataSrc: function(json) { return json.data; }
+        },
+        columns: [
+            { data: 0, name: 'select', orderable: false, searchable: false, className: 'text-center' },
+            { data: 1, name: 'numero_nf' },
+            { data: 2, name: 'tipo' },
+            { data: 3, name: 'data_emissao' },
+            { data: 4, name: 'vencimento' },
+            { data: 5, name: 'emitente' },
+            { data: 6, name: 'destinatario' },
+            { data: 7, name: 'fornecedor', orderable: false },
+            { data: 8, name: 'valor_total' },
+            { data: 9, name: 'status', orderable: false },
+            { data: 10, name: 'acoes', orderable: false, searchable: false }
+        ],
+        order: [[3, 'desc']],
+        pageLength: 50,
+        drawCallback: function() {
+            reiniciarEventosBotoes();
+            var $cb = $('#selectAllNotas');
+            if ($cb.length) $cb.prop('checked', false);
+        }
+    }));
+    FT.dtColunas.inicializar(table, 'tabelaNotasFiscais', TITULOS_NF);
+
+    function reiniciarEventosBotoes() {}
+
+    // ===== EVENTOS DOS BOTÕES DE AÇÃO (usando delegação para funcionar com DataTables) =====
+    
+    // Visualizar Itens
+    $(document).on('click', '.visualizar-itens', function() {
+        console.log('visualizar itens clicado');
+        const notaId = $(this).data('id');
+        
+        // Abrir modal
+        const modalElement = document.getElementById('modalVisualizarItens');
+        if (modalElement) {
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+            
+            // Tentar carregar itens - a função pode estar definida no modal
+            setTimeout(function() {
+                if (typeof carregarItensModal === 'function') {
+                    carregarItensModal(notaId);
+                } else if (window.carregarItensModal) {
+                    window.carregarItensModal(notaId);
+                } else {
+                    console.warn('Função carregarItensModal não encontrada');
+                }
+            }, 100);
+        }
+    });
+
+    // Importar Itens
+    $(document).on('click', '.importar-itens', function() {
+        console.log('importar itens clicado');
+        const notaId = $(this).data('id');
+        
+        const modalElement = document.getElementById('modalImportarItens');
+        if (modalElement) {
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+            $('#importacao_nf_id').val(notaId);
+            
+            // Carregar itens - a função pode estar definida no modal
+            setTimeout(function() {
+                if (typeof carregarItensImportacao === 'function') {
+                    carregarItensImportacao(notaId);
+                } else if (window.carregarItensImportacao) {
+                    window.carregarItensImportacao(notaId);
+                } else {
+                    console.warn('Função carregarItensImportacao não encontrada');
+                }
+            }, 100);
+        }
+    });
+
+    // Vincular Material
+    $(document).on('click', '.vincular-material', function() {
+        console.log('vincular material clicado');
+        const notaId = $(this).data('id');
+        // Abrir modal de vincular material se existir
+        const modalElement = document.getElementById('modalVincularMaterial');
+        if (modalElement) {
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+            // Configurar nota ID se necessário
+            if ($('#vincular_nf_id').length) {
+                $('#vincular_nf_id').val(notaId);
+            }
+        } else {
+            // Se não houver modal específico, pode ser que precise abrir o modal de importar itens
+            const modal = new bootstrap.Modal(document.getElementById('modalImportarItens'));
+            modal.show();
+            $('#importacao_nf_id').val(notaId);
+            if (typeof carregarItensImportacao === 'function') {
+                carregarItensImportacao(notaId);
+            }
+        }
+    });
+
+    // Visualizar Documentos
+    $(document).on('click', '.visualizar-docs', function() {
+        console.log('visualizar documentos clicado');
+        const notaId = $(this).data('id');
+        const numeroNf = $(this).data('numero');
+        console.log('ID da nota:', notaId, 'Número:', numeroNf);
+        
+        // Abrir modal de documentos
+        const modalElement = document.getElementById('modalDocumentos');
+        if (modalElement) {
+            const modal = new bootstrap.Modal(modalElement);
+            modal.show();
+            $('#modalDocumentosLabel').text(`Documentos da Nota Fiscal ${numeroNf}`);
+            $('#notaFiscalId').val(notaId);
+            
+            // Carregar documentos - a função pode estar definida no modal
+            setTimeout(function() {
+                if (typeof carregarDocumentos === 'function') {
+                    carregarDocumentos(notaId);
+                } else if (window.carregarDocumentos) {
+                    window.carregarDocumentos(notaId);
+                } else {
+                    console.warn('Função carregarDocumentos não encontrada');
+                }
+            }, 100);
+        }
+    });
+
+    // Cancelar / descancelar nota fiscal
+    $(document).on('click', '.cancelar-nota', function() {
+        const notaId = $(this).data('id');
+        const numeroNota = $(this).data('numero');
+        const estaCancelada = $(this).data('cancelada') == 1;
+
+        if (!notaId) {
+            mostrarAlerta('Erro', 'ID da nota fiscal não encontrado.', 'error');
+            return;
+        }
+
+        const titulo = estaCancelada ? 'Descancelar nota fiscal' : 'Cancelar nota fiscal';
+        const texto = estaCancelada
+            ? `Deseja realmente descancelar a nota fiscal ${numeroNota}?`
+            : `Deseja realmente cancelar a nota fiscal ${numeroNota}?`;
+
+        Swal.fire({
+            title: titulo,
+            text: texto,
+            icon: 'question',
+            showCancelButton: true,
+            confirmButtonText: 'Sim',
+            cancelButtonText: 'Não',
+            confirmButtonColor: '#3085d6',
+            cancelButtonColor: '#d33'
+        }).then((result) => {
+            if (!result.isConfirmed) {
+                return;
+            }
+
+            let csrfToken = $('meta[name="csrf-token"]').attr('content');
+            if (!csrfToken) {
+                csrfToken = $('input[name="csrf_token"]').first().val();
+            }
+            if (!csrfToken) {
+                mostrarAlerta('Erro', 'Token CSRF não encontrado. Recarregue a página e tente novamente.', 'error');
+                return;
+            }
+
+            const formData = new FormData();
+            formData.append('csrf_token', csrfToken);
+            formData.append('nf_id', notaId);
+
+            $.ajax({
+                url: '/notas-fiscais/api/cancelar',
+                type: 'POST',
+                data: formData,
+                processData: false,
+                contentType: false,
+                success: function(response) {
+                    if (response.success) {
+                        mostrarAlerta('Sucesso', response.message, 'success', function() {
+                            if (typeof table !== 'undefined') {
+                                table.ajax.reload(null, false);
+                            }
+                        });
+                    } else {
+                        mostrarAlerta('Erro', response.message || 'Não foi possível alterar o status da nota fiscal.', 'error');
+                    }
+                },
+                error: function(xhr) {
+                    let msg = 'Erro ao alterar status de cancelamento da nota fiscal.';
+                    if (xhr.responseJSON && xhr.responseJSON.message) {
+                        msg = xhr.responseJSON.message;
+                    } else if (xhr.responseText) {
+                        try {
+                            const j = JSON.parse(xhr.responseText);
+                            if (j.message) msg = j.message;
+                        } catch (e) {}
+                    }
+                    mostrarAlerta('Erro', msg, 'error');
+                }
+            });
+        });
+    });
+
+    // Submeter filtros via AJAX (recarregar DataTables)
+    $('#filtrosNotasFiscais').on('submit', function(e) {
+        e.preventDefault();
+        table.ajax.reload();
+    });
+});
+</script>
+{% endblock %} 

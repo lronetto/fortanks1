@@ -187,7 +187,7 @@ def salvar():
             mimetype = file.mimetype or 'application/octet-stream'
             blob_bytes = file.read()
             filename = 'PedidoCompra_'+str(pedido.id)+'_'+str(i+1)+'.pdf'
-            Upload(pai='PedidoCompra', pai_id=pedido.id, tipo=7, filename=filename, mimetype=mimetype, blob=blob_bytes)
+            Upload.registrar(pai='PedidoCompra', pai_id=pedido.id, tipo=7, filename=filename, mimetype=mimetype, blob=blob_bytes)
             
 
         db.session.commit()

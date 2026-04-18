@@ -11,7 +11,7 @@ logger = logging.getLogger(__name__)
 def _health_itens_estoque():
     """
     Healthcheck simples para manter o arquivo com uma rota (evita arquivo vazio).
-    As rotas de API deste domínio foram movidas para `controllers/api/nota_fiscal_api.py`.
+    As rotas de API deste domínio foram movidas para `controllers/nota_fiscal/routes/api.py`.
     """
     return "ok"
 

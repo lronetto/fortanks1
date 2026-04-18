@@ -1,1 +1,0 @@
-from controllers.operacional.acabamento_transporte_controller import *

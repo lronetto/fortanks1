@@ -173,7 +173,7 @@ def processar_anexo_pdf_pagina(
             pid = protocolo_id_resolvido(tipo, numero_nf, None, protocolo_id, mapa_nf_protocolo_id)
             if pid and tipo == 2:
                 dados = json.dumps({"protocolo_id": pid})
-            Upload("NotaFiscal", 0, tipo, filename, "application/pdf", payload, dados_adicionais=dados)
+            Upload.registrar("NotaFiscal", 0, tipo, filename, "application/pdf", payload, dados_adicionais=dados)
             logging.info(f"upload realizado sem nota {numero_nf}")
             return True
 
@@ -191,7 +191,7 @@ def processar_anexo_pdf_pagina(
                 pid = protocolo_id_resolvido(tipo, numero_nf, nota, protocolo_id, mapa_nf_protocolo_id)
                 if pid and tipo == 2:
                     dados = json.dumps({"protocolo_id": pid})
-                Upload(
+                Upload.registrar(
                     pai="NotaFiscal",
                     pai_id=nota.id,
                     tipo=tipo,
@@ -211,7 +211,7 @@ def processar_anexo_pdf_pagina(
         pid = protocolo_id_resolvido(tipo, numero_nf, None, protocolo_id, mapa_nf_protocolo_id)
         if pid and tipo == 2:
             dados = json.dumps({"protocolo_id": pid})
-        Upload(
+        Upload.registrar(
             pai="NotaFiscal",
             pai_id=0,
             tipo=tipo,

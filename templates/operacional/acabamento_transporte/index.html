@@ -9,11 +9,22 @@
 
 {% block content %}
 <div class="container-fluid">
-    <div class="d-sm-flex align-items-center justify-content-between mb-4">
+    <div class="d-sm-flex align-items-center justify-content-between mb-4 flex-wrap gap-2">
         <h1 class="h3 mb-0 text-gray-800"><i class="fas fa-cube"></i> Acabamento e Transporte</h1>
-        
+        <div class="d-flex flex-wrap gap-2">
+            <button type="button" id="btnAcabamentoLote" class="btn btn-success btn-sm">
+                <i class="fas fa-paint-roller"></i> Acabamento em lote
+            </button>
+            <button type="button" id="btnTransporteLote" class="btn btn-primary btn-sm">
+                <i class="fas fa-truck"></i> Transporte em lote
+            </button>
+        </div>
     </div>
-    <div class="alert alert-info">Selecione uma das opções acima para registrar acabamento ou transporte de peças.</div>
+    <div class="alert alert-info small mb-3">
+        Use <strong>Acabamento em lote</strong> ou <strong>Transporte em lote</strong> para abrir o modal (com ou sem peças marcadas na tabela).
+        Com linhas marcadas, o modal é preenchido com essas peças. Sem marcação, escolha as peças pelos campos do modal.
+        Se marcar várias linhas no acabamento, todas devem ser do <strong>mesmo tanque</strong>.
+    </div>
     <div data-ft-colvis="tabelaAcabamentoTransporte">
     <div class="row mb-3">
       <div class="form-inline d-flex flex-wrap align-items-center gap-2">
@@ -39,16 +50,36 @@
           <label for="nome_peca" class="me-2">Nome da Peça:</label>
           <input type="text" id="nome_peca" class="form-control form-control-sm" value="{{ nome_peca|default('') }}" placeholder="Digite o nome da peça">
         </div>
+        <div class="form-group">
+          <label for="inicio_acabamento" class="me-2">Início Acab.:</label>
+          <input type="date" id="inicio_acabamento" class="form-control form-control-sm" value="{{ inicio_acabamento|default('') }}">
+        </div>
+        <div class="form-group">
+          <label for="termino_acabamento" class="me-2">Término Acab.:</label>
+          <input type="date" id="termino_acabamento" class="form-control form-control-sm" value="{{ termino_acabamento|default('') }}">
+        </div>
+        <div class="form-group">
+          <label for="inicio_transporte" class="me-2">Início Transp.:</label>
+          <input type="date" id="inicio_transporte" class="form-control form-control-sm" value="{{ inicio_transporte|default('') }}">
+        </div>
+        <div class="form-group">
+          <label for="termino_transporte" class="me-2">Término Transp.:</label>
+          <input type="date" id="termino_transporte" class="form-control form-control-sm" value="{{ termino_transporte|default('') }}">
+        </div>
         <button type="button" id="btnFiltrar" class="btn btn-sm btn-secondary">
           <i class="fas fa-filter"></i> Filtrar
         </button>
       </div>
-      <div class="col d-flex align-items-center justify-content-end gap-2">
+      <div class="col d-flex align-items-center justify-content-end gap-2 flex-wrap">
         <div class="ft-col-toggle-placeholder"></div>
         <form method="get" action="{{ url_for('acabamento_transporte.exportar_excel') }}" id="formExportarExcel" style="display:inline">
           <input type="hidden" name="filtro" id="exportFiltro" value="{{ filtro|default('todos') }}">
           <input type="hidden" name="tanque_id" id="exportTanqueId" value="{{ tanque_id|default('todos') }}">
           <input type="hidden" name="nome_peca" id="exportNomePeca" value="{{ nome_peca|default('') }}">
+          <input type="hidden" name="inicio_acabamento" id="exportInicioAcabamento" value="{{ inicio_acabamento|default('') }}">
+          <input type="hidden" name="termino_acabamento" id="exportTerminoAcabamento" value="{{ termino_acabamento|default('') }}">
+          <input type="hidden" name="inicio_transporte" id="exportInicioTransporte" value="{{ inicio_transporte|default('') }}">
+          <input type="hidden" name="termino_transporte" id="exportTerminoTransporte" value="{{ termino_transporte|default('') }}">
           <button type="submit" class="btn btn-outline-success btn-sm">
             <i class="fas fa-file-excel"></i> Exportar Excel
           </button>
@@ -68,8 +99,10 @@
         <table class="table table-bordered table-striped w-100" id="tabelaAcabamentoTransporte" cellspacing="0">
           <thead>
             <tr>
+              <th width="44" class="text-center"><input type="checkbox" class="form-check-input" id="selectAllAcabamento" title="Selecionar todos desta página"></th>
               <th>Tanque</th>
               <th>Peça</th>
+              <th>Pista</th>
               <th>Acabamento</th>
               <th>Data</th>
               <th>Transportadora</th>
@@ -101,9 +134,13 @@ $(document).ready(function() {
         $('#exportFiltro').val($('#filtro').val());
         $('#exportTanqueId').val($('#tanque_id').val());
         $('#exportNomePeca').val($('#nome_peca').val());
+        $('#exportInicioAcabamento').val($('#inicio_acabamento').val());
+        $('#exportTerminoAcabamento').val($('#termino_acabamento').val());
+        $('#exportInicioTransporte').val($('#inicio_transporte').val());
+        $('#exportTerminoTransporte').val($('#termino_transporte').val());
     }
 
-    var TITULOS_ACAB = ['Tanque', 'Peça', 'Acabamento', 'Data', 'Transportadora', 'Placa', 'Nota Fiscal', 'Ações'];
+    var TITULOS_ACAB = ['', 'Tanque', 'Peça', 'Pista', 'Acabamento', 'Data', 'Transportadora', 'Placa', 'Nota Fiscal', 'Ações'];
     var dtAcabamento = $('#tabelaAcabamentoTransporte').DataTable(FT.dtOpcoes({
         processing: false,
         ajax: {
@@ -113,6 +150,10 @@ $(document).ready(function() {
                 d.filtro = $('#filtro').val();
                 d.tanque_id = $('#tanque_id').val();
                 d.nome_peca = $('#nome_peca').val();
+                d.inicio_acabamento = $('#inicio_acabamento').val();
+                d.termino_acabamento = $('#termino_acabamento').val();
+                d.inicio_transporte = $('#inicio_transporte').val();
+                d.termino_transporte = $('#termino_transporte').val();
             },
             dataSrc: function(json) {
                 if (json.error) { console.error('Erro ao carregar dados:', json.error); return []; }
@@ -120,17 +161,33 @@ $(document).ready(function() {
                 return json.data;
             }
         },
-        order: [[0, 'asc']],
+        order: [[1, 'asc']],
         columns: [
+            {
+                data: null,
+                orderable: false,
+                searchable: false,
+                className: 'text-center align-middle',
+                render: function(data, type, row) {
+                    if (type !== 'display') return '';
+                    var pid = row.peca_id != null ? row.peca_id : '';
+                    var tid = row.tanque_id != null ? row.tanque_id : '';
+                    return '<input type="checkbox" class="form-check-input at-row-checkbox" value="' + pid + '" data-tanque-id="' + tid + '">';
+                }
+            },
             { data: 'tanque' },
             { data: 'nome' },
+            { data: 'pista' },
             { data: 'acabamento' },
             { data: 'data_transporte' },
             { data: 'transportadora' },
             { data: 'placa_carreta' },
             { data: 'nota_fiscal' },
             { data: 'acoes', orderable: false, searchable: false, className: 'text-center' }
-        ]
+        ],
+        drawCallback: function() {
+            $('#selectAllAcabamento').prop('checked', false);
+        }
     }));
     FT.dtColunas.inicializar(dtAcabamento, 'tabelaAcabamentoTransporte', TITULOS_ACAB);
 
@@ -152,12 +209,90 @@ $(document).ready(function() {
     $('#btnFiltrar').on('click', function() {
         dtAcabamento.ajax.reload();
     });
+    $('#inicio_acabamento, #termino_acabamento, #inicio_transporte, #termino_transporte').on('change', function() {
+        dtAcabamento.ajax.reload();
+    });
     $('#nome_peca').on('keypress', function(e) {
         if (e.which === 13) {
             e.preventDefault();
             dtAcabamento.ajax.reload();
         }
     });
+
+    $(document).on('change', '#selectAllAcabamento', function() {
+        var checked = this.checked;
+        $('#tabelaAcabamentoTransporte tbody .at-row-checkbox').each(function() { this.checked = checked; });
+    });
+
+    function coletarLinhasSelecionadas() {
+        var out = [];
+        $('#tabelaAcabamentoTransporte tbody .at-row-checkbox:checked').each(function() {
+            var row = dtAcabamento.row($(this).closest('tr')).data();
+            if (row) out.push(row);
+        });
+        return out;
+    }
+
+    $('#btnAcabamentoLote').on('click', function() {
+        var selected = coletarLinhasSelecionadas();
+        if (!selected.length) {
+            $('#acabamento-tanque_id').val('').trigger('change');
+            $('#acabamento-peca_id').empty().trigger('change');
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modalAcabamento')).show();
+            return;
+        }
+        var tanques = {};
+        selected.forEach(function(r) {
+            if (r.tanque_id != null && r.tanque_id !== '') tanques[r.tanque_id] = true;
+        });
+        var idsTanque = Object.keys(tanques);
+        if (idsTanque.length !== 1) {
+            alert('Para acabamento em lote, selecione apenas peças do mesmo tanque.');
+            return;
+        }
+        var tanqueId = idsTanque[0];
+        $('#acabamento-tanque_id').val(tanqueId).trigger('change');
+        var $pecas = $('#acabamento-peca_id');
+        $pecas.empty();
+        selected.forEach(function(r) {
+            var id = r.peca_id;
+            var label = (r.nome || 'Peça');
+            if (r.tanque) label += ' — ' + r.tanque;
+            $pecas.append(new Option(label, id, true, true));
+        });
+        $pecas.trigger('change');
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalAcabamento')).show();
+    });
+
+    $('#btnTransporteLote').on('click', function() {
+        var selected = coletarLinhasSelecionadas();
+        if (!selected.length) {
+            $('#transporte-peca_id').empty().trigger('change');
+            $('#transporte-tanque_id').empty().trigger('change');
+            bootstrap.Modal.getOrCreateInstance(document.getElementById('modalTransporte')).show();
+            return;
+        }
+        var $pecas = $('#transporte-peca_id');
+        $pecas.empty();
+        var tanquePorId = {};
+        selected.forEach(function(r) {
+            var id = r.peca_id;
+            var label = (r.tanque ? r.tanque + ' — ' : '') + (r.nome || 'Peça');
+            $pecas.append(new Option(label, id, true, true));
+            if (r.tanque_id != null && r.tanque_id !== '') {
+                tanquePorId[r.tanque_id] = r.tanque || ('Tanque ' + r.tanque_id);
+            }
+        });
+        $pecas.trigger('change');
+        var $tanquesSel = $('#transporte-tanque_id');
+        $tanquesSel.empty();
+        Object.keys(tanquePorId).forEach(function(tid) {
+            $tanquesSel.append(new Option(tanquePorId[tid], tid, true, true));
+        });
+        $tanquesSel.trigger('change');
+        bootstrap.Modal.getOrCreateInstance(document.getElementById('modalTransporte')).show();
+    });
+
     syncExportForm();
 });
 </script>

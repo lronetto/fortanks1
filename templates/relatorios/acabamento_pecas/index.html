@@ -113,7 +113,7 @@
                     <h5 class="mb-0"><i class="fas fa-chart-bar"></i> Quantidade de Peças por Semana (por Pista)</h5>
                 </div>
                 <div class="card-body">
-                    <div class="chart-container">
+                    <div class="chart-container chart-container-acabamento-pecas">
                         <canvas id="chartSemana"></canvas>
                     </div>
                 </div>
@@ -234,7 +234,7 @@
         const dadosPorPista = {{ dados_por_pista|tojson }};
         const mediasDiariasPorPista = {{ medias_diarias_por_pista|tojson }};
         const labels = {{ labels_semana|tojson }};
-        
+        console.log(dadosPorPista);
         // Cores para as pistas (barras)
         const cores = [
             'rgba(58, 114, 171, 0.6)',
@@ -285,6 +285,7 @@
         
         // Adicionar datasets de linha para média diária de cada pista
         pistas.forEach(function(pista, index) {
+
             datasets.push({
                 label: (pista || 'Sem pista') + ' - Média Diária',
                 data: mediasDiariasPorPista[pista] || [],

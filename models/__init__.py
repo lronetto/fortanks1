@@ -21,7 +21,7 @@ from .plano_conta import PlanoConta
 from .contrato import Contrato
 from .cliente import Cliente
 from .endereco import Endereco
-from .tanque import Tanques, TanquesGrupos, TanquesProdutoComposto, TanquesPecas
+from .tanque import Tanques, TanquesGrupos, TanquesProdutoComposto, TanquesPecas, TanquesTransportes
 from .equipamento import (
     EQ_STATUS,
     Equipamento,
@@ -109,7 +109,7 @@ __all__ = [
     'EstoqueTerceiro',
     'NotaFiscal', 'NotaFiscalItem', 'Protocolo', 'Upload',
     'Cliente', 'Endereco', 
-    'Tanques', 'TanquesGrupos', 'TanquesPecas',
+    'Tanques', 'TanquesGrupos', 'TanquesPecas', 'TanquesTransportes',
     'EQ_STATUS',
     'Equipamento', 'Manutencao',
     'ChecklistModelo', 'ChecklistItem', 'ChecklistEquipamento', 'ChecklistResposta',

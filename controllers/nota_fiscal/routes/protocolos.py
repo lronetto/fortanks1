@@ -218,7 +218,7 @@ def protocolos_importar_pdfs(protocolo_id):
                 cont += 1
                 filename_final = f"{stem}_proto{protocolo_id}_{cont}.pdf"
 
-            u = Upload(
+            u = Upload.registrar(
                 pai="NotaFiscal",
                 pai_id=nid,
                 tipo=TIPO_UPLOAD_PROTOCOLO,
@@ -227,7 +227,6 @@ def protocolos_importar_pdfs(protocolo_id):
                 blob=base64.b64encode(payload).decode("utf-8"),
                 dados_adicionais=dados_adicionais,
             )
-            # Upload.__init__ chama save() ao final do branch else
 
             resultados.append({
                 "upload_id": u.id,

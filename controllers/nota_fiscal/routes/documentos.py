@@ -101,7 +101,7 @@ def api_adicionar_documento():
         arquivo_bytes = arquivo.read()
         arquivo_b64 = base64.b64encode(arquivo_bytes).decode("utf-8")
 
-        upload = Upload(
+        Upload.registrar(
             pai="NotaFiscal",
             pai_id=nota_id,
             tipo=tipo,
@@ -109,7 +109,6 @@ def api_adicionar_documento():
             mimetype=arquivo.content_type,
             blob=arquivo_b64,
         )
-        upload.save()
         return jsonify({"success": True, "message": "Documento adicionado com sucesso"})
     except Exception as e:
         logger.error(f"Erro ao adicionar documento: {str(e)}")
@@ -272,7 +271,7 @@ def exportar_pdf_originais():
                         arquivei = Arquivei(chave_acesso=nota.chave_acesso)
                         if arquivei.pdf:
                             pdf_bytes = base64.b64decode(arquivei.pdf)
-                            u = Upload(
+                            Upload.registrar(
                                 pai="NotaFiscal",
                                 pai_id=nota.id,
                                 tipo=1,
@@ -280,8 +279,6 @@ def exportar_pdf_originais():
                                 mimetype="application/pdf",
                                 blob=arquivei.pdf,
                             )
-                            db.session.add(u)
-                            db.session.commit()
                     except Exception as e:
                         db.session.rollback()
                         erros.append(f"Nota {nota.numero_nf}: erro ao obter PDF - {e}")
@@ -366,7 +363,7 @@ def download_pdfs_sem_protocolo():
                             if arquivei.pdf:
                                 pdf_bytes = base64.b64decode(arquivei.pdf)
                                 filename = f"{nota.chave_acesso}.pdf"
-                                upload_original = Upload(
+                                upload_original = Upload.registrar(
                                     pai="NotaFiscal",
                                     pai_id=nota.id,
                                     tipo=1,
@@ -374,8 +371,6 @@ def download_pdfs_sem_protocolo():
                                     mimetype="application/pdf",
                                     blob=arquivei.pdf,
                                 )
-                                db.session.add(upload_original)
-                                db.session.commit()
                                 pdfs_baixados += 1
                             else:
                                 erros.append(f"Nota {nota.numero_nf}: PDF não encontrado no Arquivei")

@@ -145,7 +145,7 @@ class NotaFiscal(db.Model):
                     pdf_data = Arquivei(chave_acesso=self.chave_acesso)
                     #print(f'pdf_data: {pdf_data}')
                     logger.debug("id: %s chave: %s", self.id, self.chave_acesso)
-                    self.upload = Upload('NotaFiscal', self.id, 1, filename=f'{self.chave_acesso}.pdf', mimetype='application/pdf', blob=pdf_data.pdf)
+                    self.upload = Upload.registrar('NotaFiscal', self.id, 1, filename=f'{self.chave_acesso}.pdf', mimetype='application/pdf', blob=pdf_data.pdf)
                 else:
                     self.upload = upload
                 #print('self.upload: ',self.upload)
@@ -255,7 +255,7 @@ class NotaFiscal(db.Model):
                         self.pdf = pdf_data.pdf
                         return self.pdf
 
-                    self.upload = Upload(
+                    self.upload = Upload.registrar(
                         pai='NotaFiscal',
                         pai_id=self.id,
                         tipo=1,

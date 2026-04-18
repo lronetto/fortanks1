@@ -31,7 +31,7 @@ def analise():
     fornecedores = [f[0] for f in fornecedores_lista if f[0]]
 
     return render_template(
-        "notas_fiscais/analise.html",
+        "notas_fiscais/analise/index.html",
         fornecedores=fornecedores,
         filtro_fornecedor=fornecedor,
         filtro_data_inicio=data_inicio,
@@ -308,7 +308,7 @@ def analise_transferencias():
     )
 
     return render_template(
-        "notas_fiscais/analise_transferencias.html",
+        "notas_fiscais/analise_transferencias/index.html",
         transferencias=transferencias,
         paginacao=paginacao,
         filtro_data_inicio=request.args.get("data_inicio", ""),
@@ -406,7 +406,7 @@ def analise_transferencias_ajax():
     transferencias = paginacao.items
 
     return render_template(
-        "notas_fiscais/_tabela_transferencias.html",
+        "notas_fiscais/analise_transferencias/partials/tabela_transferencias.html",
         transferencias=transferencias,
         paginacao=paginacao,
         filtro_data_inicio=data_inicio,
