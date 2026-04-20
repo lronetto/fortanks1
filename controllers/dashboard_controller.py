@@ -14,7 +14,7 @@ from models.centro_custo import CentroCusto
 from models.contrato import Contrato
 from models.solicitacao import Solicitacoes, SolicitacoesItens
 from models.estoque import Estoque, EstoqueMovimentacoes
-from models.concreto import ConcretoConcretagens, ConcretoConcretagensTanques, ConcretoTracos, ConcretoTracosItens, ConcretoUsinagensMateriais, ConcretoUsinagens
+from models.concreto import ConcretoConcretagens, ConcretoTracos, ConcretoTracosItens, ConcretoUsinagensMateriais, ConcretoUsinagens
 from models.unidade import Unidades
 from models.dados_analiticos import DadoAnalitico
 from models.epi import Epi, EpiEntregas

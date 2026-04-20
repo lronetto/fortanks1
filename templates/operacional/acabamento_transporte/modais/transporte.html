@@ -21,6 +21,18 @@
                 Mostrar apenas peças acabadas
               </label>
             </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="1" id="transporte-disponiveisTransporte">
+              <label class="form-check-label" for="transporte-disponiveisTransporte">
+                Peças disponíveis (concretadas, acabadas e não transportadas)
+              </label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="1" id="transporte-naoTransportadas">
+              <label class="form-check-label" for="transporte-naoTransportadas">
+                Apenas peças não transportadas
+              </label>
+            </div>
           </div>
           <div class="mb-3">
             <label for="transporte-peca_id" class="form-label">Peça(s) (pesquise pelo nome)</label>
@@ -183,12 +195,16 @@ $(function() {
       data: function(params) {
         var tval = $('#transporte-tanque_id').val();
         var csv = Array.isArray(tval) ? tval.join(',') : (tval || '');
+        var disponiveis = $('#transporte-disponiveisTransporte').is(':checked');
+        var soNaoTransportadas = $('#transporte-naoTransportadas').is(':checked');
         return {
           tanque_ids: csv,
           nome: params.term || '',
-          apenas_concretadas: 1,
+          apenas_concretadas: soNaoTransportadas && !disponiveis ? 0 : 1,
           apenas_acabadas: $('#transporte-apenasAcabadas').is(':checked') ? 1 : 0,
-          nao_acabadas: 0
+          nao_acabadas: 0,
+          apenas_disponiveis_transporte: disponiveis ? 1 : 0,
+          apenas_nao_transportadas: soNaoTransportadas ? 1 : 0
         };
       },
       processResults: function(data) {
@@ -203,7 +219,7 @@ $(function() {
     minimumInputLength: 2
   });
 
-  $('#transporte-apenasAcabadas').on('change', function() {
+  $('#transporte-apenasAcabadas, #transporte-disponiveisTransporte, #transporte-naoTransportadas').on('change', function() {
     $('#transporte-peca_id').val(null).trigger('change');
   });
 
@@ -331,6 +347,8 @@ $(function() {
     if ($('#cte_frete').autocomplete('instance')) { $('#cte_frete').autocomplete('destroy'); }
     $('#transporte-observacao').val('');
     $('#transporte-enviar-whatsapp').prop('checked', false);
+    $('#transporte-disponiveisTransporte').prop('checked', false);
+    $('#transporte-naoTransportadas').prop('checked', false);
     transporteLimparFoto();
   });
 });

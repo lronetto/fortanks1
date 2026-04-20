@@ -49,7 +49,7 @@ from .upload import Upload
 
 # Importamos os novos modelos de usinagem de concreto
 from .concreto import ConcretoTracos, ConcretoTracosItens, ConcretoUsinagens, ConcretoUsinagensMateriais, ConcretoUsinagensRompimentos
-from .concreto import ConcretoConcretagens, ConcretoConcretagensTanques
+from .concreto import ConcretoConcretagens
 
 # Importamos o modelo de conversão de unidades
 from .unidade import UnidadesConversao, Unidades
@@ -114,7 +114,7 @@ __all__ = [
     'Equipamento', 'Manutencao',
     'ChecklistModelo', 'ChecklistItem', 'ChecklistEquipamento', 'ChecklistResposta',
     'ConcretoTracos', 'ConcretoTracosItens', 'ConcretoUsinagens', 'ConcretoUsinagensMateriais', 'ConcretoUsinagensRompimentos',
-    'ConcretoConcretagens', 'ConcretoConcretagensTanques',
+    'ConcretoConcretagens',
     'Unidades', 'UnidadesConversao',
     'ProdutoComposto', 'ProdutoCompostoItem', 'TanquesProdutoComposto',
     'DadoAnalitico', 'configure_mappers', 

@@ -14,7 +14,7 @@ from .whatsapp_transporte import (
     enviar_whatsapp_transporte,
     montar_texto_whatsapp_transporte,
 )
-
+from .transporte import registrar_transporte
 __all__ = [
     'atualizar_dimensoes_numericas',
     'calcular_estatisticas_tanque',
@@ -25,4 +25,5 @@ __all__ = [
     'enviar_whatsapp_transporte',
     'montar_texto_whatsapp_transporte',
     'normalizar_numero_whatsapp_br',
+    'registrar_transporte',
 ]

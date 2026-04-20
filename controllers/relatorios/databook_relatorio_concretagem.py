@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, send_file
 from flask_login import login_required
 from models import TanquesPecas
-from models.concreto import ConcretoUsinagensRompimentos, ConcretoUsinagens, ConcretoConcretagens, ConcretoConcretagensTanques
+from models.concreto import ConcretoUsinagensRompimentos, ConcretoUsinagens, ConcretoConcretagens
 from models.contrato import Contrato
 from models.cliente import Cliente
 from models.tanque import Tanques, TanquesGrupos

@@ -4,7 +4,7 @@ from flask import Blueprint, render_template, request, jsonify, send_file
 from flask_login import login_required
 from openpyxl.worksheet.page import PageMargins
 from models import tanque
-from models.concreto import ConcretoConcretagens, ConcretoConcretagensTanques, ConcretoUsinagens
+from models.concreto import ConcretoConcretagens, ConcretoUsinagens
 from models.contrato import Contrato
 from models.tanque import Tanques, TanquesPecas, TanquesGrupos
 from models.database import db

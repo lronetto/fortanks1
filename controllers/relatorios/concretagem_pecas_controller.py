@@ -1,7 +1,7 @@
 from flask import Blueprint, render_template, request, send_file, jsonify
 from models.tanque import TanquesPecas, Tanques, TanquesGrupos, tanques_grupos
 from models.contrato import Contrato
-from models.concreto import ConcretoConcretagens, ConcretoConcretagensTanques
+from models.concreto import ConcretoConcretagens
 from models.database import db
 from datetime import datetime, timedelta
 

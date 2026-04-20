@@ -6,6 +6,8 @@ from datetime import datetime
 from models.concreto import qualidade_peca_remover_data_producao_de_dados_adicionais
 from models.database import db
 
+from .transportes import TanquesTransportes
+
 
 class TanquesPecas(db.Model):
     __tablename__ = 'TanquesPecas'
@@ -116,19 +118,40 @@ class TanquesPecas(db.Model):
         self.save()
     def set_transporte(self, data_transporte, nota_fiscal, placa_carreta, transportadora):
         from models.tanque.services.qualidade import peca_in_concretagem
-        if not peca_in_concretagem(self) :
+
+        if not peca_in_concretagem(self):
             raise ValueError('Peça não está em alguma concretagem')
         qualidade = json.loads(self.qualidade)
-        if not qualidade['acabamento']:
+        if not qualidade.get('acabamento'):
             raise ValueError('Peça não tem acabamento')
+
+        nota_gravacao = TanquesTransportes.parse_nota_int(nota_fiscal)
         qualidade['transporte'] = {
             'data_transporte': data_transporte,
-            'nota': nota_fiscal,
+            'nota': nota_gravacao if nota_gravacao is not None else nota_fiscal,
             'placa_carreta': placa_carreta,
-            'transportadora': transportadora
+            'transportadora': transportadora,
         }
-        self.qualidade = json.dumps(qualidade)
+        qualidade_peca_remover_data_producao_de_dados_adicionais(qualidade)
+        self.qualidade = json.dumps(qualidade, ensure_ascii=False)
+        self.data_entrega = data_transporte
         self.save()
+
+        dados_adicionais = {
+            'placa_carreta': placa_carreta or '',
+            'observacao': '',
+            'enviar_whatsapp': False,
+        }
+        registro = TanquesTransportes(
+            nota=TanquesTransportes.parse_nota_int(nota_fiscal),
+            cte=None,
+            transportadora=(transportadora or '').strip() or None,
+            data_transporte=TanquesTransportes.parse_data_transporte(data_transporte),
+            dados_adicionais=json.dumps(dados_adicionais, ensure_ascii=False),
+        )
+        registro.definir_pecas_ids([self.id])
+        db.session.add(registro)
+        db.session.commit()
     def is_PF(self):
         return self.tipo == 'PF'
 

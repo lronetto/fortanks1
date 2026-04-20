@@ -25,6 +25,18 @@ class TanquesTransportes(db.Model):
     created_at = db.Column(db.DateTime, nullable=False, default=datetime.now)
     updated_at = db.Column(db.DateTime, nullable=False, default=datetime.now, onupdate=datetime.now)
 
+    def __init__(self, data_transporte, nota_fiscal, placa_carreta, transportadora,pecas,observacao=None,enviar_whatsapp=False,imagem_upload_id=None):
+        self.data_transporte = data_transporte
+        self.nota = nota_fiscal
+        self.transportadora = transportadora
+        self.definir_pecas_ids(pecas)
+        self.dados_adicionais = json.dumps({
+            'placa_carreta': placa_carreta or '',
+            'observacao': observacao or '',
+            'enviar_whatsapp': enviar_whatsapp,
+            'imagem_upload_id': imagem_upload_id,
+        }, ensure_ascii=False)
+        self.save()
     def pecas_ids(self):
         if not self.pecas:
             return []

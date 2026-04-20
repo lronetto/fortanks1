@@ -3,7 +3,6 @@ from collections import defaultdict
 from flask import Blueprint, render_template, redirect, request, url_for, flash, jsonify, send_file
 from models.concreto import (
     ConcretoConcretagens,
-    ConcretoConcretagensTanques,
     ConcretoUsinagens,
     peca_obj_ja_produzida,
     limpar_data_producao_em_qualidade_str,
@@ -567,11 +566,7 @@ def api_excluir(id):
     """Exclui uma concretagem via AJAX"""
     try:
         concretagem = ConcretoConcretagens.query.get_or_404(id)
-        
-        # Remover associações de tanques
-        for ct in list(concretagem.tanques_associados):
-            db.session.delete(ct)
-        
+
         db.session.delete(concretagem)
         db.session.commit()
         

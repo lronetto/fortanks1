@@ -1,4 +1,4 @@
-"""Concretagens de peças e associação com tanques."""
+"""Concretagens de peças de tanques."""
 
 from datetime import datetime
 
@@ -31,8 +31,6 @@ class ConcretoConcretagens(db.Model):
     ultima_atualizacao = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
 
     conc = db.Column(db.Integer, nullable=True)
-    # Relacionamentos
-    tanques_associados = db.relationship("ConcretoConcretagensTanques", back_populates="concretagem", cascade="all, delete-orphan")
 
     def get_volume_total(self):
         """
@@ -105,22 +103,6 @@ class ConcretoConcretagens(db.Model):
         except (json.JSONDecodeError, TypeError, AttributeError):
             return 0
 
-    def adicionar_tanque(self, tanque: 'ConcretoConcretagensTanques'):
-        """Adiciona um tanque à concretagem"""
-        for ct in self.tanques_associados:
-            if ct.tanque_id == tanque.id:
-                return
-
-        associacao = ConcretoConcretagensTanques(tanque=tanque)
-        self.tanques_associados.append(associacao)
-
-    def remover_tanque(self, tanque):
-        """Remove um tanque da concretagem"""
-        for ct in self.tanques_associados:
-            if ct.tanque_id == tanque.id:
-                self.tanques_associados.remove(ct)
-                break
-
     def save(self):
         """Salva a concretagem no banco de dados"""
         if not self.id:
@@ -170,19 +152,3 @@ class ConcretoConcretagens(db.Model):
             log=False,
             _usinagem=True)
         return bool(ok)
-
-
-class ConcretoConcretagensTanques(db.Model):
-    """
-    Modelo para associação entre concretagem e tanques
-    """
-    __tablename__ = 'ConcretoConcretagensTanques'
-
-    concretagem_id = db.Column(db.Integer, db.ForeignKey('ConcretoConcretagens.id', ondelete='CASCADE'), primary_key=True)
-    tanque_id = db.Column(db.Integer, db.ForeignKey('Tanques.id', ondelete='CASCADE'), primary_key=True)
-
-    concretagem = db.relationship("ConcretoConcretagens", back_populates="tanques_associados")
-    tanque = db.relationship("Tanques")
-
-    def __repr__(self):
-        return f'<ConcretoConcretagensTanques {self.concretagem_id}-{self.tanque_id}>'

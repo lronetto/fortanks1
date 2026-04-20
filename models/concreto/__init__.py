@@ -13,7 +13,6 @@ from .utils import (
 )
 from .entities import (
     ConcretoConcretagens,
-    ConcretoConcretagensTanques,
     ConcretoTracos,
     ConcretoTracosItens,
     ConcretoUsinagens,
@@ -31,7 +30,6 @@ from .services import (
 
 __all__ = [
     'ConcretoConcretagens',
-    'ConcretoConcretagensTanques',
     'ConcretoTracos',
     'ConcretoTracosItens',
     'ConcretoUsinagens',

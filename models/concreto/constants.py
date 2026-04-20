@@ -5,7 +5,6 @@ Mantém os mesmos valores que `__tablename__` nas entidades, para uso em FKs e t
 """
 
 TABELA_CONCRETAGENS = "ConcretoConcretagens"
-TABELA_CONCRETAGENS_TANQUES = "ConcretoConcretagensTanques"
 TABELA_TRACOS = "ConcretoTracos"
 TABELA_TRACOS_ITENS = "ConcretoTracosItens"
 TABELA_USINAGENS = "ConcretoUsinagens"

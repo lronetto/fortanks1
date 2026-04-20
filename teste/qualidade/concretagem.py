@@ -27,7 +27,7 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..',
 from flask import Flask
 from config.config import Config
 from models.database import db
-from models.concreto import ConcretoConcretagens, ConcretoConcretagensTanques
+from models.concreto import ConcretoConcretagens
 from models.tanque import Tanques, TanquesPecas
 from models.contrato import Contrato
 # Inicializa o app Flask e o contexto
