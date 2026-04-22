@@ -72,6 +72,7 @@ from .cronograma import (
 from .permissoes import Modulo, Permissao
 from .fornecedor import Fornecedor
 from .pedido_compra import PedidoCompra, PedidoCompraItem, PedidoCompraEntrada
+from .orcamento import Orcamento, ItemOrcamento, ItemOrcamentoReferenciaMaterial
 def configure_mappers():
     """
     Configura explicitamente todos os mappers SQLAlchemy
@@ -126,4 +127,5 @@ __all__ = [
     'CronogramaLinhaBase', 'CronogramaLinhaBaseTanque',
     'Modulo', 'Permissao',
     'Fornecedor', 'PedidoCompra', 'PedidoCompraItem', 'PedidoCompraEntrada',
+    'Orcamento', 'ItemOrcamento', 'ItemOrcamentoReferenciaMaterial',
 ] 

@@ -1,0 +1,95 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Orçamento {{ orcamento.id }}{% endblock %}
+{% block mobile_title %}Orçamento{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/cadastros.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="ft-page-header">
+        <h1 class="h3 mb-0"><i class="fas fa-file-invoice-dollar"></i> Orçamento #{{ orcamento.id }}</h1>
+        <div class="btn-group">
+            <a href="{{ url_for('orcamento.index') }}" class="btn btn-outline-secondary btn-sm">
+                <i class="fas fa-arrow-left"></i>
+                <span class="d-none d-md-inline ms-1">Voltar</span>
+            </a>
+            <button type="button" class="btn btn-outline-primary btn-sm" id="btnEditarOrcamentoTopo"
+                    data-orcamento-id="{{ orcamento.id }}">
+                <i class="fas fa-edit"></i>
+                <span class="d-none d-md-inline ms-1">Editar</span>
+            </button>
+            <form method="POST"
+                  action="{{ url_for('orcamento.excluir', orcamento_id=orcamento.id) }}"
+                  class="d-inline"
+                  onsubmit="return confirm('Apagar este orçamento e todos os itens? Esta ação não pode ser desfeita.');">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <button type="submit" class="btn btn-outline-danger btn-sm">
+                    <i class="fas fa-trash-alt"></i>
+                    <span class="d-none d-md-inline ms-1">Apagar</span>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow mb-3">
+        <div class="card-body">
+            <div><strong>Nome:</strong> {{ orcamento.nome }}</div>
+            <div><strong>Data:</strong> {{ orcamento.data.strftime('%d/%m/%Y') if orcamento.data else '-' }}</div>
+            <div><strong>Status:</strong> {{ orcamento.status or '-' }}</div>
+            <div><strong>Contrato:</strong> {{ orcamento.contrato.nome if orcamento.contrato else '-' }}</div>
+            {% if orcamento.orcamento_vinculo %}
+            <div>
+                <strong>Vinculado a orçamento:</strong>
+                <a href="{{ url_for('orcamento.visualizar', orcamento_id=orcamento.orcamento_vinculo.id) }}">
+                    #{{ orcamento.orcamento_vinculo.id }} — {{ orcamento.orcamento_vinculo.nome }}
+                </a>
+            </div>
+            {% endif %}
+            {% if orcamento.descricao %}
+            <div class="mt-2"><strong>Descrição:</strong> {{ orcamento.descricao }}</div>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <span class="card-title-text"><i class="fas fa-list me-2"></i>Itens</span>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Descrição</th>
+                            <th>Material</th>
+                            <th>Quantidade</th>
+                            <th>Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for item in itens %}
+                        <tr>
+                            <td>{{ item.id }}</td>
+                            <td>{{ item.descricao_item or '-' }}</td>
+                            <td>{{ item.material.nome if item.material else '-' }}</td>
+                            <td>{{ item.quantidade }}</td>
+                            <td>R$ {{ '%.2f'|format(item.valor|float) if item.valor is not none else '0.00' }}</td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">Nenhum item encontrado.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include 'cadastros/orcamentos/modais/modal_editar_orcamento.html' %}
+{% endblock %}

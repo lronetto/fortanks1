@@ -158,7 +158,7 @@
 </div> 
 {% block scripts %}
 <script>
-var URL_EDITAR_MATERIAL_AJAX = "{{ url_for('material.editar_material_ajax', id=999999999) }}";
+var URL_EDITAR_MATERIAL_AJAX = "{{ url_for('material.editar', id=999999999) }}";
 var URL_IMAGEM_MATERIAL_INLINE = "{{ url_for('material.material_imagem_inline', upload_id=999999999) }}";
 var URL_API_ESTOQUE_MATERIAL = "{{ url_for('estoque.api_estoque_por_material', material_id=999999999) }}";
 document.addEventListener('DOMContentLoaded', function() {
@@ -301,7 +301,7 @@ document.addEventListener('DOMContentLoaded', function() {
             document.getElementById('edit_quantidade_maxima').value = '0';
         });
     }
-    $(document).on('click', '#dataTable .btn-editar', function(e) {
+    $(document).on('click', '#tabelaMateriais .btn-editar', function(e) {
         e.preventDefault();
         try {
             var btn = this;

@@ -22,12 +22,6 @@ except Exception:
     pass
 
 try:
-    from controllers.api.material_api import register as register_material_api  # noqa: E402
-    register_material_api(api_bp)
-except Exception:
-    pass
-
-try:
     from controllers.api.mobile.auth_api import register as register_auth_api  # noqa: E402
     register_auth_api(api_bp)
 except Exception:

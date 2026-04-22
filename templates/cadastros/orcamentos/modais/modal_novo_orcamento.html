@@ -1,0 +1,66 @@
+<div class="modal fade" id="modalNovoOrcamento" tabindex="-1" aria-labelledby="modalNovoOrcamentoTitulo" aria-hidden="true">
+
+    <div class="modal-dialog">
+
+        <div class="modal-content">
+
+            <form method="POST" action="{{ url_for('orcamento.novo') }}">
+
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <div class="modal-header">
+
+                    <h5 class="modal-title" id="modalNovoOrcamentoTitulo"><i class="fas fa-plus me-2"></i>Novo orçamento</h5>
+
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+
+                </div>
+
+                <div class="modal-body">
+
+                    <div class="mb-3">
+
+                        <label for="orcamento_nome" class="form-label">Nome <span class="text-danger">*</span></label>
+
+                        <input type="text" class="form-control" id="orcamento_nome" name="nome" maxlength="100" required autocomplete="off" placeholder="Ex.: Obra XYZ">
+
+                    </div>
+
+                    <div class="mb-3">
+
+                        <label for="orcamento_data" class="form-label">Data</label>
+
+                        <input type="date" class="form-control" id="orcamento_data" name="data">
+
+                    </div>
+
+                    <div class="mb-0">
+
+                        <label for="orcamento_descricao" class="form-label">Descrição</label>
+
+                        <textarea class="form-control" id="orcamento_descricao" name="descricao" rows="3" placeholder="Opcional"></textarea>
+
+                    </div>
+
+                </div>
+
+                <div class="modal-footer">
+
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+
+                    <button type="submit" class="btn btn-primary">
+
+                        <i class="fas fa-check me-1"></i>Cadastrar
+
+                    </button>
+
+                </div>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</div>
+

@@ -19,6 +19,7 @@ from controllers.cadastros import (
     colaborador_bp,
     contrato_bp,
     fornecedor_bp,
+    orcamento_bp,
     peca,
     tanque_bp,
     usuario_bp,
@@ -28,7 +29,7 @@ from controllers.estoque_controller import estoque_bp
 from controllers.inventario_controller import inventario_bp
 from controllers.estoque_terceiro_controller import estoque_terceiro_bp
 from controllers.cadastro_operacional import certificado_bp, produto_composto_bp
-from controllers.materiais import material_bp, grupo_material_bp
+from controllers.material import material_bp, grupo_material_bp
 from controllers.relatorios import dados_analiticos_bp, relatorio_bp
 from controllers.reembolso_controller import reembolso_bp, notas_json, avulsos_json
 from controllers.plr import plr_bp
@@ -179,7 +180,8 @@ db.init_app(app)
 
 # Inicializar Flask-Migrate
 logger.info("Inicializando Flask-Migrate...")
-migrate = Migrate(app, db)
+migrations_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "migrations")
+migrate = Migrate(app, db, directory=migrations_dir)
 
 # Importar explicitamente todos os modelos para garantir carregamento correto
 # A ordem aqui é importante!
@@ -210,7 +212,9 @@ app.register_blueprint(admin_bp, url_prefix='/admin')
 app.register_blueprint(dashboard_bp, url_prefix='/dashboard')
 app.register_blueprint(centro_custo_bp, url_prefix='/centro-custo')
 app.register_blueprint(contrato_bp, url_prefix='/contrato')
-app.register_blueprint(material_bp, url_prefix='/material')
+app.register_blueprint(orcamento_bp, url_prefix='/orcamentos')
+app.register_blueprint(material_bp, url_prefix='/materiais')
+app.register_blueprint(grupo_material_bp, url_prefix='/grupos-materiais')
 app.register_blueprint(plano_conta_bp, url_prefix='/plano-conta')
 app.register_blueprint(usuario_bp, url_prefix='/usuarios')
 app.register_blueprint(cliente_bp, url_prefix='/clientes')
@@ -232,7 +236,6 @@ app.register_blueprint(nota_fiscal_bp, url_prefix='/notas-fiscais')
 app.register_blueprint(estoque_bp, url_prefix='/estoque')
 app.register_blueprint(inventario_bp, url_prefix='/inventario')
 app.register_blueprint(estoque_terceiro_bp)
-app.register_blueprint(grupo_material_bp, url_prefix='/grupos-materiais')
 app.register_blueprint(unidade_bp)
 app.register_blueprint(produto_composto_bp, url_prefix='/produto-composto')
 app.register_blueprint(dados_analiticos_bp, url_prefix='/dados-analiticos')
@@ -277,6 +280,13 @@ def verificar_permissao():
 @app.route('/')
 def index():
     return redirect(url_for('auth.login'))
+
+
+@app.route('/material')
+@app.route('/material/')
+def redirect_material_raiz():
+    """Compat: URL antiga/incorreta /material → listagem de materiais."""
+    return redirect(url_for('material.index'))
 
 
 @app.context_processor

@@ -54,11 +54,10 @@ def exportar_excel():
             ncm_unico = list(ncms_validos)[0] if len(ncms_validos) == 1 else None
             ncm_iguais = "Sim" if len(ncms_validos) <= 1 else "Não"
             json_obj = json.loads(mat.dados_adicionais) if mat.dados_adicionais else {}
-            mega = json_obj.get('cod_mega', '')
-            if mega:
-                continue
-            codigo_alterdata = json_obj.get("codigo_alterdata", "")
-
+            codigo_mega = json_obj.get('codigo_mega', '')
+            codigo_alterdata = json_obj.get('codigo_alterdata', '')
+            codigo_sox = json_obj.get('codigo_sox', '')
+          
             itens_por_ncm = {}
             for item in itens:
                 ncm_item = item.ncm.strip() if item.ncm and item.ncm.strip() else None
@@ -76,14 +75,15 @@ def exportar_excel():
                 {
                     "ID": mat.id,
                     "Máscara": mat.mascara,
- #                   "Código SOX": mat.codigo,
+                    "Código SOX": codigo_sox,
+                    "Código Mega": codigo_mega,
+                    "Código Alterdata": codigo_alterdata,
                     "Nome": mat.nome,
  #                   "Descrição": mat.descricao,
                     "Categoria": mat.categoria,
                     "Unidade": mat.unidade_obj.nome if mat.unidade_obj else "",
                     "NCM": (mat.ncm if mat.ncm != "0" else (ncm_unico or "")),
                     "Plano de Conta": mat.plano_conta,
-                    "Código Alterdata": codigo_alterdata,
                     "Data Criação": mat.data_criacao.strftime("%Y-%m-%d %H:%M:%S") if mat.data_criacao else "",
                     "Quantidade Importada": len(itens),
                     "ncn iguais": ncm_iguais,

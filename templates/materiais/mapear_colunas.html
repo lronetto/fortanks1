@@ -121,11 +121,31 @@
 
                 <div class="row mb-4">
                     <div class="col-md-4 mb-3">
-                        <label for="col_codigo_erp" class="form-label">Código ERP</label>
-                        <select class="form-select" id="col_codigo_erp" name="col_codigo_erp">
+                        <label for="col_codigo_sox" class="form-label">Código SOX</label>
+                        <select class="form-select" id="col_codigo_sox" name="col_codigo_sox">
                             <option value="">Selecione a coluna...</option>
                             {% for coluna in colunas %}
-                            <option value="{{ coluna }}" {% if mapeamento_automatico.get('col_codigo_erp') == coluna %}selected{% endif %}>{{ coluna }}</option>
+                            <option value="{{ coluna }}" {% if mapeamento_automatico.get('col_codigo_sox') == coluna %}selected{% endif %}>{{ coluna }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="col_codigo_mega" class="form-label">Código Mega</label>
+                        <select class="form-select" id="col_codigo_mega" name="col_codigo_mega">
+                            <option value="">Selecione a coluna...</option>
+                            {% for coluna in colunas %}
+                            <option value="{{ coluna }}" {% if mapeamento_automatico.get('col_codigo_mega') == coluna %}selected{% endif %}>{{ coluna }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="col-md-4 mb-3">
+                        <label for="col_codigo_alterdata" class="form-label">Código Alterdata</label>
+                        <select class="form-select" id="col_codigo_alterdata" name="col_codigo_alterdata">
+                            <option value="">Selecione a coluna...</option>
+                            {% for coluna in colunas %}
+                            <option value="{{ coluna }}" {% if mapeamento_automatico.get('col_codigo_alterdata') == coluna %}selected{% endif %}>{{ coluna }}</option>
                             {% endfor %}
                         </select>
                     </div>

@@ -8,7 +8,7 @@ from models.centro_custo import CentroCusto
 from models.usuario import Usuario
 from models.colaborador import Colaborador
 from utils.email_utils import enviar_email
-from utils.material_imagem_upload import parse_dados_json
+from utils.utils import parse_dados_json
 
 # Importar WeasyPrint (requer instalação: pip install WeasyPrint)
 # e instalação de dependências de sistema (Pango, Cairo, etc.)

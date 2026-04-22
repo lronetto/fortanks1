@@ -10,7 +10,7 @@ import io
 import pandas as pd
 from weasyprint import HTML, CSS
 import os
-from utils.material_imagem_upload import parse_dados_json
+from utils.utils import parse_dados_json
 
 # Configuração do logger
 logger = logging.getLogger(__name__)

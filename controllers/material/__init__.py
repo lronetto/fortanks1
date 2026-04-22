@@ -1,23 +1,20 @@
 """
 Pacote de rotas de Material.
 
-- Rotas de página (templates/redirects) ficam em `controllers/material/routes/*`.
-- Endpoints de API (JSON/AJAX) ficam em `controllers/api/material_api.py`.
+- Rotas de página em `controllers/material/routes/core.py`, etc.
+- Endpoints JSON/AJAX em `controllers/material/routes/api.py`.
 """
 
 from flask import Blueprint
 
-material_bp = Blueprint("material", __name__, url_prefix="/materiais")
+material_bp = Blueprint("material", __name__)
+grupo_material_bp = Blueprint("grupo_material", __name__)
 
-# Registrar APIs centralizadas
-from controllers.api.material_api import register as _register_material_api  # noqa: E402
+from .routes import api  # noqa: E402,F401 — registra rotas JSON no blueprint
 
-_register_material_api(material_bp)
-
-# Registrar rotas de página
 from .routes.core import *  # noqa: E402,F401,F403
 from .routes.datatables import *  # noqa: E402,F401,F403
 from .routes.importacao import *  # noqa: E402,F401,F403
 from .routes.exportacoes import *  # noqa: E402,F401,F403
-
+from .routes.grupo import *  # noqa: E402,F401,F403
 

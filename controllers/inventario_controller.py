@@ -9,7 +9,7 @@ from models.unidade import Unidades
 from sqlalchemy import or_, func, select, distinct
 from decimal import Decimal
 import logging
-from utils.material_imagem_upload import parse_dados_json
+from utils.utils import parse_dados_json
 
 # Configuração do logger
 logger = logging.getLogger(__name__)

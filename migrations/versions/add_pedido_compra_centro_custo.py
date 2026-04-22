@@ -16,20 +16,36 @@ depends_on = None
 
 
 def upgrade():
-    op.add_column(
-        'PedidosCompra',
-        sa.Column('centro_custo_id', sa.Integer(), nullable=True),
-    )
-    op.create_foreign_key(
-        'fk_pedidoscompra_centro_custo',
-        'PedidosCompra',
-        'centros_custo',
-        ['centro_custo_id'],
-        ['id'],
-    )
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    if not insp.has_table("PedidosCompra"):
+        return
+    cols = {c["name"] for c in insp.get_columns("PedidosCompra")}
+    if "centro_custo_id" not in cols:
+        op.add_column(
+            "PedidosCompra",
+            sa.Column("centro_custo_id", sa.Integer(), nullable=True),
+        )
+    fks = {fk["name"] for fk in insp.get_foreign_keys("PedidosCompra")}
+    if "fk_pedidoscompra_centro_custo" not in fks:
+        op.create_foreign_key(
+            "fk_pedidoscompra_centro_custo",
+            "PedidosCompra",
+            "centros_custo",
+            ["centro_custo_id"],
+            ["id"],
+        )
 
 
 def downgrade():
-    op.drop_constraint('fk_pedidoscompra_centro_custo', 'PedidosCompra', type_='foreignkey')
-    op.drop_column('PedidosCompra', 'centro_custo_id')
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    if not insp.has_table("PedidosCompra"):
+        return
+    fks = {fk["name"] for fk in insp.get_foreign_keys("PedidosCompra")}
+    if "fk_pedidoscompra_centro_custo" in fks:
+        op.drop_constraint("fk_pedidoscompra_centro_custo", "PedidosCompra", type_="foreignkey")
+    cols = {c["name"] for c in insp.get_columns("PedidosCompra")}
+    if "centro_custo_id" in cols:
+        op.drop_column("PedidosCompra", "centro_custo_id")
 

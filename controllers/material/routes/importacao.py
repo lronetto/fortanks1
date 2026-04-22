@@ -14,7 +14,7 @@ from models.database import db
 from models.material import Materiais
 from models.unidade import Unidades
 from models.plano_conta import PlanoConta
-from utils.material_imagem_upload import dump_dados_json, parse_dados_json
+from utils.utils import dump_dados_json, parse_dados_json
 
 from .. import material_bp
 
@@ -96,12 +96,15 @@ def selecionar_planilha():
         # Dicionário de mapeamento: campo_sistema -> possíveis_nomes_no_excel
         campos_mapeamento = {
             'col_id': ['id', 'ID', 'Id', 'codigo', 'Código', 'CÓDIGO', 'cod', 'COD'],
+            'col_mascara': ['mascara', 'Máscara', 'MÁSCARA', 'masc', 'MASC'],
+            'col_codigo_sox': ['codigo_sox', 'Código SOX', 'CÓDIGO SOX', 'codigo sox', 'Código Sox', 'sox', 'SOX'],
+            'col_codigo_mega': ['codigo_mega', 'Código Mega', 'CÓDIGO MEGA', 'codigo mega', 'Código Mega', 'mega', 'MEGA'],
+            'col_codigo_alterdata': ['codigo_alterdata', 'Código Alterdata', 'CÓDIGO ALTERDATA', 'codigo alterdata', 'Código Alterdata', 'alterdata', 'ALTERDATA'],
             'col_nome': ['nome', 'Nome', 'NOME', 'descricao', 'Descrição', 'DESCRIÇÃO', 'desc', 'DESC', 'material', 'Material', 'MATERIAL'],
             'col_categoria': ['categoria', 'Categoria', 'CATEGORIA', 'cat', 'CAT', 'tipo', 'Tipo', 'TIPO'],
-            'col_codigo_erp': ['codigo_erp', 'Código ERP', 'CÓDIGO ERP', 'codigo erp', 'Código Erp', 'erp', 'ERP'],
             'col_plano_conta': ['plano_conta', 'Plano de Conta', 'PLANO DE CONTA', 'plano de conta', 'Plano Conta', 'conta', 'Conta', 'CONTA'],
             'col_unidade': ['unidade', 'Unidade', 'UNIDADE', 'und', 'UND', 'un', 'UN'],
-            'col_mascara': ['mascara', 'Máscara', 'MÁSCARA', 'masc', 'MASC'],
+            
             'col_ncm': ['ncm', 'NCM', 'Ncm'],
         }
         
@@ -147,7 +150,9 @@ def confirmar_importacao():
         col_id = request.form.get("col_id", "").strip()
         col_nome = request.form.get("col_nome", "").strip()
         col_categoria = request.form.get("col_categoria", "").strip()
-        col_codigo_erp = request.form.get("col_codigo_erp", "").strip()
+        col_codigo_sox = request.form.get("col_codigo_sox", "").strip()
+        col_codigo_mega = request.form.get("col_codigo_mega", "").strip()
+        col_codigo_alterdata = request.form.get("col_codigo_alterdata", "").strip()
         col_plano_conta = request.form.get("col_plano_conta", "").strip()
         col_unidade = request.form.get("col_unidade", "").strip()
         col_mascara = request.form.get("col_mascara", "").strip()
@@ -177,7 +182,20 @@ def confirmar_importacao():
         # Validar se as colunas mapeadas existem no arquivo
         colunas_arquivo = df.columns.tolist()
         colunas_obrigatorias = [col_nome, col_categoria]
-        colunas_opcionais = [col for col in [col_id, col_codigo_erp, col_plano_conta, col_unidade, col_mascara, col_ncm] if col]
+        colunas_opcionais = [
+            col
+            for col in [
+                col_id,
+                col_codigo_sox,
+                col_codigo_mega,
+                col_codigo_alterdata,
+                col_plano_conta,
+                col_unidade,
+                col_mascara,
+                col_ncm,
+            ]
+            if col
+        ]
         
         for col in colunas_obrigatorias + colunas_opcionais:
             if col and col not in colunas_arquivo:
@@ -213,7 +231,9 @@ def confirmar_importacao():
                 
                 # Extrair valores opcionais
                 codigo = str(row[col_id]).strip() if col_id and pd.notna(row.get(col_id)) else None
-                codigo_erp = str(row[col_codigo_erp]).strip() if col_codigo_erp and pd.notna(row.get(col_codigo_erp)) else None
+                codigo_sox = str(row[col_codigo_sox]).strip() if col_codigo_sox and pd.notna(row.get(col_codigo_sox)) else None
+                codigo_mega = str(row[col_codigo_mega]).strip() if col_codigo_mega and pd.notna(row.get(col_codigo_mega)) else None
+                codigo_alterdata = str(row[col_codigo_alterdata]).strip() if col_codigo_alterdata and pd.notna(row.get(col_codigo_alterdata)) else None
                 plano_conta_texto = str(row[col_plano_conta]).strip() if col_plano_conta and pd.notna(row.get(col_plano_conta)) else None
                 unidade_nome = str(row[col_unidade]).strip() if col_unidade and pd.notna(row.get(col_unidade)) else None
                 mascara = str(row[col_mascara]).strip() if col_mascara and pd.notna(row.get(col_mascara)) else None
@@ -222,8 +242,12 @@ def confirmar_importacao():
                 # Limpar valores "nan" ou "None"
                 if codigo and codigo.lower() in ["nan", "none", ""]:
                     codigo = None
-                if codigo_erp and codigo_erp.lower() in ["nan", "none", ""]:
-                    codigo_erp = None
+                if codigo_sox and codigo_sox.lower() in ["nan", "none", ""]:
+                    codigo_sox = None
+                if codigo_mega and codigo_mega.lower() in ["nan", "none", ""]:
+                    codigo_mega = None
+                if codigo_alterdata and codigo_alterdata.lower() in ["nan", "none", ""]:
+                    codigo_alterdata = None
                 if plano_conta_texto and plano_conta_texto.lower() in ["nan", "none", ""]:
                     plano_conta_texto = None
                 if unidade_nome and unidade_nome.lower() in ["nan", "none", ""]:
@@ -279,13 +303,17 @@ def confirmar_importacao():
                         # Atualizar material existente
                         material_existente.nome = nome
                         material_existente.categoria = categoria
-                        if codigo:
+                        if codigo_sox:
                             extras = parse_dados_json(material_existente.dados_adicionais)
-                            extras["codigo_sox"] = codigo
+                            extras["codigo_sox"] = codigo_sox
                             material_existente.dados_adicionais = dump_dados_json(extras) if extras else None
-                        if codigo_erp:
+                        if codigo_mega:
                             extras = parse_dados_json(material_existente.dados_adicionais)
-                            extras["codigo_alterdata"] = codigo_erp
+                            extras["codigo_mega"] = codigo_mega
+                            material_existente.dados_adicionais = dump_dados_json(extras) if extras else None
+                        if codigo_alterdata:
+                            extras = parse_dados_json(material_existente.dados_adicionais)
+                            extras["codigo_alterdata"] = codigo_alterdata
                             material_existente.dados_adicionais = dump_dados_json(extras) if extras else None
                         if plano_conta_id:
                             material_existente.plano_conta_id = plano_conta_id
@@ -306,10 +334,12 @@ def confirmar_importacao():
                 else:
                     # Criar novo material
                     extras = parse_dados_json(None)
-                    if codigo:
-                        extras["codigo_sox"] = codigo
-                    if codigo_erp:
-                        extras["codigo_alterdata"] = codigo_erp
+                    if codigo_sox:
+                        extras["codigo_sox"] = codigo_sox
+                    if codigo_mega:
+                        extras["codigo_mega"] = codigo_mega
+                    if codigo_alterdata:
+                        extras["codigo_alterdata"] = codigo_alterdata
                     novo_material = Materiais(
                         nome=nome,
                         categoria=categoria,
@@ -384,9 +414,31 @@ def download_modelo():
         temp_file = os.path.join(tempfile.gettempdir(), "modelo_importacao_materiais.xlsx")
         with pd.ExcelWriter(temp_file, engine="openpyxl") as writer:
             df_principal = pd.DataFrame(
-                columns=["ID", "Nome", "Categoria", "Código ERP", "Plano de Conta", "Unidade", "Máscara", "NCM"]
+                columns=[
+                    "ID",
+                    "Nome",
+                    "Categoria",
+                    "Código SOX",
+                    "Código Mega",
+                    "Código Alterdata",
+                    "Plano de Conta",
+                    "Unidade",
+                    "Máscara",
+                    "NCM",
+                ]
             )
-            df_principal.loc[0] = ["1", "Cimento Portland CP-II", "Matéria-prima", "ERP001", "Material Direto", "sc", "123", "1234567890"]
+            df_principal.loc[0] = [
+                "1",
+                "Cimento Portland CP-II",
+                "Matéria-prima",
+                "SOX001",
+                "MEGA001",
+                "ALT001",
+                "Material Direto",
+                "sc",
+                "123",
+                "1234567890",
+            ]
             df_principal.to_excel(writer, sheet_name="Materiais", index=False)
         return send_file(
             temp_file,

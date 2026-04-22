@@ -6,7 +6,7 @@ from models.colaborador import Colaborador
 from models.database import db
 from models.estoque import Estoque, EstoqueMovimentacoes, EstoqueInventarios, EstoqueInventariosItens
 from utils.ca_scraper import consultar_ca, baixar_pagina_consultaca
-from utils.material_imagem_upload import parse_dados_json
+from utils.utils import parse_dados_json
 from datetime import datetime, timedelta, date
 import json
 import logging

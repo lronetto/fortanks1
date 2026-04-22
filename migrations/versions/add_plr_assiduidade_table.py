@@ -15,6 +15,11 @@ depends_on = None
 
 
 def upgrade():
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if inspector.has_table("PlrAssiduidade"):
+        return
+
     op.create_table(
         'PlrAssiduidade',
         sa.Column('id', sa.Integer(), nullable=False),
@@ -31,4 +36,7 @@ def upgrade():
 
 
 def downgrade():
-    op.drop_table('PlrAssiduidade')
+    bind = op.get_bind()
+    inspector = sa.inspect(bind)
+    if inspector.has_table("PlrAssiduidade"):
+        op.drop_table("PlrAssiduidade")

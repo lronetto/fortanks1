@@ -1,0 +1,139 @@
+<!-- Modal editar orçamento -->
+<div class="modal fade" id="modalEditarOrcamento" tabindex="-1" aria-labelledby="modalEditarOrcamentoTitulo" aria-hidden="true">
+    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+        <div class="modal-content">
+            <form id="formEditarOrcamento" method="POST" action="">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="retorno" id="edit_orc_retorno" value="">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="modalEditarOrcamentoTitulo"><i class="fas fa-edit me-2"></i>Editar orçamento</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+                </div>
+                <div class="modal-body">
+                    <div id="edit_orc_loading" class="text-center py-4 d-none">
+                        <div class="spinner-border text-primary" role="status"><span class="visually-hidden">Carregando...</span></div>
+                    </div>
+                    <div id="edit_orc_campos">
+                        <div class="mb-3">
+                            <label for="edit_orc_nome" class="form-label">Nome <span class="text-danger">*</span></label>
+                            <input type="text" class="form-control" id="edit_orc_nome" name="nome" maxlength="100" required autocomplete="off">
+                        </div>
+                        <div class="row g-3 mb-3">
+                            <div class="col-md-4">
+                                <label for="edit_orc_data" class="form-label">Data</label>
+                                <input type="date" class="form-control" id="edit_orc_data" name="data">
+                            </div>
+                            <div class="col-md-4">
+                                <label for="edit_orc_status" class="form-label">Status</label>
+                                <select class="form-select" id="edit_orc_status" name="status"></select>
+                            </div>
+                            <div class="col-md-4">
+                                <label for="edit_orc_contrato_id" class="form-label">Contrato</label>
+                                <select class="form-select" id="edit_orc_contrato_id" name="contrato_id"></select>
+                            </div>
+                        </div>
+                        <div class="mb-3">
+                            <label for="edit_orc_vinculado_a_orcamento_id" class="form-label">Vinculado a outro orçamento</label>
+                            <select class="form-select" id="edit_orc_vinculado_a_orcamento_id" name="vinculado_a_orcamento_id"></select>
+                            <div class="form-text">Referência opcional a outro orçamento (ex.: revisão ou versão anterior).</div>
+                        </div>
+                        <div class="mb-0">
+                            <label for="edit_orc_descricao" class="form-label">Descrição</label>
+                            <textarea class="form-control" id="edit_orc_descricao" name="descricao" rows="3" placeholder="Opcional"></textarea>
+                        </div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary" id="edit_orc_btn_salvar">
+                        <i class="fas fa-save me-1"></i>Salvar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+$(document).ready(function () {
+    var urlDadosTpl = '{{ url_for("orcamento.editar_dados", orcamento_id=999999999) }}';
+    var urlPostTpl = '{{ url_for("orcamento.editar", orcamento_id=999999999) }}';
+    var statusPadrao = ['Pendente', 'Importado', 'Aprovado', 'Reprovado'];
+
+    function preencherStatus($sel, valorAtual) {
+        $sel.empty();
+        var atual = valorAtual || '';
+        statusPadrao.forEach(function (st) {
+            $sel.append($('<option>', { value: st, text: st }));
+        });
+        if (atual && statusPadrao.indexOf(atual) === -1) {
+            $sel.append($('<option>', { value: atual, text: atual }));
+        }
+        $sel.val(atual || 'Pendente');
+    }
+
+    function preencherContratos($sel, itens, selecionado) {
+        $sel.empty().append($('<option>', { value: '', text: '— Nenhum —' }));
+        itens.forEach(function (c) {
+            $sel.append($('<option>', { value: c.id, text: c.nome }));
+        });
+        $sel.val(selecionado ? String(selecionado) : '');
+    }
+
+    function preencherOutrosOrcamentos($sel, itens, selecionado) {
+        $sel.empty().append($('<option>', { value: '', text: '— Nenhum —' }));
+        itens.forEach(function (o) {
+            $sel.append($('<option>', { value: o.id, text: o.id + ' — ' + o.nome }));
+        });
+        $sel.val(selecionado ? String(selecionado) : '');
+    }
+
+    window.ftAbrirModalEditarOrcamento = function (orcamentoId, retorno) {
+        if (!orcamentoId) return;
+        $('#edit_orc_retorno').val(retorno === 'lista' ? 'lista' : 'visualizar');
+        $('#formEditarOrcamento').attr('action', urlPostTpl.replace('999999999', String(orcamentoId)));
+
+        $('#edit_orc_loading').removeClass('d-none');
+        $('#edit_orc_campos').addClass('d-none');
+        $('#edit_orc_btn_salvar').prop('disabled', true);
+
+        var url = urlDadosTpl.replace('999999999', String(orcamentoId));
+        fetch(url, { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+            .then(function (r) {
+                if (!r.ok) throw new Error('Falha ao carregar');
+                return r.json();
+            })
+            .then(function (data) {
+                $('#modalEditarOrcamentoTitulo').html('<i class="fas fa-edit me-2"></i>Editar orçamento #' + data.id);
+                $('#edit_orc_nome').val(data.nome || '');
+                $('#edit_orc_data').val(data.data || '');
+                preencherStatus($('#edit_orc_status'), data.status);
+                preencherContratos($('#edit_orc_contrato_id'), data.contratos || [], data.contrato_id);
+                preencherOutrosOrcamentos($('#edit_orc_vinculado_a_orcamento_id'), data.outros_orcamentos || [], data.vinculado_a_orcamento_id);
+                $('#edit_orc_descricao').val(data.descricao || '');
+
+                $('#edit_orc_loading').addClass('d-none');
+                $('#edit_orc_campos').removeClass('d-none');
+                $('#edit_orc_btn_salvar').prop('disabled', false);
+
+                var el = document.getElementById('modalEditarOrcamento');
+                if (el && window.bootstrap && window.bootstrap.Modal) {
+                    window.bootstrap.Modal.getOrCreateInstance(el).show();
+                }
+            })
+            .catch(function () {
+                $('#edit_orc_loading').addClass('d-none');
+                $('#edit_orc_campos').removeClass('d-none');
+                $('#edit_orc_btn_salvar').prop('disabled', false);
+                alert('Não foi possível carregar os dados do orçamento.');
+            });
+    };
+
+    $('#btnEditarOrcamentoTopo').on('click', function () {
+        var id = $(this).data('orcamento-id');
+        if (id && typeof window.ftAbrirModalEditarOrcamento === 'function') {
+            window.ftAbrirModalEditarOrcamento(id, 'visualizar');
+        }
+    });
+});
+</script>

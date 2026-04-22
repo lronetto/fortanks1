@@ -24,7 +24,7 @@ from models.material import Materiais
 from models.unidade import get_conversao_unidade, normalizar_unidade, comparar_unidades
 from models.tanque import TanquesPecas, TanquesProdutoComposto, Tanques, TanquesGrupos
 from models.produto_composto import ProdutoComposto
-from utils.material_imagem_upload import parse_dados_json
+from utils.utils import parse_dados_json
 
 logger = logging.getLogger(__name__)
 

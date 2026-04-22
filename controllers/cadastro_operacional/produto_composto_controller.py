@@ -16,7 +16,7 @@ from sqlalchemy import or_, func, and_
 from sqlalchemy.orm import joinedload
 from decimal import Decimal
 from collections import defaultdict
-from utils.material_imagem_upload import parse_dados_json
+from utils.utils import parse_dados_json
 from utils.datatable_helper import DataTableParams
 
 from controllers.cadastro_operacional.services.produto_composto_componentes_service import (

@@ -179,6 +179,11 @@
                        abrirSubmenu('materiaisSubmenu');
                    }
 
+                   // Auto-abrir o submenu de Orçamento
+                   if (window.location.pathname.includes('/orcamentos')) {
+                       abrirSubmenu('orcamentoSubmenu');
+                   }
+
                    // Auto-abrir o submenu de segurança se estiver em uma página relacionada
                    if (window.location.pathname.includes('/seguranca') ||
                        window.location.pathname.includes('/epis')) {
@@ -652,6 +657,29 @@
                     </a>
                 </li>
                 {% endif %}
+
+                <!-- Orçamento -->
+                <li class="{{ is_active('orcamento') }}">
+                    <a href="#orcamentoSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="sidebar-link">
+                        <span class="sb-icon"><i class="fas fa-file-invoice-dollar"></i></span>
+                        <span class="sb-label">Orçamento</span>
+                        <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
+                    </a>
+                    <ul class="collapse list-unstyled sb-submenu" id="orcamentoSubmenu">
+                        <li class="{{ is_active('orcamento.index') }}">
+                            <a href="{{ url_for('orcamento.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-list"></i></span>
+                                <span class="sb-label">Orçamento</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('orcamento.referencias') }}">
+                            <a href="{{ url_for('orcamento.referencias') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-link"></i></span>
+                                <span class="sb-label">Referências</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
 
                 <!-- Reembolsos -->
                 {% if current_user.is_permissao('reembolsos') %}
@@ -1159,6 +1187,8 @@
             <main class="container-fluid">
                 {% block content %}{% endblock %}
             </main>
+
+            {% block page_modals %}{% endblock %}
 
             <!-- Rodapé -->
             <footer class="footer mt-auto py-3">

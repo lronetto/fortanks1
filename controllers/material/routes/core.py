@@ -1,43 +1,18 @@
 import logging
-from datetime import datetime
 
-from flask import Blueprint, flash, redirect, render_template, request, url_for, current_app
+from flask import flash, redirect, render_template, request, url_for, jsonify
 from flask_login import current_user, login_required
-from sqlalchemy import text
 
 from models.database import db
-from models.material import Materiais, MateriaisGrupos
+from models.material import Materiais
 from models.plano_conta import PlanoConta
-from models.tanque import TanquesPecas
-from models.unidade import Unidades, UnidadesConversao
-from models.nota_fiscal import NotaFiscalItem
-from models.estoque import Estoque
-from models.orcamento import Orcamento, ItemOrcamento
-from models.concreto import ConcretoUsinagensMateriais
-from models.epi import Epi
-from utils.material_imagem_upload import (
-    dump_dados_json,
-    parse_dados_json,
-    salvar_imagem_material,
-    set_imagem_upload_id,
-)
+from models.unidade import Unidades
+from utils.utils import parse_dados_json
+from utils.normalizar import normalizar_str_inteiro
 
 from .. import material_bp
 
 logger = logging.getLogger(__name__)
-
-
-def _normalizar_codigo_inteiro(valor):
-    txt = str(valor or "").strip()
-    if not txt:
-        return ""
-    txt = txt.replace(",", ".")
-    try:
-        return str(int(float(txt)))
-    except (TypeError, ValueError):
-        if "." in txt:
-            return txt.split(".", 1)[0]
-        return txt
 
 
 @material_bp.before_request
@@ -81,64 +56,37 @@ def novo():
     planos_conta = PlanoConta.query.filter_by(ativo=True).order_by(PlanoConta.indice).all()
     unidades = Unidades.query.filter_by(ativo=True).order_by(Unidades.nome).all()
 
+    from_modal = request.referrer and "index" in request.referrer
+
     try:
-        codigo = _normalizar_codigo_inteiro(request.form.get("codigo"))
-        nome = request.form.get("nome")
-        descricao = request.form.get("descricao")
-        categoria = request.form.get("categoria")
-        plano_conta = request.form.get("plano_conta")
-        codigo_alterdata = _normalizar_codigo_inteiro(request.form.get("codigo_alterdata") or request.form.get("codigo_erp"))
-        codigo_mega = _normalizar_codigo_inteiro(request.form.get("codigo_mega"))
-        unidade = request.form.get("unidade")
-        mascara = _normalizar_codigo_inteiro(request.form.get("mascara"))
-        formula_calculo = request.form.get("formula_calculo", "").strip()
-
-        unidade_texto = request.form.get("unidade_texto", "")
-        if not unidade and unidade_texto:
-            unidade = unidade_texto
-
-        from_modal = request.referrer and "index" in request.referrer
-
-        if not nome or not categoria:
-            flash("Nome e categoria são campos obrigatórios!", "danger")
-            if from_modal:
-                return redirect(url_for("material.index"))
-            return render_template("materiais/novo.html", planos_conta=planos_conta, unidades=unidades)
-
-        # A coluna `codigo` foi removida do banco; o valor do usuário é salvo em dados_adicionais["codigo_sox"].
-
-        extras = parse_dados_json(None)
-        if codigo:
-            extras["codigo_sox"] = codigo
-        if codigo_alterdata:
-            extras["codigo_alterdata"] = codigo_alterdata
-        if codigo_mega:
-            extras["codigo_mega"] = codigo_mega
-            extras["cod_mega"] = codigo_mega
-
-        material = Materiais(
-            nome=nome.upper(),
-            descricao=descricao,
-            categoria=categoria,
-            plano_conta=plano_conta,
-            unidade_id=unidade,
-            mascara=mascara,
-            formula_calculo=formula_calculo if formula_calculo else None,
-            dados_adicionais=dump_dados_json(extras) if extras else None,
+        material = Materiais.criar_desde_formulario(
+            nome=request.form.get("nome"),
+            descricao=request.form.get("descricao"),
+            categoria=request.form.get("categoria"),
+            plano_conta=request.form.get("plano_conta"),
+            unidade=request.form.get("unidade"),
+            unidade_texto=request.form.get("unidade_texto", ""),
+            mascara_raw=request.form.get("mascara"),
+            formula_calculo=request.form.get("formula_calculo", ""),
+            codigo_raw=request.form.get("codigo"),
+            codigo_alterdata_raw=request.form.get("codigo_alterdata"),
+            codigo_erp_raw=request.form.get("codigo_erp"),
+            codigo_mega_raw=request.form.get("codigo_mega"),
         )
         material.usuario_id = current_user.id
         material.save()
 
         arquivo_img = request.files.get("imagem_material")
         if arquivo_img and arquivo_img.filename:
-            uid = salvar_imagem_material(material.id, arquivo_img)
-            if uid:
-                material.dados_adicionais = set_imagem_upload_id(material.dados_adicionais, uid)
-                db.session.add(material)
-                db.session.commit()
+            material.set_imagem_upload(arquivo_img)
 
         flash("Material cadastrado com sucesso!", "success")
         return redirect(url_for("material.index"))
+    except ValueError as e:
+        flash(str(e), "danger")
+        if from_modal:
+            return redirect(url_for("material.index"))
+        return render_template("materiais/novo.html", planos_conta=planos_conta, unidades=unidades)
     except Exception as e:
         flash(f"Erro ao cadastrar material: {str(e)}", "danger")
         return redirect(url_for("material.index"))
@@ -147,67 +95,112 @@ def novo():
 @material_bp.route("/editar/<int:id>", methods=["GET", "POST"])
 @login_required
 def editar(id):
-    if not current_user.is_permissao('material', 'editar'):
-        flash('Você não tem permissão para editar este material.', 'danger')
-        return redirect(url_for('material.index'))
-    """
-    Mantém fluxo de página (HTML). A parte AJAX/JSON foi centralizada em `controllers/api/material_api.py`.
-    """
+    from models.estoque import Estoque, EstoqueMovimentacoes
     material = Materiais.query.get_or_404(id)
-    unidades = Unidades.query.filter_by(ativo=True).order_by(Unidades.nome).all()
 
     if request.method == "POST":
+        csrf_token = request.form.get("csrf_token")
+        if not csrf_token:
+            return jsonify({"success": False, "message": "CSRF token não fornecido"}), 400
+
+        data = request.form
+        quantidade = data.get("edit_quantidade", "")
+        quantidade_minima = data.get("edit_quantidade_minima", "")
+        quantidade_maxima = data.get("edit_quantidade_maxima", "")
+
         try:
-            codigo = _normalizar_codigo_inteiro(request.form.get("codigo", ""))
-            nome = request.form.get("nome", "")
-            descricao = request.form.get("descricao", "")
-            categoria = request.form.get("categoria", "")
-            plano_conta = request.form.get("plano_conta", "")
-            codigo_alterdata = _normalizar_codigo_inteiro(
-                request.form.get("codigo_alterdata") or request.form.get("codigo_erp", "")
+            material.aplicar_edicao_desde_formulario(
+                nome=data.get("edit_nome", ""),
+                descricao=data.get("edit_descricao", ""),
+                categoria=data.get("edit_categoria", ""),
+                plano_conta=data.get("edit_plano_conta", ""),
+                unidade=data.get("edit_unidade", ""),
+                mascara_raw=data.get("edit_mascara", ""),
+                formula_calculo=data.get("edit_formula_calculo", ""),
+                codigo_raw=data.get("edit_codigo", ""),
+                codigo_alterdata_raw=data.get("edit_codigo_alterdata"),
+                codigo_erp_raw=data.get("edit_codigo_erp"),
+                codigo_mega_raw=data.get("edit_codigo_mega"),
             )
-            unidade = request.form.get("unidade", "")
-            mascara = _normalizar_codigo_inteiro(request.form.get("mascara", ""))
-            formula_calculo = request.form.get("formula_calculo", "").strip()
 
-            if not nome or not categoria:
-                flash("Nome e categoria são campos obrigatórios!", "danger")
-                return render_template(
-                    "materiais/editar.html",
-                    material=material,
-                    planos_conta=PlanoConta.query.filter_by(ativo=True).all(),
-                    unidades=unidades,
-                )
+            remover_img = data.get("remover_imagem_material") == "1"
+            arquivo_img = request.files.get("imagem_material")
+            if remover_img:
+                material.remover_imagem_upload()
+            elif arquivo_img and arquivo_img.filename:
+                material.set_imagem_upload(arquivo_img)
 
-            # A coluna `codigo` foi removida do banco; salvamos em dados_adicionais["codigo_sox"].
-            material.nome = nome.upper()
-            material.descricao = descricao
-            material.categoria = categoria
-            material.plano_conta = plano_conta
-            material.unidade_id = unidade
-            material.mascara = mascara
-            material.formula_calculo = formula_calculo if formula_calculo else None
+            from decimal import Decimal
 
-            extras = parse_dados_json(material.dados_adicionais)
-            if codigo:
-                extras["codigo_sox"] = codigo
-            if codigo_alterdata:
-                extras["codigo_alterdata"] = codigo_alterdata
-            else:
-                extras.pop("codigo_alterdata", None)
-            material.dados_adicionais = dump_dados_json(extras) if extras else None
+            estoque = Estoque.query.filter_by(material_id=material.id, tipo_item="material").first()
 
-            db.session.add(material)
+            if quantidade or quantidade_minima or quantidade_maxima:
+                quantidade_anterior = None
+                if not estoque:
+                    estoque = Estoque(
+                        material_id=material.id,
+                        tipo_item="material",
+                        quantidade=Decimal(str(quantidade)) if quantidade else Decimal("0"),
+                        quantidade_minima=Decimal(str(quantidade_minima)) if quantidade_minima else Decimal("0"),
+                        quantidade_maxima=Decimal(str(quantidade_maxima)) if quantidade_maxima else Decimal("0"),
+                        usuario_id=current_user.id if hasattr(current_user, "id") else None,
+                    )
+                    db.session.add(estoque)
+                else:
+                    quantidade_anterior = estoque.quantidade
+                    if quantidade:
+                        estoque.quantidade = Decimal(str(quantidade))
+                    if quantidade_minima:
+                        estoque.quantidade_minima = Decimal(str(quantidade_minima))
+                    if quantidade_maxima:
+                        estoque.quantidade_maxima = Decimal(str(quantidade_maxima))
+                    estoque.usuario_id = (
+                        current_user.id if hasattr(current_user, "id") else estoque.usuario_id
+                    )
+
+                if estoque and quantidade and quantidade_anterior is not None:
+                    nova_quantidade = Decimal(str(quantidade))
+                    if nova_quantidade != quantidade_anterior:
+                        movimentacao = EstoqueMovimentacoes(
+                            estoque_id=estoque.id,
+                            tipo_movimento="ajuste",
+                            quantidade=nova_quantidade,
+                            observacao="Ajuste manual via edição de material",
+                            usuario_id=current_user.id if hasattr(current_user, "id") else None,
+                        )
+                        db.session.add(movimentacao)
+
             db.session.commit()
-            flash("Material atualizado com sucesso!", "success")
-            return redirect(url_for("material.visualizar", id=material.id))
-        except Exception as e:
+            return jsonify(
+                {"success": True, "message": "Material atualizado com sucesso!", "redirect": url_for("material.index")}
+            )
+        except ValueError as ve:
             db.session.rollback()
-            flash(f"Erro ao atualizar material: {str(e)}", "danger")
-            return redirect(url_for("material.index"))
+            return jsonify({"success": False, "message": str(ve)})
+        except Exception as db_error:
+            db.session.rollback()
+            logger.error(f"Erro ao salvar material: {str(db_error)}", exc_info=True)
+            return jsonify({"success": False, "message": f"Erro ao salvar material: {str(db_error)}"})
 
-    planos_conta = PlanoConta.query.filter_by(ativo=True).all()
-    return render_template("materiais/editar.html", material=material, planos_conta=planos_conta, unidades=unidades)
+    img_id = material.get_imagem_upload_id()
+    extras = parse_dados_json(material.dados_adicionais)
+    return jsonify(
+        {
+            "id": material.id,
+            "codigo": normalizar_str_inteiro(extras.get("codigo_sox")),
+            "nome": material.nome,
+            "descricao": material.descricao or "",
+            "categoria": material.categoria,
+            "plano_conta": material.plano_conta or "",
+            "codigo_erp": normalizar_str_inteiro(extras.get("codigo_alterdata")),
+            "codigo_alterdata": normalizar_str_inteiro(extras.get("codigo_alterdata")),
+            "codigo_mega": normalizar_str_inteiro(extras.get("codigo_mega") or extras.get("cod_mega")),
+            "unidade": material.unidade_obj.nome if material.unidade_obj else "",
+            "mascara": normalizar_str_inteiro(material.mascara),
+            "formula_calculo": material.formula_calculo or "",
+            "imagem_upload_id": img_id,
+        }
+    )
 
 
 @material_bp.route("/visualizar/<int:id>")
@@ -225,100 +218,11 @@ def excluir(id):
         return redirect(url_for('material.index'))
     try:
         material = Materiais.query.get_or_404(id)
-        
-        # Verificar todos os relacionamentos que podem impedir a exclusão
-        bloqueios = []
-        
-        # Verificar grupos de materiais (tabela de associação many-to-many)
-        try:
-            # Verificar diretamente na tabela de associação
-            result = db.session.execute(
-                text("SELECT COUNT(*) FROM materiais_grupos WHERE material_id = :material_id"),
-                {'material_id': material.id}
-            ).scalar()
-            if result and result > 0:
-                bloqueios.append(f"{result} grupo(s) de material")
-        except Exception as e:
-            logger.warning(f"Erro ao verificar grupos de material: {str(e)}")
-            # Tentar usar o relacionamento como fallback
-            try:
-                if hasattr(material, 'grupos') and material.grupos:
-                    count = len(material.grupos)
-                    if count > 0:
-                        bloqueios.append(f"{count} grupo(s) de material")
-            except Exception:
-                pass
-        # Verificar solicitações
-        try:
-            if hasattr(material, 'solicitacoes_itens') and material.solicitacoes_itens:
-                count = len(material.solicitacoes_itens)
-                if count > 0:
-                    bloqueios.append(f"{count} solicitação(ões)")
-        except Exception:
-            pass
-        
-        # Verificar itens de nota fiscal
-        try:
-            itens_nf = NotaFiscalItem.query.filter_by(material_id=material.id).count()
-            if itens_nf > 0:
-                bloqueios.append(f"{itens_nf} item(ns) de nota fiscal")
-        except Exception:
-            pass
-        
-        # Verificar estoque
-        try:
-            estoques = Estoque.query.filter_by(material_id=material.id).count()
-            if estoques > 0:
-                bloqueios.append(f"{estoques} registro(s) de estoque")
-        except Exception:
-            pass
-        
-        # Verificar orçamentos
-        try:
-            orcamentos = Orcamento.query.filter_by(material_id=material.id).count()
-            if orcamentos > 0:
-                bloqueios.append(f"{orcamentos} orçamento(s)")
-        except Exception:
-            pass
-        
-        # Verificar itens de orçamento
-        try:
-            itens_orcamento = Orcamento.query.filter_by(material_id=material.id).count()
-            if orcamentos > 0:
-                bloqueios.append(f"{orcamentos} orçamento(s)")
-        except Exception:
-            pass
-        
-        # Verificar EPIs
-        try:
-            epis = Epi.query.filter_by(material_id=material.id).count()
-            if epis > 0:
-                bloqueios.append(f"{epis} epi(s)")
-        except Exception:
-            pass
-        
-        # Verificar conversões de unidade
-        try:
-            conversoes = UnidadesConversao.query.filter_by(material_id=material.id).count()
-            if conversoes > 0:
-                bloqueios.append(f"{conversoes} conversão(ões)")
-        except Exception:
-            pass
-        
-        # Se houver bloqueios, informar ao usuário
-        if bloqueios:
-            mensagem = f"Este material não pode ser excluído pois está vinculado a: {', '.join(bloqueios)}"
-            flash(mensagem, "danger")
-            return redirect(url_for("material.index"))
-
-        # Se não houver bloqueios, remover associações e excluir o material
-        nome = material.nome
-        
-
-        # Agora pode excluir o material
-        material.delete()
-        db.session.commit()
-        flash(f'Material "{nome}" excluído com sucesso!', "success")
+        msg = material.excluir_apos_validar_vinculos()
+        flash(msg, "success")
+    except ValueError as e:
+        flash(str(e), "danger")
+        return redirect(url_for("material.index"))
     except Exception as e:
         db.session.rollback()
         logger.error(f"Erro ao excluir material {id}: {str(e)}", exc_info=True)

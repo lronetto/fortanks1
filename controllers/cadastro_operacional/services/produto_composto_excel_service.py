@@ -11,7 +11,7 @@ from models.database import db
 from models.estoque import Estoque
 from models.material import Materiais
 from models.produto_composto import ProdutoComposto, ProdutoCompostoItem
-from utils.material_imagem_upload import parse_dados_json
+from utils.utils import parse_dados_json
 
 from controllers.cadastro_operacional.services.produto_composto_componentes_service import (
     expandir_componentes_produto_composto,

@@ -1,0 +1,96 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Referências de Itens de Orçamento{% endblock %}
+{% block mobile_title %}Referências de Itens{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="ft-page-header">
+        <h1 class="h3 mb-0"><i class="fas fa-link"></i> Referências de Itens</h1>
+        <a href="{{ url_for('orcamento.index') }}" class="btn btn-outline-secondary btn-sm">
+            <i class="fas fa-arrow-left"></i>
+            <span class="d-none d-md-inline ms-1">Voltar</span>
+        </a>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <span class="card-title-text"><i class="fas fa-filter me-2"></i>Filtros</span>
+        </div>
+        <div class="card-body">
+            <form method="GET" action="{{ url_for('orcamento.referencias') }}" class="row g-2 align-items-center">
+                <div class="col-md-6">
+                    <div class="input-group input-group-sm">
+                        <span class="input-group-text"><i class="fas fa-search"></i></span>
+                        <input type="text" class="form-control" name="q" value="{{ busca }}" placeholder="Buscar por texto do item">
+                    </div>
+                </div>
+                <div class="col-md-auto">
+                    <button type="submit" class="btn btn-primary btn-sm">
+                        <i class="fas fa-filter"></i> Filtrar
+                    </button>
+                    <a href="{{ url_for('orcamento.referencias') }}" class="btn btn-outline-secondary btn-sm">
+                        Limpar
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4">
+        <div class="card-header py-3">
+            <span class="card-title-text"><i class="fas fa-list me-2"></i>Referências</span>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-bordered table-hover align-middle">
+                    <thead>
+                        <tr>
+                            <th style="width: 90px;">ID</th>
+                            <th>Texto do item</th>
+                            <th style="width: 420px;">Material do sistema</th>
+                            <th style="width: 120px;">Ação</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for referencia in referencias %}
+                        <tr>
+                            <td>{{ referencia.id }}</td>
+                            <td>{{ referencia.texto_item }}</td>
+                            <td>
+                                <form method="POST" action="{{ url_for('orcamento.vincular_referencia', referencia_id=referencia.id) }}" class="d-flex gap-2">
+                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                                    <input type="hidden" name="q" value="{{ busca }}">
+                                    <select name="material_id" class="form-select form-select-sm">
+                                        <option value="">Sem vínculo</option>
+                                        {% for material in materiais %}
+                                            <option value="{{ material.id }}" {% if referencia.material_id == material.id %}selected{% endif %}>
+                                                {{ material.nome }}
+                                            </option>
+                                        {% endfor %}
+                                    </select>
+                                    <button type="submit" class="btn btn-success btn-sm">
+                                        Salvar
+                                    </button>
+                                </form>
+                            </td>
+                            <td class="text-center">
+                                {% if referencia.material %}
+                                    <span class="badge bg-success">Vinculado</span>
+                                {% else %}
+                                    <span class="badge bg-warning text-dark">Pendente</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">Nenhuma referência encontrada.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

@@ -130,7 +130,7 @@
     $(document).ready(function () {
         // Carregar materiais associados ao plano de conta
         $.ajax({
-            url: '/api/materiais',
+            url: '{{ url_for("material.api_materiais") }}',
             type: 'GET',
             data: {
                 plano_conta: '{{ plano_conta.codigo }}'

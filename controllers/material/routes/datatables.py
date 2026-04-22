@@ -12,24 +12,12 @@ from models.material import Materiais
 from models.plano_conta import PlanoConta
 from models.solicitacao import SolicitacoesItens
 from models.unidade import Unidades
-from utils.material_imagem_upload import parse_dados_json
+from utils.normalizar import normalizar_str_inteiro
+from utils.utils import parse_dados_json
 
 from .. import material_bp
 
 logger = logging.getLogger(__name__)
-
-
-def _normalizar_codigo_inteiro(valor):
-    txt = str(valor or "").strip()
-    if not txt:
-        return ""
-    txt = txt.replace(",", ".")
-    try:
-        return str(int(float(txt)))
-    except (TypeError, ValueError):
-        if "." in txt:
-            return txt.split(".", 1)[0]
-        return txt
 
 
 def _esc(val):
@@ -221,10 +209,10 @@ def materiais_datatables():
         data = []
         for m in items:
             extras           = parse_dados_json(m.dados_adicionais)
-            mascara          = _normalizar_codigo_inteiro(m.mascara)
-            codigo_sox       = _normalizar_codigo_inteiro(extras.get("codigo_sox"))
-            codigo_alterdata = _normalizar_codigo_inteiro(extras.get("codigo_alterdata"))
-            codigo_mega      = _normalizar_codigo_inteiro(extras.get("codigo_mega") or extras.get("cod_mega"))
+            mascara          = normalizar_str_inteiro(m.mascara)
+            codigo_sox       = normalizar_str_inteiro(extras.get("codigo_sox"))
+            codigo_alterdata = normalizar_str_inteiro(extras.get("codigo_alterdata"))
+            codigo_mega      = normalizar_str_inteiro(extras.get("codigo_mega") or extras.get("cod_mega"))
             plano_codigo     = m.plano_conta or ""
             plano_desc       = (m.plano_conta_obj.descricao if m.plano_conta_obj else (m.plano_conta or "")).strip()
             unidade_id       = m.unidade_id or ""

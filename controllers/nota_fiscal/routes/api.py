@@ -13,7 +13,7 @@ from models.unidade import comparar_unidades, get_conversao_unidade, Unidades
 from models.database import db
 from models.estoque import EstoqueMovimentacoes
 from models.material import Materiais
-from utils.material_imagem_upload import parse_dados_json
+from utils.utils import parse_dados_json
 from models.nota_fiscal import NotaFiscal, NotaFiscalItem
 from models.pedido_compra import PedidoCompraEntrada, PedidoCompraItem
 from ..services.query_notas import api_get_dados_notas_fiscais

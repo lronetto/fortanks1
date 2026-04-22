@@ -1,0 +1,82 @@
+<div class="modal fade" id="modalImportarOrcamento" tabindex="-1" aria-hidden="true">
+
+    <div class="modal-dialog">
+
+        <div class="modal-content">
+
+            <form method="POST" action="{{ url_for('orcamento.importar') }}" enctype="multipart/form-data">
+
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+
+                <div class="modal-header">
+
+                    <h5 class="modal-title"><i class="fas fa-file-import me-2"></i>Importar Orçamento</h5>
+
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+
+                </div>
+
+                <div class="modal-body">
+
+                    <div class="mb-3">
+
+                        <label for="orcamento_id_existente" class="form-label">Vincular a orçamento existente</label>
+
+                        <select class="form-select" id="orcamento_id_existente" name="orcamento_id_existente">
+
+                            <option value="">Criar novo (nome e data vêm da planilha: F4 e O1)</option>
+
+                            {% for o in orcamentos_recentes %}
+
+                            <option value="{{ o.id }}">{{ o.id }} — {{ o.nome }}</option>
+
+                            {% endfor %}
+
+                        </select>
+
+                        <div class="form-text">Se escolher um orçamento, os itens da aba INSUMOS são acrescentados a ele; cabeçalho do cadastro não é alterado pela planilha.</div>
+
+                    </div>
+
+                    <div class="mb-2 small text-muted">
+
+                        Novo orçamento: nome em <strong>ENTRADAS!F4</strong>, data em <strong>ENTRADAS!O1</strong>.
+
+                    </div>
+
+                    <div class="mb-2 small text-muted">
+
+                        Os itens são lidos da aba <strong>INSUMOS</strong> (descrição D, quantidade K, valor Q).
+
+                    </div>
+
+                    <div class="mb-3">
+
+                        <label for="arquivo_orcamento" class="form-label">Arquivo Excel</label>
+
+                        <input type="file" class="form-control" id="arquivo_orcamento" name="arquivo_orcamento" accept=".xlsx,.xlsm,.xltx,.xltm" required>
+
+                    </div>
+
+                </div>
+
+                <div class="modal-footer">
+
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+
+                    <button type="submit" class="btn btn-success">
+
+                        <i class="fas fa-upload me-1"></i>Importar
+
+                    </button>
+
+                </div>
+
+            </form>
+
+        </div>
+
+    </div>
+
+</div>
+

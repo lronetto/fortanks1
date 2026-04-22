@@ -6,7 +6,7 @@ from flask import render_template, redirect, url_for, request, flash, jsonify, s
 from flask_login import login_required, current_user
 from models.material import Materiais
 from models.unidade import Unidades, UnidadesConversao, get_conversao_unidade
-from utils.material_imagem_upload import parse_dados_json
+from utils.utils import parse_dados_json
 from models.colaborador import Colaborador
 from models.concreto import (
     ConcretoUsinagensRompimentos,

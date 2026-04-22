@@ -1,0 +1,143 @@
+{% extends 'common/base.html' %}
+
+{% block title %}Orçamentos{% endblock %}
+{% block mobile_title %}Orçamentos{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{{ url_for('static', filename='css/cadastros.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="ft-page-header">
+        <h1 class="h3 mb-0"><i class="fas fa-file-invoice-dollar"></i> Orçamentos</h1>
+        <div class="btn-group">
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#modalNovoOrcamento">
+                <i class="fas fa-plus"></i>
+                <span class="d-none d-md-inline ms-1">Novo</span>
+            </button>
+            <button type="button" class="btn btn-outline-success btn-sm" data-bs-toggle="modal" data-bs-target="#modalImportarOrcamento">
+                <i class="fas fa-file-import"></i>
+                <span class="d-none d-md-inline ms-1">Importar</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="card shadow mb-4" data-ft-colvis="tabelaOrcamentos">
+        <div class="card-header py-3 d-flex align-items-center justify-content-between">
+            <span class="card-title-text"><i class="fas fa-list me-2"></i>Lista de Orçamentos</span>
+            <div class="ft-col-toggle-placeholder"></div>
+        </div>
+        <div class="card-body p-md-3 p-2">
+            <form id="filtrosOrcamentos" class="mb-3">
+                <div class="row g-2 align-items-center">
+                    <div class="col-md-4">
+                        <div class="input-group input-group-sm">
+                            <span class="input-group-text"><i class="fas fa-search"></i></span>
+                            <input type="text" class="form-control" id="buscaOrcamentos" placeholder="Buscar por nome, status ou contrato">
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <select class="form-select form-select-sm" name="status" id="statusOrcamento">
+                            <option value="">Todos os status</option>
+                            <option value="Pendente">Pendente</option>
+                            <option value="Importado">Importado</option>
+                            <option value="Aprovado">Aprovado</option>
+                            <option value="Reprovado">Reprovado</option>
+                        </select>
+                    </div>
+                    <div class="col-md-auto">
+                        <button type="submit" class="btn btn-primary btn-sm">
+                            <i class="fas fa-filter"></i> Filtrar
+                        </button>
+                    </div>
+                </div>
+            </form>
+
+            <div class="ft-datatable-wrapper">
+                <table class="table table-bordered w-100" id="tabelaOrcamentos">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Nome</th>
+                            <th>Data</th>
+                            <th>Status</th>
+                            <th>Contrato</th>
+                            <th>Itens</th>
+                            <th>Criado em</th>
+                            <th>Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% include 'cadastros/orcamentos/modais/modal_editar_orcamento.html' %}
+{% include 'cadastros/orcamentos/modais/modal_novo_orcamento.html' %}
+{% include 'cadastros/orcamentos/modais/modal_importar_orcamento.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+$(function () {
+    var TITULOS_ORC = ['ID', 'Nome', 'Data', 'Status', 'Contrato', 'Itens', 'Criado em', ''];
+
+    var tabela = $('#tabelaOrcamentos').DataTable(FT.dtOpcoes({
+        ajax: {
+            url: "{{ url_for('orcamento.api_datatables') }}",
+            type: 'GET',
+            data: function (d) {
+                d['search[value]'] = ($('#buscaOrcamentos').val() || '').trim();
+                $('#filtrosOrcamentos').serializeArray().forEach(function (item) {
+                    d[item.name] = item.value;
+                });
+            }
+        },
+        order: [[1, 'asc']],
+        columns: [
+            { data: 0, name: 'id', className: 'text-center' },
+            { data: 1, name: 'nome' },
+            { data: 2, name: 'data' },
+            { data: 3, name: 'status' },
+            { data: 4, name: 'contrato' },
+            { data: 5, name: 'itens', className: 'text-center' },
+            { data: 6, name: 'criado_em' },
+            { data: 7, name: 'acoes', orderable: false, searchable: false, className: 'text-center' }
+        ]
+    }));
+
+    FT.dtColunas.inicializar(tabela, 'tabelaOrcamentos', TITULOS_ORC);
+
+    $('#filtrosOrcamentos').on('submit', function (e) {
+        e.preventDefault();
+        tabela.ajax.reload();
+    });
+
+    $('#tabelaOrcamentos').on('click', '.ft-editar-orcamento', function (e) {
+        e.preventDefault();
+        e.stopPropagation();
+        var id = $(this).data('orcamento-id');
+        if (id && typeof window.ftAbrirModalEditarOrcamento === 'function') {
+            window.ftAbrirModalEditarOrcamento(id, 'lista');
+        }
+    });
+
+    var urlExcluirOrcamentoTpl = '{{ url_for("orcamento.excluir", orcamento_id=999999999) }}';
+    $('#tabelaOrcamentos').on('click', '.ft-excluir-orcamento', function () {
+        var id = $(this).data('orcamento-id');
+        if (!id || !confirm('Apagar este orçamento e todos os itens? Esta ação não pode ser desfeita.')) {
+            return;
+        }
+        var token = $('meta[name="csrf-token"]').attr('content');
+        var action = urlExcluirOrcamentoTpl.replace('999999999', String(id));
+        $('<form>', { method: 'POST', action: action })
+            .append($('<input>', { type: 'hidden', name: 'csrf_token', value: token }))
+            .appendTo('body')
+            .submit();
+    });
+});
+</script>
+{% endblock %}

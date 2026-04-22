@@ -16,11 +16,23 @@ depends_on = None
 
 
 def upgrade():
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    if not insp.has_table("PedidosCompraItens"):
+        return
+    cols = {c["name"] for c in insp.get_columns("PedidosCompraItens")}
+    if "quantidade_entregue_inicial" in cols:
+        return
     op.add_column(
-        'PedidosCompraItens',
-        sa.Column('quantidade_entregue_inicial', sa.Numeric(15, 4), nullable=False, server_default='0'),
+        "PedidosCompraItens",
+        sa.Column("quantidade_entregue_inicial", sa.Numeric(15, 4), nullable=False, server_default="0"),
     )
 
 
 def downgrade():
-    op.drop_column('PedidosCompraItens', 'quantidade_entregue_inicial')
+    bind = op.get_bind()
+    insp = sa.inspect(bind)
+    if insp.has_table("PedidosCompraItens") and "quantidade_entregue_inicial" in {
+        c["name"] for c in insp.get_columns("PedidosCompraItens")
+    }:
+        op.drop_column("PedidosCompraItens", "quantidade_entregue_inicial")

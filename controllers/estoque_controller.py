@@ -23,7 +23,7 @@ from weasyprint import HTML, CSS
 import os
 
 from models.produto_composto import ProdutoComposto
-from utils.material_imagem_upload import parse_dados_json
+from utils.utils import parse_dados_json
 
 # Configuração do logger
 logger = logging.getLogger(__name__)

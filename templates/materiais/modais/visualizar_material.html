@@ -75,7 +75,7 @@ document.addEventListener('DOMContentLoaded', function() {
     }
     document.addEventListener('click', function(e) {
         var btn = e.target.closest('.btn-visualizar');
-        var tbl = document.getElementById('dataTable');
+        var tbl = document.getElementById('tabelaMateriais');
         if (!btn || !tbl || !tbl.contains(btn)) return;
         e.preventDefault();
         preencherModalVisualizacao(btn);
