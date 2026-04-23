@@ -1,4 +1,4 @@
-"""Módulo de Orçamentos (cadastros)."""
+"""Módulo de Orçamentos."""
 
 from flask import Blueprint
 

@@ -147,7 +147,6 @@ def extrair_dados_xml_cte(xml_data: str):
             placa = rodo.findtext('cte:placa', default='', namespaces=ns)
         # fallback para motorista (nome pode estar no xObs)
         if not motorista and compl is not None and xObs:
-            import re
             motorista_match = re.search(r'MOTORISTA ([A-Z .A-Z]+), CPF', xObs)
             if motorista_match:
                 motorista = motorista_match.group(1)

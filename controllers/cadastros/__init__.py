@@ -2,7 +2,6 @@ from controllers.cadastros.cliente_controller import cliente_bp
 from controllers.cadastros.colaborador_controller import colaborador_bp
 from controllers.cadastros.contrato_controller import contrato_bp
 from controllers.cadastros.fornecedor_controller import fornecedor_bp
-from controllers.cadastros.orcamento import orcamento_bp
 from controllers.cadastros.peca_controller import peca
 from controllers.cadastros.tanque_controller import tanque_bp
 from controllers.cadastros.usuario_controller import usuario_bp

@@ -19,11 +19,11 @@ from controllers.cadastros import (
     colaborador_bp,
     contrato_bp,
     fornecedor_bp,
-    orcamento_bp,
     peca,
     tanque_bp,
     usuario_bp,
 )
+from controllers.orcamento import orcamento_bp
 from controllers.nota_fiscal import nota_fiscal_bp
 from controllers.estoque_controller import estoque_bp
 from controllers.inventario_controller import inventario_bp
