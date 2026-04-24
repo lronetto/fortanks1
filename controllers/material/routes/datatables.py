@@ -12,7 +12,7 @@ from models.material import Materiais
 from models.plano_conta import PlanoConta
 from models.solicitacao import SolicitacoesItens
 from models.unidade import Unidades
-from utils.normalizar import normalizar_str_inteiro
+from utils.parser import ToInt
 from utils.utils import parse_dados_json
 
 from .. import material_bp
@@ -209,10 +209,10 @@ def materiais_datatables():
         data = []
         for m in items:
             extras           = parse_dados_json(m.dados_adicionais)
-            mascara          = normalizar_str_inteiro(m.mascara)
-            codigo_sox       = normalizar_str_inteiro(extras.get("codigo_sox"))
-            codigo_alterdata = normalizar_str_inteiro(extras.get("codigo_alterdata"))
-            codigo_mega      = normalizar_str_inteiro(extras.get("codigo_mega") or extras.get("cod_mega"))
+            mascara          = ToInt(m.mascara)
+            codigo_sox       = ToInt(extras.get("codigo_sox"))
+            codigo_alterdata = ToInt(extras.get("codigo_alterdata"))
+            codigo_mega      = ToInt(extras.get("codigo_mega") or extras.get("cod_mega"))
             plano_codigo     = m.plano_conta or ""
             plano_desc       = (m.plano_conta_obj.descricao if m.plano_conta_obj else (m.plano_conta or "")).strip()
             unidade_id       = m.unidade_id or ""

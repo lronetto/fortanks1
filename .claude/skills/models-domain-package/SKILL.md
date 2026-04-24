@@ -56,11 +56,12 @@ models/<domínio>/
 
 ## Compatibilidade ao refatorar
 
-1. Mapear todos os imports: `grep -r "models.<domínio>"` e `from models import` que tocam nas classes movidas.
-2. Criar a nova árvore; mover código sem alterar comportamento na primeira passada (só paths de import).
-3. Atualizar **`models/__init__.py`** se registrar modelos para `configure_mappers()` — continuar importando do pacote agregador (`from .<domínio> import ...`).
-4. Remover arquivos antigos na raiz de `models/<domínio>/` só depois de nenhum import apontar para eles.
-5. Rodar `python -m py_compile` nos módulos tocados; import completo do app pode exigir venv com dependências.
+1. **Antes de mover ou reimplementar lógica**, inspecionar **`models/<domínio>/utils/`** (e o `__init__.py` de `utils`, se existir): listar módulos, ler nomes exportados e **buscar no pacote** (`grep` por palavras-chave do comportamento). Se já existir função equivalente (normalização, parsing de JSON do domínio, datas, chaves de `dados_adicionais`, etc.), **reutilizar ou estender** em vez de duplicar em `entities/`, `services/` ou no controller legado. O mesmo vale ao extrair código de controllers para o domínio: preferir centralizar em `utils/` existente quando for puro.
+2. Mapear todos os imports: `grep -r "models.<domínio>"` e `from models import` que tocam nas classes movidas.
+3. Criar a nova árvore; mover código sem alterar comportamento na primeira passada (só paths de import).
+4. Atualizar **`models/__init__.py`** se registrar modelos para `configure_mappers()` — continuar importando do pacote agregador (`from .<domínio> import ...`).
+5. Remover arquivos antigos na raiz de `models/<domínio>/` só depois de nenhum import apontar para eles.
+6. Rodar `python -m py_compile` nos módulos tocados; import completo do app pode exigir venv com dependências.
 
 ## Imports e ciclos
 
@@ -80,6 +81,7 @@ models/<domínio>/
 
 **Refatoração**
 
+- [ ] **`utils/` do domínio** revisado: nada duplicado; reutilização ou extensão de helpers já existentes
 - [ ] Estrutura de pastas criada; código movido com imports corrigidos
 - [ ] `__init__.py` raiz reexporta a API antiga
 - [ ] `models/__init__.py` atualizado se aplicável

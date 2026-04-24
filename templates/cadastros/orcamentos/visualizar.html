@@ -5,6 +5,7 @@
 
 {% block extra_css %}
 <link rel="stylesheet" href="{{ url_for('static', filename='css/cadastros.css') }}">
+<link rel="stylesheet" href="https://cdn.datatables.net/rowgroup/1.4.1/css/rowGroup.bootstrap5.min.css">
 {% endblock %}
 
 {% block content %}
@@ -59,32 +60,58 @@
             <span class="card-title-text"><i class="fas fa-list me-2"></i>Itens</span>
         </div>
         <div class="card-body">
-            <div class="table-responsive">
-                <table class="table table-bordered">
+            <div class="row g-2 mb-3">
+                <div class="col-md-4">
+                    <div class="border rounded p-2 h-100">
+                        <div class="small text-muted">Valor Fabricação</div>
+                        <div class="fw-semibold">{{ resumo_valores.valor_fabricacao_fmt }}</div>
+                        <div class="small text-muted mt-1">
+                            Grupos: {{ resumo_valores.grupos_fabricacao|join(', ') if resumo_valores.grupos_fabricacao else 'não configurado' }}
+                        </div>
+                        <div class="small text-muted mt-1">
+                            Descrição (prioridade): {{ resumo_valores.padroes_desc_fabricacao|join(', ') if resumo_valores.padroes_desc_fabricacao else 'não configurado' }}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="border rounded p-2 h-100">
+                        <div class="small text-muted">Valor Montagem</div>
+                        <div class="fw-semibold">{{ resumo_valores.valor_montagem_fmt }}</div>
+                        <div class="small text-muted mt-1">
+                            Grupos: {{ resumo_valores.grupos_montagem|join(', ') if resumo_valores.grupos_montagem else 'não configurado' }}
+                        </div>
+                        <div class="small text-muted mt-1">
+                            Descrição (prioridade): {{ resumo_valores.padroes_desc_montagem|join(', ') if resumo_valores.padroes_desc_montagem else 'não configurado' }}
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="border rounded p-2 h-100">
+                        <div class="small text-muted">Valor Total</div>
+                        <div class="fw-semibold">{{ resumo_valores.valor_total_fmt }}</div>
+                    </div>
+                </div>
+            </div>
+            <div class="mb-3">
+                <div class="input-group input-group-sm">
+                    <span class="input-group-text"><i class="fas fa-search"></i></span>
+                    <input type="text" class="form-control" id="buscaItensOrcamento" placeholder="Buscar por descrição, grupo, material ou unidade">
+                </div>
+            </div>
+            <div class="ft-datatable-wrapper">
+                <table class="table table-bordered w-100" id="tabelaItensOrcamento">
                     <thead>
                         <tr>
                             <th>#</th>
                             <th>Descrição</th>
                             <th>Material</th>
+                            <th>Unidade</th>
                             <th>Quantidade</th>
                             <th>Valor</th>
+                            <th>Total</th>
                         </tr>
                     </thead>
-                    <tbody>
-                        {% for item in itens %}
-                        <tr>
-                            <td>{{ item.id }}</td>
-                            <td>{{ item.descricao_item or '-' }}</td>
-                            <td>{{ item.material.nome if item.material else '-' }}</td>
-                            <td>{{ item.quantidade }}</td>
-                            <td>R$ {{ '%.2f'|format(item.valor|float) if item.valor is not none else '0.00' }}</td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="5" class="text-center text-muted">Nenhum item encontrado.</td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
+                    <tbody></tbody>
                 </table>
             </div>
         </div>
@@ -92,4 +119,82 @@
 </div>
 
 {% include 'cadastros/orcamentos/modais/modal_editar_orcamento.html' %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="https://cdn.datatables.net/rowgroup/1.4.1/js/dataTables.rowGroup.min.js"></script>
+<script>
+$(function () {
+    function fmtMoedaGrp(n) {
+        return (Number(n) || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+    }
+
+    var TITULOS_ITENS = ['ID', 'Descrição', 'Material', 'Unidade', 'Quantidade', 'Valor', 'Total', 'Valor núm.', 'Total núm.', 'Grupo'];
+    var tabelaItens = $('#tabelaItensOrcamento').DataTable(FT.dtOpcoes({
+        ajax: {
+            url: "{{ url_for('orcamento.api_datatables_itens', orcamento_id=orcamento.id) }}",
+            type: 'GET',
+            data: function (d) {
+                d['search[value]'] = ($('#buscaItensOrcamento').val() || '').trim();
+            }
+        },
+        responsive: false,
+        pageLength: -1,
+        lengthMenu: [[25, 50, 100, -1], [25, 50, 100, 'Todos']],
+        order: [[9, 'asc'], [0, 'asc']],
+        columns: [
+            { data: 'id', name: 'id', className: 'text-center', defaultContent: '' },
+            { data: 'descricao_item', name: 'descricao_item', defaultContent: '' },
+            { data: 'material', name: 'material', defaultContent: '' },
+            { data: 'unidade', name: 'unidade', className: 'text-center', defaultContent: '' },
+            { data: 'quantidade', name: 'quantidade', className: 'text-end', defaultContent: '' },
+            { data: 'valor', name: 'valor', className: 'text-end', defaultContent: '' },
+            { data: 'total', name: 'total', className: 'text-end', defaultContent: '' },
+            { data: 'valor_num', name: 'valor_num', visible: false, searchable: false, orderable: false, defaultContent: 0 },
+            { data: 'total_num', name: 'total_num', visible: false, searchable: false, orderable: false, defaultContent: 0 },
+            { data: 'grupo', name: 'grupo', visible: false, searchable: true, defaultContent: '' }
+        ],
+        rowGroup: {
+            dataSrc: 'grupo',
+            className: 'ft-orcamento-grupo',
+            startRender: function (rows, group) {
+                var nome = (group === null || group === '') ? '(sem grupo)' : group;
+                var sumTotal = 0;
+                rows.every(function () {
+                    var d = this.data();
+                    var t = parseFloat(d.total_num);
+                    sumTotal += isNaN(t) ? 0 : t;
+                });
+                return ''
+                    + '<div class="ft-grupo-inner-grid">'
+                    +   '<div class="ft-grupo-label text-truncate">'
+                    +     '<span class="text-muted me-1 ft-grupo-chevron"><i class="fas fa-chevron-down"></i></span>'
+                    +     '<span class="align-middle">' + FT.escAttr(nome) + '</span>'
+                    +     ' <span class="badge bg-secondary ms-1">' + rows.count() + '</span>'
+                    +   '</div>'
+                    +   '<div class="ft-grupo-total-val text-end">' + fmtMoedaGrp(sumTotal) + '</div>'
+                    + '</div>';
+            }
+        }
+    }));
+
+    FT.dtColunas.inicializar(tabelaItens, 'tabelaItensOrcamento_v2', TITULOS_ITENS);
+
+    $('#tabelaItensOrcamento').on('click', 'tbody tr.ft-orcamento-grupo', function () {
+        var $tr = $(this);
+        var collapsed = !$tr.data('collapsed');
+        $tr.data('collapsed', collapsed);
+        var $next = $tr.next('tr');
+        while ($next.length && !$next.hasClass('ft-orcamento-grupo')) {
+            $next.toggle(!collapsed);
+            $next = $next.next('tr');
+        }
+        $tr.find('.ft-grupo-chevron i').toggleClass('fa-chevron-down', !collapsed).toggleClass('fa-chevron-right', collapsed);
+    });
+
+    $('#buscaItensOrcamento').on('input', function () {
+        tabelaItens.ajax.reload();
+    });
+});
+</script>
 {% endblock %}

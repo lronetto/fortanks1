@@ -1,36 +1,36 @@
-<!-- Modal Editar Cargo x Salário (usado no loop por item) -->
-<div class="modal fade" id="modalEditarCargoSalario{{ item.id }}" tabindex="-1" aria-labelledby="modalEditarCargoSalarioLabel{{ item.id }}" aria-hidden="true">
+<!-- Modal único: edição preenchida via JS (lista DataTables server-side) -->
+<div class="modal fade" id="modalEditarCargoSalario" tabindex="-1" aria-labelledby="modalEditarCargoSalarioLabel" aria-hidden="true">
     <div class="modal-dialog">
         <div class="modal-content">
-            <form method="POST" action="{{ url_for('plr.cargo_salario_editar', id=item.id) }}">
+            <form method="POST" id="formEditarCargoSalario" action="#">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="modalEditarCargoSalarioLabel{{ item.id }}">Editar Cargo x Salário</h5>
+                    <h5 class="modal-title" id="modalEditarCargoSalarioLabel">Editar Cargo x Salário</h5>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
                 </div>
                 <div class="modal-body">
                     <div class="mb-3">
                         <label class="form-label">Cargo</label>
-                        <input type="text" class="form-control" value="{{ item.cargo.nome if item.cargo else '' }}" readonly disabled>
-                        <input type="hidden" name="cargo_id" value="{{ item.cargo_id }}">
+                        <input type="text" class="form-control" id="cargo_salario_editar_nome" readonly disabled value="">
+                        <input type="hidden" name="cargo_id" id="cargo_salario_editar_cargo_id" value="">
                     </div>
                     <div class="row mb-3">
                         <div class="col-6">
-                            <label class="form-label">Mês *</label>
-                            <select class="form-select" name="mes" required>
+                            <label class="form-label" for="cargo_salario_editar_mes">Mês *</label>
+                            <select class="form-select" name="mes" id="cargo_salario_editar_mes" required>
                                 {% for i in range(1, 13) %}
-                                <option value="{{ i }}" {% if item.mes == i %}selected{% endif %}>{{ i }}</option>
+                                <option value="{{ i }}">{{ i }}</option>
                                 {% endfor %}
                             </select>
                         </div>
                         <div class="col-6">
-                            <label class="form-label">Ano *</label>
-                            <input type="number" class="form-control" name="ano" min="2020" max="2030" value="{{ item.ano }}" required>
+                            <label class="form-label" for="cargo_salario_editar_ano">Ano *</label>
+                            <input type="number" class="form-control" name="ano" id="cargo_salario_editar_ano" min="2020" max="2030" required>
                         </div>
                     </div>
                     <div class="mb-3">
-                        <label class="form-label">Salário (R$) *</label>
-                        <input type="text" class="form-control" name="salario" value="{{ "%.2f" | format(item.salario) if item.salario is not none else '' }}" placeholder="0,00" required>
+                        <label class="form-label" for="cargo_salario_editar_salario">Salário (R$) *</label>
+                        <input type="text" class="form-control" name="salario" id="cargo_salario_editar_salario" placeholder="0,00" required>
                     </div>
                 </div>
                 <div class="modal-footer">

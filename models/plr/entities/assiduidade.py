@@ -3,7 +3,7 @@
 from datetime import datetime
 
 from models.database import db
-from models.plr.constants import TABELA_PLR_ASSIDUIDADE
+from models.plr.constants import TABELA_PLR_ASSIDUIDADES
 
 
 class PlrAssiduidade(db.Model):
@@ -12,7 +12,7 @@ class PlrAssiduidade(db.Model):
     Regra: 1 falta = -10%, 2 = -20%, 3 = -30%, 4 ou mais = perde 100% do mês.
     """
 
-    __tablename__ = TABELA_PLR_ASSIDUIDADE
+    __tablename__ = TABELA_PLR_ASSIDUIDADES
 
     id = db.Column(db.Integer, primary_key=True)
     colaborador_id = db.Column(

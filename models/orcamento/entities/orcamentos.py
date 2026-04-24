@@ -19,7 +19,7 @@ class Orcamento(db.Model):
 
     contrato_id = db.Column(db.Integer, db.ForeignKey("contratos.id"), nullable=True)
     usuario_id = db.Column(db.Integer, db.ForeignKey("usuarios.id"), nullable=True)
-
+    dados_adicionais = db.Column(db.Text, nullable=True)
     vinculado_a_orcamento_id = db.Column(
         db.Integer,
         db.ForeignKey("Orcamentos.id", ondelete="SET NULL"),

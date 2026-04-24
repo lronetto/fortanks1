@@ -1,40 +1,26 @@
 """
-Utilitário para leitura da planilha "Acompanhamento Mensal - MOD" e extração
-das avaliações PLR por aba (formato MES ANO: ex. AGO 2025).
+Leitura da planilha "Acompanhamento Mensal - MOD" e extração das avaliações PLR por aba
+(formato MES ANO: ex. AGO 2025).
 Cabeçalho na linha 32 (0-based: 31), dados a partir da linha 34 (0-based: 33).
 Colunas: 0=CPF, 4=EQUIPE, 5=OBRA, 12=Assiduidade, 13=Zero Acidente,
          14=Segurança/Limpeza/Organização, 15=Prazo.
 """
 import re
 from datetime import date
-from typing import List, Dict, Any, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
-# Mapeamento nome da aba -> (mes, ano). Ex: "AGO 2025" -> (8, 2025)
-MESES_ABREV = {
-    'JAN': 1, 'FEV': 2, 'MAR': 3, 'ABR': 4, 'MAI': 5, 'JUN': 6,
-    'JUL': 7, 'AGO': 8, 'SET': 9, 'OUT': 10, 'NOV': 11, 'DEZ': 12,
-}
-
-# Linha do cabeçalho (0-based) e primeira linha de dados
-HEADER_ROW = 31
-DATA_START_ROW = 33
-
-# Colunas (0-based)
-COL_CPF = 0
-COL_EQUIPE = 4
-COL_OBRA = 5
-COL_ASSIDUIDADE = 12
-COL_ZERO_ACIDENTE = 13
-COL_SEGURANCA = 14
-COL_PRAZO = 15
-
-# Critérios na ordem das colunas (tipo, peso %)
-CRITERIOS = [
-    ('Assiduidade', 0.30),
-    ('Zero Acidente', 0.15),
-    ('Segurança, Limpeza, Organização', 0.25),
-    ('Prazo', 0.30),
-]
+from ..constants import (
+    PLR_PLANILHA_MOD_COL_ASSIDUIDADE,
+    PLR_PLANILHA_MOD_COL_CPF,
+    PLR_PLANILHA_MOD_COL_EQUIPE,
+    PLR_PLANILHA_MOD_COL_OBRA,
+    PLR_PLANILHA_MOD_COL_PRAZO,
+    PLR_PLANILHA_MOD_COL_SEGURANCA,
+    PLR_PLANILHA_MOD_COL_ZERO_ACIDENTE,
+    PLR_PLANILHA_MOD_CRITERIOS,
+    PLR_PLANILHA_MOD_DATA_START_ROW_IDX,
+    PLR_PLANILHA_MOD_MESES_ABREV,
+)
 
 
 def _normalizar_cpf(val: Any) -> Optional[str]:
@@ -42,20 +28,20 @@ def _normalizar_cpf(val: Any) -> Optional[str]:
     if val is None:
         return None
     s = str(val).strip()
-    if not s or s.lower() == 'nan':
+    if not s or s.lower() == "nan":
         return None
-    dig = re.sub(r'\D', '', s)
+    dig = re.sub(r"\D", "", s)
     return dig if len(dig) == 11 else None
 
 
 def _parse_sheet_name(nome: str) -> Optional[Tuple[int, int]]:
     """Retorna (mes, ano) se a aba for no formato 'MES ANO' (ex: AGO 2025)."""
     nome = nome.strip().upper()
-    match = re.match(r'^([A-Z]{3})\s*(\d{4})$', nome)
+    match = re.match(r"^([A-Z]{3})\s*(\d{4})$", nome)
     if not match:
         return None
     mes_abrev, ano_str = match.groups()
-    mes = MESES_ABREV.get(mes_abrev)
+    mes = PLR_PLANILHA_MOD_MESES_ABREV.get(mes_abrev)
     if mes is None:
         return None
     try:
@@ -76,7 +62,7 @@ def _cell_value(book, sheet, row: int, col: int):
         if cell.ctype == 2:  # number
             return cell.value
         if cell.ctype == 1:  # text
-            return (cell.value or '').strip() or None
+            return (cell.value or "").strip() or None
         if cell.ctype == 0:  # empty
             return None
         return cell.value
@@ -108,8 +94,8 @@ def _valor_nota(val: Any) -> Optional[float]:
             return v if 0 <= v <= 100 else None  # planilha pode vir 0-100 ou 0-10
         except (TypeError, ValueError):
             return None
-    s = str(val).strip().replace(',', '.')
-    if not s or s.lower() == 'nan':
+    s = str(val).strip().replace(",", ".")
+    if not s or s.lower() == "nan":
         return None
     try:
         v = float(s)
@@ -142,47 +128,49 @@ def ler_avaliacoes_planilha_xls(caminho: str) -> List[Dict[str, Any]]:
             mes, ano = parsed
             data_avaliacao = date(ano, mes, 1)
 
-            for row_idx in range(DATA_START_ROW, sheet.nrows):
-                cpf_raw = _cell_value(book, sheet, row_idx, COL_CPF)
+            for row_idx in range(PLR_PLANILHA_MOD_DATA_START_ROW_IDX, sheet.nrows):
+                cpf_raw = _cell_value(book, sheet, row_idx, PLR_PLANILHA_MOD_COL_CPF)
                 cpf = _normalizar_cpf(cpf_raw)
                 if not cpf:
                     continue
 
-                equipe = _cell_value(book, sheet, row_idx, COL_EQUIPE)
+                equipe = _cell_value(book, sheet, row_idx, PLR_PLANILHA_MOD_COL_EQUIPE)
                 if equipe is not None and isinstance(equipe, float):
                     equipe = str(int(equipe)) if equipe == int(equipe) else str(equipe)
-                obra_raw = _cell_value(book, sheet, row_idx, COL_OBRA)
+                obra_raw = _cell_value(book, sheet, row_idx, PLR_PLANILHA_MOD_COL_OBRA)
                 obra = None
                 if obra_raw is not None:
                     obra = str(obra_raw).strip() or None
                 if obra is not None and isinstance(obra_raw, (int, float)):
                     obra = str(int(obra_raw)) if obra_raw == int(obra_raw) else str(obra_raw)
 
-                raw1 = _valor_nota(_cell_value(book, sheet, row_idx, COL_ASSIDUIDADE))
+                raw1 = _valor_nota(_cell_value(book, sheet, row_idx, PLR_PLANILHA_MOD_COL_ASSIDUIDADE))
                 v1 = (int(raw1 * 100) / 30.0) * 10.0 if raw1 is not None else None
-                raw2 = _valor_nota(_cell_value(book, sheet, row_idx, COL_ZERO_ACIDENTE))
+                raw2 = _valor_nota(_cell_value(book, sheet, row_idx, PLR_PLANILHA_MOD_COL_ZERO_ACIDENTE))
                 v2 = (int(raw2 * 100) / 15.0) * 10.0 if raw2 is not None else None
-                raw3 = _valor_nota(_cell_value(book, sheet, row_idx, COL_SEGURANCA))
+                raw3 = _valor_nota(_cell_value(book, sheet, row_idx, PLR_PLANILHA_MOD_COL_SEGURANCA))
                 v3 = (int(raw3 * 100) / 25.0) * 10.0 if raw3 is not None else None
-                raw4 = _valor_nota(_cell_value(book, sheet, row_idx, COL_PRAZO))
+                raw4 = _valor_nota(_cell_value(book, sheet, row_idx, PLR_PLANILHA_MOD_COL_PRAZO))
                 v4 = (int(raw4 * 100) / 30.0) * 10.0 if raw4 is not None else None
 
                 avaliacao = []
-                for (tipo, peso), val in zip(CRITERIOS, [v1, v2, v3, v4]):
+                for (tipo, peso), val in zip(PLR_PLANILHA_MOD_CRITERIOS, [v1, v2, v3, v4]):
                     if val is not None:
-                        avaliacao.append({'tipo': tipo, 'valor': val, 'peso': peso})
+                        avaliacao.append({"tipo": tipo, "valor": val, "peso": peso})
 
                 if not avaliacao:
                     continue
 
-                resultado.append({
-                    'cpf': cpf,
-                    'equipe': equipe,
-                    'obra': obra,
-                    'data': data_avaliacao,
-                    'avaliacao': avaliacao,
-                    'sheet_name': sheet.name,
-                })
+                resultado.append(
+                    {
+                        "cpf": cpf,
+                        "equipe": equipe,
+                        "obra": obra,
+                        "data": data_avaliacao,
+                        "avaliacao": avaliacao,
+                        "sheet_name": sheet.name,
+                    }
+                )
     return resultado
 
 
@@ -200,47 +188,49 @@ def _ler_avaliacoes_planilha_xlsx_impl(caminho: str) -> List[Dict[str, Any]]:
             mes, ano = parsed
             data_avaliacao = date(ano, mes, 1)
             max_row = sheet.max_row or 0
-            for row_idx in range(DATA_START_ROW, max_row):
-                cpf_raw = _cell_value_xlsx(sheet, row_idx, COL_CPF)
+            for row_idx in range(PLR_PLANILHA_MOD_DATA_START_ROW_IDX, max_row):
+                cpf_raw = _cell_value_xlsx(sheet, row_idx, PLR_PLANILHA_MOD_COL_CPF)
                 cpf = _normalizar_cpf(cpf_raw)
                 if not cpf:
                     continue
 
-                equipe = _cell_value_xlsx(sheet, row_idx, COL_EQUIPE)
+                equipe = _cell_value_xlsx(sheet, row_idx, PLR_PLANILHA_MOD_COL_EQUIPE)
                 if equipe is not None and isinstance(equipe, float):
                     equipe = str(int(equipe)) if equipe == int(equipe) else str(equipe)
-                obra_raw = _cell_value_xlsx(sheet, row_idx, COL_OBRA)
+                obra_raw = _cell_value_xlsx(sheet, row_idx, PLR_PLANILHA_MOD_COL_OBRA)
                 obra = None
                 if obra_raw is not None:
                     obra = str(obra_raw).strip() or None
                 if obra is not None and isinstance(obra_raw, (int, float)):
                     obra = str(int(obra_raw)) if obra_raw == int(obra_raw) else str(obra_raw)
 
-                raw1 = _valor_nota(_cell_value_xlsx(sheet, row_idx, COL_ASSIDUIDADE))
+                raw1 = _valor_nota(_cell_value_xlsx(sheet, row_idx, PLR_PLANILHA_MOD_COL_ASSIDUIDADE))
                 v1 = (int(raw1 * 100) / 30.0) * 10.0 if raw1 is not None else None
-                raw2 = _valor_nota(_cell_value_xlsx(sheet, row_idx, COL_ZERO_ACIDENTE))
+                raw2 = _valor_nota(_cell_value_xlsx(sheet, row_idx, PLR_PLANILHA_MOD_COL_ZERO_ACIDENTE))
                 v2 = (int(raw2 * 100) / 15.0) * 10.0 if raw2 is not None else None
-                raw3 = _valor_nota(_cell_value_xlsx(sheet, row_idx, COL_SEGURANCA))
+                raw3 = _valor_nota(_cell_value_xlsx(sheet, row_idx, PLR_PLANILHA_MOD_COL_SEGURANCA))
                 v3 = (int(raw3 * 100) / 25.0) * 10.0 if raw3 is not None else None
-                raw4 = _valor_nota(_cell_value_xlsx(sheet, row_idx, COL_PRAZO))
+                raw4 = _valor_nota(_cell_value_xlsx(sheet, row_idx, PLR_PLANILHA_MOD_COL_PRAZO))
                 v4 = (int(raw4 * 100) / 30.0) * 10.0 if raw4 is not None else None
 
                 avaliacao = []
-                for (tipo, peso), val in zip(CRITERIOS, [v1, v2, v3, v4]):
+                for (tipo, peso), val in zip(PLR_PLANILHA_MOD_CRITERIOS, [v1, v2, v3, v4]):
                     if val is not None:
-                        avaliacao.append({'tipo': tipo, 'valor': val, 'peso': peso})
+                        avaliacao.append({"tipo": tipo, "valor": val, "peso": peso})
 
                 if not avaliacao:
                     continue
 
-                resultado.append({
-                    'cpf': cpf,
-                    'equipe': equipe,
-                    'obra': obra,
-                    'data': data_avaliacao,
-                    'avaliacao': avaliacao,
-                    'sheet_name': sheet.title,
-                })
+                resultado.append(
+                    {
+                        "cpf": cpf,
+                        "equipe": equipe,
+                        "obra": obra,
+                        "data": data_avaliacao,
+                        "avaliacao": avaliacao,
+                        "sheet_name": sheet.title,
+                    }
+                )
     finally:
         wb.close()
     return resultado
@@ -253,8 +243,8 @@ def ler_avaliacoes_planilha(caminho: str) -> List[Dict[str, Any]]:
     que ler_avaliacoes_planilha_xls.
     """
     path_lower = caminho.lower()
-    if path_lower.endswith('.xlsx'):
+    if path_lower.endswith(".xlsx"):
         return _ler_avaliacoes_planilha_xlsx_impl(caminho)
-    if path_lower.endswith('.xls'):
+    if path_lower.endswith(".xls"):
         return ler_avaliacoes_planilha_xls(caminho)
-    raise ValueError('Formato não suportado. Use .xls ou .xlsx.')
+    raise ValueError("Formato não suportado. Use .xls ou .xlsx.")

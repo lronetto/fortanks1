@@ -27,12 +27,24 @@ solicitacao_bp = Blueprint('solicitacao', __name__, url_prefix='/solicitacoes')
 @login_required
 def index():
     """Lista todas as solicitações"""
+    filtro_material_nome = (request.args.get('material_nome') or '').strip()
+
     # Se for gerente ou superior, mostra todas as solicitações
     if current_user.is_gerente_ou_superior:
-        solicitacoes = Solicitacoes.query.order_by(Solicitacoes.data_solicitacao.desc()).all()
+        query = Solicitacoes.query
     else:
         # Se não, mostra apenas as próprias solicitações
-        solicitacoes = Solicitacoes.query.filter_by(solicitante_id=current_user.id).order_by(Solicitacoes.data_solicitacao.desc()).all()
+        query = Solicitacoes.query.filter_by(solicitante_id=current_user.id)
+
+    if filtro_material_nome:
+        termo = f'%{filtro_material_nome}%'
+        query = query.filter(
+            Solicitacoes.itens.any(
+                SolicitacoesItens.material.has(Materiais.nome.ilike(termo))
+            )
+        )
+
+    solicitacoes = query.order_by(Solicitacoes.data_solicitacao.desc()).all()
     
     # Buscar dados para o formulário no modal
     materiais = Materiais.query.order_by(Materiais.nome).all()
@@ -41,7 +53,8 @@ def index():
     return render_template('solicitacoes/index.html', 
                           solicitacoes=solicitacoes,
                           materiais=materiais,
-                          centros_custo=centros_custo)
+                          centros_custo=centros_custo,
+                          filtro_material_nome=filtro_material_nome)
 
 @solicitacao_bp.route('/novo', methods=['POST'])
 @login_required

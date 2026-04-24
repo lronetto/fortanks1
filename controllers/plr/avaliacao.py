@@ -22,63 +22,21 @@ from models.colaborador import Colaborador
 from models.centro_custo import CentroCusto
 from models.plr import ModeloPLR
 from models.departamento import Departamento
-from utils.plr_import_planilha import ler_avaliacoes_planilha
-from utils.plr_calculo import assiduidade_pct_por_faltas, nota_media_com_assiduidade
+from models.plr.utils import (
+    assiduidade_pct_por_faltas,
+    ler_avaliacoes_planilha,
+    nota_media_com_assiduidade,
+)
 
 from . import plr_bp
 from .constantes import CRITERIOS_PADRAO_PLR
 from .efetivo import CAMPOS_EFETIVO_PLR
-
-
-def _avaliacao_list_for_form(avaliacao_field):
-    """Converte campo avaliacao (JSON) em lista de dicts para o formulário."""
-    if not avaliacao_field:
-        return list(CRITERIOS_PADRAO_PLR)
-    if isinstance(avaliacao_field, list):
-        return [x if isinstance(x, dict) else {'tipo': '', 'valor': x} for x in avaliacao_field]
-    if isinstance(avaliacao_field, dict):
-        return [avaliacao_field]
-    return list(CRITERIOS_PADRAO_PLR)
-
-
-def _valor_por_tipo(avaliacao, tipo):
-    """Retorna o valor do critério pelo tipo na lista avaliacao, ou None."""
-    if not avaliacao or not isinstance(avaliacao, list):
-        return None
-    for item in avaliacao:
-        if isinstance(item, dict) and item.get('tipo') == tipo:
-            v = item.get('valor')
-            if v is not None:
-                try:
-                    return float(v)
-                except (TypeError, ValueError):
-                    return None
-    return None
-
-
-def _equipes_distintas_plr():
-    """Retorna lista de nomes de equipe distintos em PLRColaborador.equipe_alocada."""
-    registros = PLRColaborador.query.filter(PLRColaborador.equipe_alocada.isnot(None)).all()
-    seen = set()
-    result = []
-    for av in registros:
-        if not isinstance(av.equipe_alocada, list):
-            continue
-        for nome in av.equipe_alocada:
-            if not nome or not isinstance(nome, str):
-                continue
-            s = nome.strip()
-            if s and s not in seen:
-                seen.add(s)
-                result.append(s)
-    return sorted(result)
-
-
-def _cpf_apenas_digitos(cpf):
-    """Retorna CPF apenas com dígitos para comparação."""
-    if cpf is None:
-        return ''
-    return re.sub(r'\D', '', str(cpf))
+from .services.avaliacoes import (
+    avaliacao_list_for_form as _avaliacao_list_for_form,
+    cpf_apenas_digitos as _cpf_apenas_digitos,
+    equipes_distintas_plr as _equipes_distintas_plr,
+    valor_por_tipo as _valor_por_tipo,
+)
 
 
 @plr_bp.route('/avaliacoes/')

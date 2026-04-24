@@ -94,6 +94,14 @@
                     </select>
                     <small class="text-muted">Ctrl+clique para múltiplos</small>
                 </div>
+                <div class="col-md-12">
+                    <div class="form-check mb-0">
+                        <input class="form-check-input" type="checkbox" id="salario_por_grupo" name="salario_por_grupo" value="1">
+                        <label class="form-check-label" for="salario_por_grupo">
+                            Salário atualizado (planilha MOD, col. X): usar <strong>grupo</strong> (mapeamento oficial/ajudante em <code>models/plr/constants.py</code> — <code>CARGOS_OFICIAL</code> / <code>CARGOS_AJUDANTE</code> → <code>CARGO_OFICIAL</code> / <code>CARGO_AJUDANTE</code>). Desmarcado = salário do cargo vigente (FID).
+                        </label>
+                    </div>
+                </div>
                 <div class="col-md-2 d-flex align-items-end gap-1">
                     <button type="submit" class="btn btn-primary" id="btnGerarPlanilha">
                         <i class="fas fa-search"></i> Gerar
@@ -106,20 +114,26 @@
         </div>
     </div>
 
-    <div class="card shadow mb-4" id="cardPlanilhaResultado" style="display: none;">
+    <div class="card shadow mb-4" id="cardPlanilhaResultado" data-ft-colvis="tabela-planilha-plr" style="display: none;">
         <div class="card-header py-3">
-            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center">
+            <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center gap-2">
                 <div class="mb-2 mb-md-0">
                     <h6 class="m-0 font-weight-bold">Planilha de Cálculo PLR</h6>
                     <span class="text-muted small" id="dataFechamentoLabel"></span>
                 </div>
-                <div class="btn-group">
+                <div class="d-flex flex-wrap align-items-center gap-2">
+                    <div class="ft-col-toggle-placeholder order-md-first order-2"></div>
+                    <div class="btn-group order-1 order-md-0">
                     <button type="button" class="btn btn-success btn-sm" id="btnExportarExcel" disabled>
                         <i class="fas fa-file-excel"></i> Exportar Excel
                     </button>
                     <button type="button" class="btn btn-outline-success btn-sm" id="btnExportarExcelFormulas" disabled title="Mesma planilha com SOMA, P, VPO e Valor total em fórmulas">
                         <i class="fas fa-calculator"></i> Excel (fórmulas)
                     </button>
+                    <button type="button" class="btn btn-outline-secondary btn-sm" id="btnExportarExcelPlanilhaMod" disabled title="Planilha oficial MOD (template PLANILHA_PLR.xlsx): abas por mês + PAGAMENTO MOD">
+                        <i class="fas fa-table"></i> Excel (planilha MOD)
+                    </button>
+                    </div>
                 </div>
             </div>
         </div>
@@ -136,7 +150,7 @@
             </div>
         </div>
         <div class="card-footer small text-muted">
-            Regra: Salário base PLR = salário do cargo no período × multiplicador. Se tempo de casa &gt; 18 meses, multiplicador = 2; senão 1. P = participação média (%). VPO = Salário base PLR × P/100. Valor total = VPO.
+            Regra: Salário base PLR = salário do cargo no período × multiplicador. Se tempo de casa &gt; 18 meses, multiplicador = 1,2; senão 1. Coluna <strong>Sal. atualizado</strong> = mesma lógica da col. X da exportação Excel (planilha MOD), inclusive opção “Salário atualizado (grupo)”. P = participação média (%). VPO = (Salário base PLR / 12) × 6 × (P/100). Valor total = VPO.
         </div>
     </div>
 
@@ -152,45 +166,43 @@
 {% block scripts %}
 {{ super() }}
 {% if planilha_json %}
-<script>window.PLANILHA_PLR_DATA = {{ planilha_json | tojson | safe }};</script>
+<script>window.PLANILHA_BOOT = {{ planilha_json | tojson | safe }};</script>
 {% endif %}
 <script>
 document.addEventListener('DOMContentLoaded', function() {
     var MESES_ABREV = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
-    var dadosUrl = '{{ url_for("plr.relatorio_planilha_dados") }}';
-    var excelUrl = '{{ url_for("plr.relatorio_planilha_excel") }}';
-    var excelFormulasUrl = '{{ url_for("plr.relatorio_planilha_excel_formulas") }}';
+    var dadosUrl = {{ url_for('plr.relatorio_planilha_dados') | tojson }};
+    var excelUrl = {{ url_for('plr.relatorio_planilha_excel') | tojson }};
+    var excelFormulasUrl = {{ url_for('plr.relatorio_planilha_excel_formulas') | tojson }};
+    var excelPlanilhaModUrl = {{ url_for('plr.relatorio_planilha_excel_planilha_plr') | tojson }};
     var dtInstance = null;
     var ultimoFiltro = null;
+    var mesesColunasAtual = [];
 
-    function initDataTable(data, mesesColunas, dataFechamento) {
+    function buildMesesColunasLocal(anoI, mesI, anoF, mesF) {
+        var out = [];
+        var cy = anoI, cm = mesI;
+        while (cy < anoF || (cy === anoF && cm <= mesF)) {
+            out.push({ mes: cm, ano: cy });
+            cm += 1;
+            if (cm > 12) { cm = 1; cy += 1; }
+        }
+        return out;
+    }
+
+    function showCardPlanilha(dataFechamentoLabel) {
         var card = document.getElementById('cardPlanilhaResultado');
         var msg = document.getElementById('planilhaMensagem');
         var labelFech = document.getElementById('dataFechamentoLabel');
         if (card) card.style.display = 'block';
         if (msg) msg.style.display = 'none';
-        if (labelFech) labelFech.textContent = dataFechamento ? ('Data de fechamento: ' + dataFechamento) : '';
-        buildThead(mesesColunas);
+        if (labelFech) labelFech.textContent = dataFechamentoLabel ? ('Data de fechamento: ' + dataFechamentoLabel) : '';
         var btnExcel = document.getElementById('btnExportarExcel');
         var btnExcelFormulas = document.getElementById('btnExportarExcelFormulas');
-        if (btnExcel && ultimoFiltro) { btnExcel.disabled = false; }
-        if (btnExcelFormulas && ultimoFiltro) { btnExcelFormulas.disabled = false; }
-        var $table = $('#tabela-planilha-plr');
-        if ($table.length && typeof $.fn.DataTable !== 'undefined') {
-            if ($.fn.DataTable.isDataTable($table)) {
-                $table.DataTable().destroy();
-            }
-            dtInstance = null;
-            dtInstance = $table.DataTable({
-                data: data,
-                columns: buildColumns(mesesColunas),
-                responsive: false,
-                order: [[1, 'asc']],
-                language: { url: '{{ url_for("static", filename="js/datatables-pt-BR-1.13.json") }}' },
-                pageLength: 25,
-                dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip'
-            });
-        }
+        var btnExcelMod = document.getElementById('btnExportarExcelPlanilhaMod');
+        if (btnExcel && ultimoFiltro) btnExcel.disabled = false;
+        if (btnExcelFormulas && ultimoFiltro) btnExcelFormulas.disabled = false;
+        if (btnExcelMod && ultimoFiltro) btnExcelMod.disabled = false;
     }
 
     function buildColumns(mesesColunas) {
@@ -202,23 +214,37 @@ document.addEventListener('DOMContentLoaded', function() {
             { data: 'tempo_casa_meses', className: 'text-end' },
             { data: 'funcao' }
         ];
-        var i, m;
+        var i;
         for (i = 0; i < mesesColunas.length; i++) {
-            m = mesesColunas[i];
             (function(idx) {
                 cols.push({
-                    data: 'pcts_meses',
+                    data: 'pct_' + idx,
                     className: 'text-end',
-                    render: function(d) { return d && d[idx] != null ? (d[idx].toFixed(2) + '%') : '-'; }
+                    defaultContent: '-'
                 });
             })(i);
         }
         cols.push({ data: 'soma', className: 'text-end' });
         cols.push({ data: 'p', className: 'text-end' });
+        cols.push({ data: 'salario_atualizado', className: 'text-end' });
         cols.push({ data: 'salario_base_plr', className: 'text-end' });
         cols.push({ data: 'vpo', className: 'text-end' });
         cols.push({ data: 'valor_total', className: 'text-end fw-bold' });
         return cols;
+    }
+
+    /** Títulos em texto puro (mesma ordem que buildColumns), para o menu Colunas. */
+    function buildTitulosColunas(mesesColunas) {
+        var titulos = [
+            'CPF', 'Nome', 'Admissão', 'Demissão / Fecham.', 'Tempo casa (meses)', 'Função'
+        ];
+        var i, m;
+        for (i = 0; i < mesesColunas.length; i++) {
+            m = mesesColunas[i];
+            titulos.push(MESES_ABREV[(m.mes - 1)] + ' ' + m.ano);
+        }
+        titulos.push('SOMA', 'P (%)', 'Sal. atualizado', 'Salário base PLR', 'VPO', 'Valor total a pagar');
+        return titulos;
     }
 
     function buildThead(mesesColunas) {
@@ -235,7 +261,7 @@ document.addEventListener('DOMContentLoaded', function() {
             m = mesesColunas[i];
             ths.push(MESES_ABREV[(m.mes - 1)] + '<br>' + m.ano);
         }
-        ths.push('SOMA', 'P (%)', 'Salário base<br>PLR', 'VPO', 'Valor total<br>a pagar');
+        ths.push('SOMA', 'P (%)', 'Sal.<br>atualizado', 'Salário base<br>PLR', 'VPO', 'Valor total<br>a pagar');
         var row = document.getElementById('theadPlanilhaRow');
         if (!row) return;
         row.innerHTML = '';
@@ -252,6 +278,82 @@ document.addEventListener('DOMContentLoaded', function() {
         });
     }
 
+    /** Parâmetros GET alinhados a ``parse_filtros_planilha`` (``traditional`` para vários departamentos). */
+    function filtrosParaQueryAjax() {
+        if (!ultimoFiltro) return {};
+        var o = {
+            ano_inicio: ultimoFiltro.ano_inicio,
+            mes_inicio: ultimoFiltro.mes_inicio,
+            ano_fim: ultimoFiltro.ano_fim,
+            mes_fim: ultimoFiltro.mes_fim
+        };
+        if (ultimoFiltro.modelo_plr_id) o.modelo_plr_id = ultimoFiltro.modelo_plr_id;
+        if (ultimoFiltro.equipe) o.equipe = ultimoFiltro.equipe;
+        var deps = ultimoFiltro.departamentos || [];
+        if (deps.length) o.departamento_id = deps.slice();
+        if (ultimoFiltro.salario_por_grupo) o.salario_grupo = '1';
+        return o;
+    }
+
+    function initOrReloadDataTablePlanilha(mesesColunas, dataFechamentoLabel) {
+        mesesColunasAtual = mesesColunas;
+        var $table = $('#tabela-planilha-plr');
+        if (!$table.length || typeof $.fn.DataTable === 'undefined' || typeof window.FT === 'undefined') return;
+
+        if ($.fn.DataTable.isDataTable($table)) {
+            $table.DataTable().clear().destroy();
+            dtInstance = null;
+        }
+        buildThead(mesesColunas);
+
+        dtInstance = $table.DataTable(FT.dtOpcoes({
+            serverSide: false,
+            processing: true,
+            order: [[1, 'asc']],
+            paging: true,
+            pageLength: 25,
+            lengthMenu: [[10, 25, 50, 100, -1], [10, 25, 50, 100, 'Todos']],
+            ajax: {
+                url: dadosUrl,
+                type: 'GET',
+                traditional: true,
+                data: filtrosParaQueryAjax,
+                dataSrc: function(json) {
+                    var errEl = document.getElementById('planilhaErro');
+                    if (json.error) {
+                        if (errEl) {
+                            errEl.textContent = json.error;
+                            errEl.style.display = 'block';
+                        }
+                        return [];
+                    }
+                    if (errEl) errEl.style.display = 'none';
+                    if (json.meses_colunas && json.meses_colunas.length !== mesesColunasAtual.length) {
+                        console.warn('PLR planilha: contagem de meses servidor vs. cliente divergiu.');
+                    }
+                    if (json.data_fechamento && document.getElementById('dataFechamentoLabel')) {
+                        document.getElementById('dataFechamentoLabel').textContent =
+                            'Data de fechamento: ' + json.data_fechamento;
+                    }
+                    return json.data || [];
+                }
+            },
+            columns: buildColumns(mesesColunas),
+            responsive: false
+        }));
+        if (FT.dtColunas) {
+            var titulosCols = buildTitulosColunas(mesesColunas);
+            try {
+                var keyColVis = FT.dtColunas.storageKey('tabela-planilha-plr');
+                var salvoColVis = JSON.parse(localStorage.getItem(keyColVis) || 'null');
+                if (Array.isArray(salvoColVis) && salvoColVis.length !== titulosCols.length) {
+                    localStorage.removeItem(keyColVis);
+                }
+            } catch (e) {}
+            FT.dtColunas.inicializar(dtInstance, 'tabela-planilha-plr', titulosCols);
+        }
+    }
+
     function formatDateBr(isoDate) {
         if (!isoDate || isoDate.length < 10) return '';
         var parts = isoDate.split('-');
@@ -261,96 +363,82 @@ document.addEventListener('DOMContentLoaded', function() {
     var form = document.getElementById('formPlanilhaPlr');
     if (form) {
         form.addEventListener('submit', function(e) {
-        e.preventDefault();
-        var inicioVal = document.getElementById('periodo_inicio').value;
-        var fimVal = document.getElementById('periodo_fim').value;
-        var errEl = document.getElementById('planilhaErro');
-        if (!inicioVal || !fimVal) {
-            if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'Informe as datas de início e de fechamento.'; }
-            return;
-        }
-        var partsInicio = inicioVal.split('-');
-        var partsFim = fimVal.split('-');
-        var anoInicio = parseInt(partsInicio[0], 10);
-        var mesInicio = parseInt(partsInicio[1], 10);
-        var anoFim = parseInt(partsFim[0], 10);
-        var mesFim = parseInt(partsFim[1], 10);
-        if (anoInicio > anoFim || (anoInicio === anoFim && mesInicio > mesFim)) {
-            if (errEl) { errEl.style.display = 'block'; errEl.textContent = 'A data de início deve ser anterior ou igual à data de fechamento.'; }
-            return;
-        }
-        if (errEl) errEl.style.display = 'none';
-        var msgEl = document.getElementById('planilhaMensagem');
-        if (msgEl) msgEl.style.display = 'none';
-        var btn = document.getElementById('btnGerarPlanilha');
-        if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Carregando...'; }
-        var btnExcel = document.getElementById('btnExportarExcel');
-        var btnExcelFormulas = document.getElementById('btnExportarExcelFormulas');
-        if (btnExcel) { btnExcel.disabled = true; }
-        if (btnExcelFormulas) { btnExcelFormulas.disabled = true; }
-
-        var modeloVal = document.getElementById('modelo_plr_id').value;
-        var equipeVal = document.getElementById('equipe').value;
-        var depEl = document.getElementById('departamento_id');
-        var departamentosVal = depEl ? Array.from(depEl.selectedOptions).map(function(o) { return o.value; }).filter(Boolean) : [];
-        var url = dadosUrl + '?ano_inicio=' + anoInicio + '&mes_inicio=' + mesInicio + '&ano_fim=' + anoFim + '&mes_fim=' + mesFim;
-        if (modeloVal) url += '&modelo_plr_id=' + encodeURIComponent(modeloVal);
-        if (equipeVal) url += '&equipe=' + encodeURIComponent(equipeVal);
-        departamentosVal.forEach(function(id) { url += '&departamento_id=' + encodeURIComponent(id); });
-        ultimoFiltro = {
-            ano_inicio: anoInicio,
-            mes_inicio: mesInicio,
-            ano_fim: anoFim,
-            mes_fim: mesFim,
-            modelo_plr_id: modeloVal || '',
-            equipe: equipeVal || '',
-            departamentos: departamentosVal
-        };
-
-        fetch(url, { method: 'GET', headers: { 'Accept': 'application/json' } })
-            .then(function(res) { return res.json(); })
-            .then(function(res) {
-                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-search"></i> Gerar'; }
-                if (btnExcel && ultimoFiltro) { btnExcel.disabled = false; }
-                if (document.getElementById('btnExportarExcelFormulas') && ultimoFiltro) {
-                    document.getElementById('btnExportarExcelFormulas').disabled = false;
+            e.preventDefault();
+            var inicioVal = document.getElementById('periodo_inicio').value;
+            var fimVal = document.getElementById('periodo_fim').value;
+            var errEl = document.getElementById('planilhaErro');
+            if (!inicioVal || !fimVal) {
+                if (errEl) {
+                    errEl.style.display = 'block';
+                    errEl.textContent = 'Informe as datas de início e de fechamento.';
                 }
-                if (res.error) {
-                    errEl = document.getElementById('planilhaErro');
-                    if (errEl) { errEl.textContent = res.error; errEl.style.display = 'block'; }
-                    return;
+                return;
+            }
+            var partsInicio = inicioVal.split('-');
+            var partsFim = fimVal.split('-');
+            var anoInicio = parseInt(partsInicio[0], 10);
+            var mesInicio = parseInt(partsInicio[1], 10);
+            var anoFim = parseInt(partsFim[0], 10);
+            var mesFim = parseInt(partsFim[1], 10);
+            if (anoInicio > anoFim || (anoInicio === anoFim && mesInicio > mesFim)) {
+                if (errEl) {
+                    errEl.style.display = 'block';
+                    errEl.textContent = 'A data de início deve ser anterior ou igual à data de fechamento.';
                 }
-                var dataFechamento = formatDateBr(fimVal) || res.data_fechamento || '';
-                initDataTable(res.data || [], res.meses_colunas || [], dataFechamento);
-            })
-            .catch(function(err) {
-                if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-search"></i> Gerar'; }
-                errEl = document.getElementById('planilhaErro');
-                if (errEl) { errEl.textContent = 'Erro ao carregar os dados. Tente novamente.'; errEl.style.display = 'block'; }
-            });
+                return;
+            }
+            if (errEl) errEl.style.display = 'none';
+            var msgEl = document.getElementById('planilhaMensagem');
+            if (msgEl) msgEl.style.display = 'none';
+            var btn = document.getElementById('btnGerarPlanilha');
+            if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Carregando...'; }
+            document.getElementById('btnExportarExcel').disabled = true;
+            document.getElementById('btnExportarExcelFormulas').disabled = true;
+            document.getElementById('btnExportarExcelPlanilhaMod').disabled = true;
+
+            var modeloVal = document.getElementById('modelo_plr_id').value;
+            var equipeVal = document.getElementById('equipe').value;
+            var depEl = document.getElementById('departamento_id');
+            var departamentosVal = depEl ? Array.from(depEl.selectedOptions).map(function(o) { return o.value; }).filter(Boolean) : [];
+            var sg = document.getElementById('salario_por_grupo');
+            ultimoFiltro = {
+                ano_inicio: anoInicio,
+                mes_inicio: mesInicio,
+                ano_fim: anoFim,
+                mes_fim: mesFim,
+                modelo_plr_id: modeloVal || '',
+                equipe: equipeVal || '',
+                departamentos: departamentosVal,
+                salario_por_grupo: !!(sg && sg.checked)
+            };
+
+            var mesesColunas = buildMesesColunasLocal(anoInicio, mesInicio, anoFim, mesFim);
+            var dataFechamento = formatDateBr(fimVal) || '';
+            showCardPlanilha(dataFechamento);
+            initOrReloadDataTablePlanilha(mesesColunas, dataFechamento);
+
+            if (btn) { btn.disabled = false; btn.innerHTML = '<i class="fas fa-search"></i> Gerar'; }
         });
+    }
+
+    function appendExcelParams(params) {
+        if (!ultimoFiltro) return;
+        params.append('ano_inicio', ultimoFiltro.ano_inicio);
+        params.append('mes_inicio', ultimoFiltro.mes_inicio);
+        params.append('ano_fim', ultimoFiltro.ano_fim);
+        params.append('mes_fim', ultimoFiltro.mes_fim);
+        if (ultimoFiltro.modelo_plr_id) params.append('modelo_plr_id', ultimoFiltro.modelo_plr_id);
+        if (ultimoFiltro.equipe) params.append('equipe', ultimoFiltro.equipe);
+        (ultimoFiltro.departamentos || []).forEach(function(id) { params.append('departamento_id', id); });
+        if (ultimoFiltro.salario_por_grupo) params.append('salario_grupo', '1');
     }
 
     var btnExcel = document.getElementById('btnExportarExcel');
     if (btnExcel) {
         btnExcel.addEventListener('click', function() {
-            if (!ultimoFiltro) {
-                return;
-            }
+            if (!ultimoFiltro) return;
             var params = new URLSearchParams();
-            params.append('ano_inicio', ultimoFiltro.ano_inicio);
-            params.append('mes_inicio', ultimoFiltro.mes_inicio);
-            params.append('ano_fim', ultimoFiltro.ano_fim);
-            params.append('mes_fim', ultimoFiltro.mes_fim);
-            if (ultimoFiltro.modelo_plr_id) {
-                params.append('modelo_plr_id', ultimoFiltro.modelo_plr_id);
-            }
-            if (ultimoFiltro.equipe) {
-                params.append('equipe', ultimoFiltro.equipe);
-            }
-            (ultimoFiltro.departamentos || []).forEach(function(id) {
-                params.append('departamento_id', id);
-            });
+            appendExcelParams(params);
             window.location = excelUrl + '?' + params.toString();
         });
     }
@@ -359,23 +447,39 @@ document.addEventListener('DOMContentLoaded', function() {
         btnExcelFormulas.addEventListener('click', function() {
             if (!ultimoFiltro) return;
             var params = new URLSearchParams();
-            params.append('ano_inicio', ultimoFiltro.ano_inicio);
-            params.append('mes_inicio', ultimoFiltro.mes_inicio);
-            params.append('ano_fim', ultimoFiltro.ano_fim);
-            params.append('mes_fim', ultimoFiltro.mes_fim);
-            if (ultimoFiltro.modelo_plr_id) params.append('modelo_plr_id', ultimoFiltro.modelo_plr_id);
-            if (ultimoFiltro.equipe) params.append('equipe', ultimoFiltro.equipe);
-            (ultimoFiltro.departamentos || []).forEach(function(id) { params.append('departamento_id', id); });
+            appendExcelParams(params);
             window.location = excelFormulasUrl + '?' + params.toString();
         });
     }
+    var btnExcelPlanilhaMod = document.getElementById('btnExportarExcelPlanilhaMod');
+    if (btnExcelPlanilhaMod) {
+        btnExcelPlanilhaMod.addEventListener('click', function() {
+            if (!ultimoFiltro) return;
+            var params = new URLSearchParams();
+            appendExcelParams(params);
+            window.location = excelPlanilhaModUrl + '?' + params.toString();
+        });
+    }
 
-    if (window.PLANILHA_PLR_DATA && window.PLANILHA_PLR_DATA.meses_colunas) {
-        initDataTable(
-            window.PLANILHA_PLR_DATA.data || [],
-            window.PLANILHA_PLR_DATA.meses_colunas,
-            window.PLANILHA_PLR_DATA.data_fechamento || ''
+    if (window.PLANILHA_BOOT && window.PLANILHA_BOOT.filtros) {
+        var f = window.PLANILHA_BOOT.filtros;
+        var cbBoot = document.getElementById('salario_por_grupo');
+        if (cbBoot) cbBoot.checked = !!f.salario_por_grupo;
+        ultimoFiltro = {
+            ano_inicio: f.ano_inicio,
+            mes_inicio: f.mes_inicio,
+            ano_fim: f.ano_fim,
+            mes_fim: f.mes_fim,
+            modelo_plr_id: f.modelo_plr_id || '',
+            equipe: f.equipe || '',
+            departamentos: f.departamentos || [],
+            salario_por_grupo: !!f.salario_por_grupo
+        };
+        var mc = window.PLANILHA_BOOT.meses_colunas || buildMesesColunasLocal(
+            ultimoFiltro.ano_inicio, ultimoFiltro.mes_inicio, ultimoFiltro.ano_fim, ultimoFiltro.mes_fim
         );
+        showCardPlanilha(window.PLANILHA_BOOT.data_fechamento || '');
+        initOrReloadDataTablePlanilha(mc, window.PLANILHA_BOOT.data_fechamento || '');
     }
 });
 </script>

@@ -1,5 +1,6 @@
 """Funções auxiliares para JSON de qualidade de peças e usinagens."""
 
+from datetime import timedelta
 from flask import json
 
 
@@ -76,3 +77,11 @@ def limpar_data_producao_dados_adicionais_usinagem_str(dados_raw):
         d = {}
     d['data_producao'] = None
     return json.dumps(d, ensure_ascii=False)
+    
+def calcular_data_rompimento_28_dias(data_moldagem_dt):
+    """Calcula data de rompimento 28 dias após a moldagem. Se cair em domingo, adiciona 1 dia."""
+    data_rompimento = data_moldagem_dt + timedelta(days=28)
+    # Verificar se é domingo (weekday() retorna 6 para domingo)
+    if data_rompimento.weekday() == 6:  # Domingo
+        data_rompimento += timedelta(days=1)  # Adiciona 1 dia (vira segunda-feira)
+    return data_rompimento

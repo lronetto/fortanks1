@@ -1,4 +1,7 @@
-"""Domínio PLR (Participação nos Lucros e Resultados)."""
+"""Domínio PLR (Participação nos Lucros e Resultados).
+
+Utilitários em ``models.plr.utils`` (cálculo e importação de planilhas).
+"""
 
 from .entities import (
     EfetivoPLR,

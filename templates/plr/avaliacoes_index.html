@@ -94,9 +94,10 @@
         </div>
     </div>
 
-    <div class="card shadow mb-4">
-        <div class="card-header py-3">
+    <div class="card shadow mb-4" data-ft-colvis="tabela-avaliacoes">
+        <div class="card-header py-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
             <h6 class="m-0 font-weight-bold">Lista de Avaliações</h6>
+            <div class="ft-col-toggle-placeholder"></div>
         </div>
         <div class="card-body">
             <div class="table-responsive">
@@ -151,12 +152,13 @@ document.addEventListener('DOMContentLoaded', function() {
         if (deptVal && deptVal.length) params.departamento_id = deptVal;
         return params;
     }
+    var TITULOS_AVAL = ['Data', 'Colaborador', 'Obra', 'Equipe alocada', 'Assiduidade', 'Zero acidente', 'Seg. / limp. / org.', 'Prazo', 'Total %', ''];
     var $table = $('#tabela-avaliacoes');
-    if ($table.length && typeof $.fn.DataTable !== 'undefined') {
-        dtInstance = $table.DataTable({
+    if ($table.length && typeof $.fn.DataTable !== 'undefined' && typeof window.FT !== 'undefined') {
+        dtInstance = $table.DataTable(FT.dtOpcoes({
+            serverSide: false,
             responsive: true,
             order: [[0, 'desc']],
-            language: { url: '{{ url_for("static", filename="js/datatables-pt-BR-1.13.json") }}' },
             ajax: {
                 url: '{{ url_for("plr.avaliacoes_dados") }}',
                 data: function(d) {
@@ -179,7 +181,10 @@ document.addEventListener('DOMContentLoaded', function() {
                 { data: 'total_pct' },
                 { data: 'acoes', orderable: false, searchable: false, className: 'text-center', render: function(data) { return data || ''; } }
             ]
-        });
+        }));
+        if (FT.dtColunas) {
+            FT.dtColunas.inicializar(dtInstance, 'tabela-avaliacoes', TITULOS_AVAL);
+        }
     }
         if (typeof $.fn.select2 !== 'undefined') {
         $('#filtro_departamento').select2({ placeholder: 'Todos os departamentos', allowClear: true, width: '100%' });

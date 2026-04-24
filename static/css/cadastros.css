@@ -48,3 +48,32 @@
 .table-group-item:hover { background-color: #f8f9fa; }
 .table-group-item td:first-child,
 .table-sub-header td { padding-left: 2rem !important; }
+
+/* Orçamento: cabeçalho de grupo (DataTables RowGroup) */
+#tabelaItensOrcamento tr.ft-orcamento-grupo td {
+    cursor: pointer;
+    background-color: #e9ecef !important;
+    font-weight: 600;
+    border-top: 2px solid #dee2e6;
+}
+#tabelaItensOrcamento tr.ft-orcamento-grupo:hover td {
+    background-color: #dee2e6 !important;
+}
+
+/* Cabeçalho de grupo: mesma quantidade de colunas visíveis da tabela (7) — total na última */
+#tabelaItensOrcamento tr.ft-orcamento-grupo .ft-grupo-inner-grid {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    align-items: center;
+    gap: 0.35rem;
+    width: 100%;
+}
+#tabelaItensOrcamento tr.ft-orcamento-grupo .ft-grupo-label {
+    grid-column: 1 / 7;
+    min-width: 0;
+}
+#tabelaItensOrcamento tr.ft-orcamento-grupo .ft-grupo-total-val {
+    grid-column: 7 / 8;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+}

@@ -172,15 +172,3 @@ def is_date_string(valor_str):
         except:
             continue
     return False
-
-def normalizar_str_inteiro(valor) -> int | None:
-    txt = str(valor or "").strip()
-    if not txt:
-        return None
-    txt = txt.replace(",", ".")
-    try:
-        return str(int(float(txt)))
-    except (TypeError, ValueError):
-        if "." in txt:
-            return txt.split(".", 1)[0]
-        return txt

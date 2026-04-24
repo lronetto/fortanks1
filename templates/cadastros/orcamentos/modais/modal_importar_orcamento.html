@@ -28,7 +28,9 @@
 
                             {% for o in orcamentos_recentes %}
 
-                            <option value="{{ o.id }}">{{ o.id }} — {{ o.nome }}</option>
+                            <option value="{{ o.id }}">
+                                {% if o.vinculado_a_orcamento_id %}-> {% endif %}{{ o.id }} — {{ o.nome }}
+                            </option>
 
                             {% endfor %}
 

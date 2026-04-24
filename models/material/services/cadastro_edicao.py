@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING, Any, Dict, Optional
 
-from utils.normalizar import normalizar_str_inteiro 
+from utils.parser import ToInt
 from utils.utils import dump_dados_json, parse_dados_json
 
 if TYPE_CHECKING:
@@ -79,10 +79,10 @@ def construir_material_novo(
     if not nome or not categoria:
         raise ValueError("Nome e categoria são campos obrigatórios!")
 
-    codigo = normalizar_str_inteiro(codigo_raw)
-    codigo_alterdata = normalizar_str_inteiro(codigo_alterdata_raw or codigo_erp_raw)
-    codigo_mega = normalizar_str_inteiro(codigo_mega_raw)
-    mascara = normalizar_str_inteiro(mascara_raw)
+    codigo = ToInt(codigo_raw)
+    codigo_alterdata = ToInt(codigo_alterdata_raw or codigo_erp_raw)
+    codigo_mega = ToInt(codigo_mega_raw)
+    mascara = ToInt(mascara_raw)
 
     unidade_resolvida = _resolver_unidade_id(unidade, unidade_texto)
     unidade_id = unidade_resolvida if unidade_resolvida not in ("", None) else None
@@ -98,7 +98,7 @@ def construir_material_novo(
         categoria=categoria,
         plano_conta=plano_conta,
         unidade_id=unidade_id,
-        mascara=normalizar_str_inteiro(mascara),
+        mascara=ToInt(mascara),
         formula_calculo=formula if formula else None,
         dados_adicionais=dados_adicionais,
     )
@@ -125,10 +125,10 @@ def aplicar_edicao_formulario(
     if not nome or not categoria:
         raise ValueError("Nome e categoria são campos obrigatórios!")
 
-    codigo = normalizar_str_inteiro(codigo_raw)
-    codigo_alterdata = normalizar_str_inteiro(codigo_alterdata_raw or codigo_erp_raw)
-    codigo_mega = normalizar_str_inteiro(codigo_mega_raw)
-    m_txt = normalizar_str_inteiro(mascara_raw)
+    codigo = ToInt(codigo_raw)
+    codigo_alterdata = ToInt(codigo_alterdata_raw or codigo_erp_raw)
+    codigo_mega = ToInt(codigo_mega_raw)
+    m_txt = ToInt(mascara_raw)
 
     material.nome = nome.upper()
     material.descricao = descricao

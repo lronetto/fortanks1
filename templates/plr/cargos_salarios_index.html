@@ -18,13 +18,14 @@
         </div>
     </div>
 
-    <div class="card shadow mb-4">
-        <div class="card-header py-3">
+    <div class="card shadow mb-4" data-ft-colvis="tabela-cargos-salarios">
+        <div class="card-header py-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
             <h6 class="m-0 font-weight-bold">Lista</h6>
+            <div class="ft-col-toggle-placeholder"></div>
         </div>
         <div class="card-body">
             <div class="table-responsive">
-                <table class="table table-bordered table-hover" width="100%" cellspacing="0">
+                <table class="table table-bordered table-hover" id="tabela-cargos-salarios" width="100%" cellspacing="0">
                     <thead>
                         <tr>
                             <th>Cargo</th>
@@ -35,29 +36,7 @@
                         </tr>
                     </thead>
                     <tbody>
-                        {% for item in itens %}
-                        <tr>
-                            <td>{{ item.cargo.nome if item.cargo else '-' }}</td>
-                            <td>{{ item.mes }}</td>
-                            <td>{{ item.ano }}</td>
-                            <td>{{ "%.2f" | format(item.salario) | replace('.', ',') if item.salario is not none else '-' }}</td>
-                            <td class="text-center">
-                                <button type="button" class="btn btn-sm btn-primary" data-bs-toggle="modal" data-bs-target="#modalEditarCargoSalario{{ item.id }}" title="Editar">
-                                    <i class="fas fa-edit"></i>
-                                </button>
-                                <form method="POST" action="{{ url_for('plr.cargo_salario_excluir', id=item.id) }}" class="d-inline" onsubmit="return confirm('Excluir este registro?');">
-                                    <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
-                                    <button type="submit" class="btn btn-sm btn-danger" title="Excluir">
-                                        <i class="fas fa-trash"></i>
-                                    </button>
-                                </form>
-                            </td>
-                        </tr>
-                        {% else %}
-                        <tr>
-                            <td colspan="5" class="text-center">Nenhum registro.</td>
-                        </tr>
-                        {% endfor %}
+                        {# Dados via AJAX (DataTables server-side) #}
                     </tbody>
                 </table>
             </div>
@@ -66,7 +45,64 @@
 </div>
 
 {% include 'plr/modais/modal_novo_cargo_salario.html' %}
-{% for item in itens %}
 {% include 'plr/modais/modal_editar_cargo_salario.html' %}
-{% endfor %}
+{% endblock %}
+
+{% block scripts %}
+{{ super() }}
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var dtUrl = {{ url_for('plr.cargos_salarios_datatables') | tojson }};
+    var urlJsonBase = {{ url_for('plr.cargo_salario_json', id=0) | tojson }}.replace('/0/json', '/');
+    var urlEditarTpl = {{ url_for('plr.cargo_salario_editar', id=0) | tojson }};
+    var $table = $('#tabela-cargos-salarios');
+    if (!$table.length || typeof $.fn.DataTable === 'undefined' || typeof window.FT === 'undefined') return;
+
+    var TITULOS_COLS = ['Cargo', 'Mês', 'Ano', 'Salário (R$)', ''];
+
+    var dtCargos = $table.DataTable(FT.dtOpcoes({
+        order: [[2, 'desc'], [1, 'desc']],
+        ajax: { url: dtUrl },
+        columns: [
+            { data: 'cargo' },
+            { data: 'mes', className: 'text-center' },
+            { data: 'ano', className: 'text-center' },
+            { data: 'salario', className: 'text-end' },
+            {
+                data: 'acoes',
+                orderable: false,
+                searchable: false,
+                className: 'text-center',
+                render: function(data) { return data || ''; }
+            }
+        ]
+    }));
+    FT.dtColunas.inicializar(dtCargos, 'tabela-cargos-salarios', TITULOS_COLS);
+
+    var modalEditar = document.getElementById('modalEditarCargoSalario');
+    var formEditar = document.getElementById('formEditarCargoSalario');
+
+    $(document).on('click', '.btn-editar-cargo-salario', function() {
+        var id = this.getAttribute('data-id');
+        if (!id) return;
+        var urlJson = urlJsonBase + id + '/json';
+        fetch(urlJson, { headers: { 'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest' } })
+            .then(function(r) { return r.json(); })
+            .then(function(d) {
+                formEditar.action = urlEditarTpl.replace('editar/0', 'editar/' + id);
+                document.getElementById('cargo_salario_editar_cargo_id').value = d.cargo_id != null ? String(d.cargo_id) : '';
+                document.getElementById('cargo_salario_editar_nome').value = d.cargo_nome || '';
+                document.getElementById('cargo_salario_editar_mes').value = d.mes != null ? String(d.mes) : '1';
+                document.getElementById('cargo_salario_editar_ano').value = d.ano != null ? String(d.ano) : '';
+                var sal = d.salario;
+                document.getElementById('cargo_salario_editar_salario').value =
+                    sal != null ? String(sal).replace('.', ',') : '';
+                if (window.bootstrap && modalEditar) {
+                    new bootstrap.Modal(modalEditar).show();
+                }
+            })
+            .catch(function() { alert('Erro ao carregar os dados.'); });
+    });
+});
+</script>
 {% endblock %}

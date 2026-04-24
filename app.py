@@ -12,7 +12,7 @@ from controllers.admin.cadastros import (
     unidade_bp,
 )
 from controllers.auth_controller import auth_bp
-from controllers.usinagem_concreto import usinagem_concreto
+from controllers.operacional.usinagem_concreto import usinagem_concreto
 from controllers.solicitacao_controller import solicitacao_bp
 from controllers.cadastros import (
     cliente_bp,

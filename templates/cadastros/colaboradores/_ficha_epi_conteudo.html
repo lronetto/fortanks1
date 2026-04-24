@@ -54,7 +54,7 @@
             <strong>Nome:</strong>               <span>{{ colaborador.nome }}</span>
             <strong>Matrícula/ID:</strong>       <span>{{ colaborador.id }}</span> {# Ou um campo de matrícula se existir #}
             <strong>CPF:</strong>                <span>{{ colaborador.cpf or 'Não informado' }}</span>
-            <strong>Cargo:</strong>              <span>{{ colaborador.cargo.nome if colaborador.cargo else 'Não informado' }}</span>
+            <strong>Cargo:</strong>              <span>{% set cgv = colaborador.get_funcao() or colaborador.cargo %}{{ cgv.nome if cgv else 'Não informado' }}</span>
             <strong>Departamento:</strong>     <span>{{ colaborador.departamento.nome if colaborador.departamento else 'Não informado' }}</span>
             <strong>Data de Admissão:</strong> <span>{{ colaborador.data_admissao.strftime('%d/%m/%Y') if colaborador.data_admissao else 'Não informada' }}</span>
         </div>

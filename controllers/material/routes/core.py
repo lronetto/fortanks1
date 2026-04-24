@@ -7,8 +7,8 @@ from models.database import db
 from models.material import Materiais
 from models.plano_conta import PlanoConta
 from models.unidade import Unidades
+from utils.parser import ToInt
 from utils.utils import parse_dados_json
-from utils.normalizar import normalizar_str_inteiro
 
 from .. import material_bp
 
@@ -187,16 +187,16 @@ def editar(id):
     return jsonify(
         {
             "id": material.id,
-            "codigo": normalizar_str_inteiro(extras.get("codigo_sox")),
+            "codigo": ToInt(extras.get("codigo_sox")),
             "nome": material.nome,
             "descricao": material.descricao or "",
             "categoria": material.categoria,
             "plano_conta": material.plano_conta or "",
-            "codigo_erp": normalizar_str_inteiro(extras.get("codigo_alterdata")),
-            "codigo_alterdata": normalizar_str_inteiro(extras.get("codigo_alterdata")),
-            "codigo_mega": normalizar_str_inteiro(extras.get("codigo_mega") or extras.get("cod_mega")),
+            "codigo_erp": ToInt(extras.get("codigo_alterdata")),
+            "codigo_alterdata": ToInt(extras.get("codigo_alterdata")),
+            "codigo_mega": ToInt(extras.get("codigo_mega") or extras.get("cod_mega")),
             "unidade": material.unidade_obj.nome if material.unidade_obj else "",
-            "mascara": normalizar_str_inteiro(material.mascara),
+            "mascara": ToInt(material.mascara),
             "formula_calculo": material.formula_calculo or "",
             "imagem_upload_id": img_id,
         }

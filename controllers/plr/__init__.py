@@ -6,7 +6,9 @@ O blueprint `plr_bp` é definido aqui; as rotas são distribuídas em:
 - avaliacao: avaliações PLR (listagem, nova/editar/excluir, importar, por-mês)
 - modelos: modelos de PLR e cargos-salários
 - relatorio_avaliacao: relatório de avaliação (filtro modelo/período)
-- relatorio_planilha: relatório planilha (cálculo, dados JSON, export Excel, página)
+- planilha_plr (routes planilha_plr_* + services): relatório planilha (cálculo, DataTables, Excel, assiduidade)
+
+A estrutura segue o padrão `routes/` + `services/`, mantendo um único blueprint.
 """
 from flask import Blueprint, redirect, url_for
 from flask_login import login_required
@@ -21,12 +23,15 @@ def _login_required():
 
 
 # Registrar rotas dos submódulos (decoradores vinculam ao plr_bp)
-from . import efetivo  # noqa: E402
-from . import avaliacao  # noqa: E402
-from . import modelos  # noqa: E402
-from . import relatorio_avaliacao  # noqa: E402, F401
-from . import relatorio_planilha  # noqa: E402, F401
-from . import assiduidade  # noqa: E402, F401
+from .routes.efetivo import *  # noqa: E402,F401,F403
+from .routes.avaliacao import *  # noqa: E402,F401,F403
+from .routes.modelos import *  # noqa: E402,F401,F403
+from .routes.relatorio_avaliacao import *  # noqa: E402,F401,F403
+from .routes.planilha_plr_core import *  # noqa: E402,F401,F403
+from .routes.planilha_plr_datatables import *  # noqa: E402,F401,F403
+from .routes.planilha_plr_exportacao import *  # noqa: E402,F401,F403
+from .routes.planilha_plr_assiduidade import *  # noqa: E402,F401,F403
+from .routes.assiduidade import *  # noqa: E402,F401,F403
 
 
 @plr_bp.route('/')

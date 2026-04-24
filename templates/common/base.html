@@ -121,7 +121,7 @@
                        abrirSubmenu('concretagemSubmenu');
                    }
 
-                   // Auto-abrir o submenu de equipamentos se estiver em uma página relacionada
+                   // Auto-abrir o submenu de equipamentos (Produção)
                    if (window.location.pathname.includes('/equipamentos') ||
                        window.location.pathname.includes('/checklists')) {
                        abrirSubmenu('equipamentosSubmenu');
@@ -166,7 +166,6 @@
                        window.location.pathname.includes('/contrato') ||
                        window.location.pathname.includes('/cliente') ||
                        window.location.pathname.includes('/fornecedor') ||
-                       window.location.pathname.includes('/colaborador') ||
                        window.location.pathname.includes('/tanques') ||
                        window.location.pathname.includes('/pecas') ||
                        window.location.pathname.includes('/tracos')) {
@@ -459,6 +458,49 @@
                 </li>
                 {% endif %}
 
+                <!-- Equipamentos -->
+                {% if current_user.is_permissao('equipamentos') %}
+                <li class="{{ is_active('equipamento') }} {{ is_active('equipamento.checklists') }} {{ is_active('equipamento.checklists_pendentes') }} {{ is_active('equipamento.realizar_checklist') }} {{ is_active('equipamento.emprestimos') }}">
+                    <a href="#equipamentosSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="sidebar-link">
+                        <span class="sb-icon"><i class="fas fa-tools"></i></span>
+                        <span class="sb-label">Equipamentos</span>
+                        <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
+                    </a>
+                    <ul class="collapse list-unstyled sb-submenu" id="equipamentosSubmenu">
+                        <li class="{{ is_active('equipamento') }}">
+                            <a href="{{ url_for('equipamento.index') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-tools"></i></span>
+                                <span class="sb-label">Listar Equipamentos</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('equipamento.emprestimos') }}">
+                            <a href="{{ url_for('equipamento.emprestimos') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-people-carry"></i></span>
+                                <span class="sb-label">Empréstimos</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('equipamento.checklists') }}">
+                            <a href="{{ url_for('equipamento.checklists') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-list-alt"></i></span>
+                                <span class="sb-label">Modelos de Checklist</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('equipamento.checklists_pendentes') }}">
+                            <a href="{{ url_for('equipamento.checklists_pendentes') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-clipboard-check"></i></span>
+                                <span class="sb-label">Checklists Pendentes</span>
+                            </a>
+                        </li>
+                        <li class="{{ is_active('equipamento.realizar_checklist') }}">
+                            <a href="{{ url_for('equipamento.realizar_checklist') }}" class="sidebar-link sb-sublink">
+                                <span class="sb-icon"><i class="fas fa-tasks"></i></span>
+                                <span class="sb-label">Novo Checklist</span>
+                            </a>
+                        </li>
+                    </ul>
+                </li>
+                {% endif %}
+
                 <!-- Cadastro Operacional -->
                 {% if current_user.is_permissao('cadastro_operacional') %}
                 <li class="{{ is_active('cadastro_operacional') }}">
@@ -694,46 +736,12 @@
                 <!-- ── RH & SEGURANÇA ──────────────────────────────── -->
                 <li class="sidebar-section-label">RH &amp; Segurança</li>
 
-                <!-- Equipamentos -->
-                {% if current_user.is_permissao('equipamentos') %}
-                <li class="{{ is_active('equipamento') }} {{ is_active('equipamento.checklists') }} {{ is_active('equipamento.checklists_pendentes') }} {{ is_active('equipamento.realizar_checklist') }} {{ is_active('equipamento.emprestimos') }}">
-                    <a href="#equipamentosSubmenu" data-bs-toggle="collapse" aria-expanded="false" class="sidebar-link">
-                        <span class="sb-icon"><i class="fas fa-tools"></i></span>
-                        <span class="sb-label">Equipamentos</span>
-                        <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
+                {% if current_user.is_permissao('colaboradores') %}
+                <li class="{{ is_active('colaborador') }}">
+                    <a href="{{ url_for('colaborador.index') }}" class="sidebar-link">
+                        <span class="sb-icon"><i class="fas fa-user-tie"></i></span>
+                        <span class="sb-label">Colaboradores</span>
                     </a>
-                    <ul class="collapse list-unstyled sb-submenu" id="equipamentosSubmenu">
-                        <li class="{{ is_active('equipamento') }}">
-                            <a href="{{ url_for('equipamento.index') }}" class="sidebar-link sb-sublink">
-                                <span class="sb-icon"><i class="fas fa-tools"></i></span>
-                                <span class="sb-label">Listar Equipamentos</span>
-                            </a>
-                        </li>
-                        <li class="{{ is_active('equipamento.emprestimos') }}">
-                            <a href="{{ url_for('equipamento.emprestimos') }}" class="sidebar-link sb-sublink">
-                                <span class="sb-icon"><i class="fas fa-people-carry"></i></span>
-                                <span class="sb-label">Empréstimos</span>
-                            </a>
-                        </li>
-                        <li class="{{ is_active('equipamento.checklists') }}">
-                            <a href="{{ url_for('equipamento.checklists') }}" class="sidebar-link sb-sublink">
-                                <span class="sb-icon"><i class="fas fa-list-alt"></i></span>
-                                <span class="sb-label">Modelos de Checklist</span>
-                            </a>
-                        </li>
-                        <li class="{{ is_active('equipamento.checklists_pendentes') }}">
-                            <a href="{{ url_for('equipamento.checklists_pendentes') }}" class="sidebar-link sb-sublink">
-                                <span class="sb-icon"><i class="fas fa-clipboard-check"></i></span>
-                                <span class="sb-label">Checklists Pendentes</span>
-                            </a>
-                        </li>
-                        <li class="{{ is_active('equipamento.realizar_checklist') }}">
-                            <a href="{{ url_for('equipamento.realizar_checklist') }}" class="sidebar-link sb-sublink">
-                                <span class="sb-icon"><i class="fas fa-tasks"></i></span>
-                                <span class="sb-label">Novo Checklist</span>
-                            </a>
-                        </li>
-                    </ul>
                 </li>
                 {% endif %}
 
@@ -935,14 +943,6 @@
                         <span class="sb-arrow"><i class="fas fa-chevron-right"></i></span>
                     </a>
                     <ul class="collapse list-unstyled sb-submenu" id="cadastrosSubmenu">
-                        {% if current_user.is_permissao('colaboradores') %}
-                        <li class="{{ is_active('colaborador') }}">
-                            <a href="{{ url_for('colaborador.index') }}" class="sidebar-link sb-sublink">
-                                <span class="sb-icon"><i class="fas fa-user-tie"></i></span>
-                                <span class="sb-label">Colaboradores</span>
-                            </a>
-                        </li>
-                        {% endif %}
                         {% if current_user.is_permissao('usuarios') %}
                         <li class="{{ is_active('usuario') }}">
                             <a href="{{ url_for('usuario.index') }}" class="sidebar-link sb-sublink">

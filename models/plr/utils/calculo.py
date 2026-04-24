@@ -17,8 +17,8 @@ def tempo_de_casa_meses(data_admissao, data_fechamento):
     if data_admissao > fim:
         return 0
     meses = (fim.year - data_admissao.year) * 12
-    meses += (fim.month - data_admissao.month)
-    if data_admissao.day <=15:
+    meses += fim.month - data_admissao.month
+    if data_admissao.day <= 15:
         meses += 1
     return max(0, meses)
 
@@ -54,16 +54,16 @@ def nota_media_com_assiduidade(avaliacao, assiduidade_pct=None):
     soma_pesos = 0.0
     valores_simples = []
     for item in avaliacao:
-        if isinstance(item, dict) and 'valor' in item:
-            tipo = item.get('tipo', '')
-            if tipo == 'Assiduidade' and assiduidade_pct is not None:
+        if isinstance(item, dict) and "valor" in item:
+            tipo = item.get("tipo", "")
+            if tipo == "Assiduidade" and assiduidade_pct is not None:
                 v = assiduidade_pct / 10.0
             else:
                 try:
-                    v = float(item['valor'])
+                    v = float(item["valor"])
                 except (TypeError, ValueError):
                     continue
-            peso = item.get('peso')
+            peso = item.get("peso")
             if peso is not None:
                 try:
                     p = float(peso)
@@ -83,17 +83,16 @@ def nota_media_com_assiduidade(avaliacao, assiduidade_pct=None):
 def multiplicador_tempo_casa(tempo_mes):
     """
     Multiplicador do salário base para PLR conforme tempo de casa.
-    Por padrão: mais de 18 meses → 2; até 18 meses → 1.
+    Mais de 18 meses → 1.2; até 18 meses → 1.
     """
     if tempo_mes > 18:
         return 1.2
     return 1
-   
 
 
-def salario_base_plr(colaborador, mes_ref, ano_ref, data_fechamento, db_session):
+def salario_base_plr(colaborador, data_fechamento):
     """
-    Retorna salário base para PLR do colaborador no mês/ano de referência,
+    Retorna salário base para PLR do colaborador na data de fechamento do período,
     aplicando o multiplicador por tempo de casa.
 
     Retorno: dict com tempo_casa_meses, salario_base (do cargo), multiplicador, salario_base_plr.
@@ -107,21 +106,29 @@ def salario_base_plr(colaborador, mes_ref, ano_ref, data_fechamento, db_session)
     mult = multiplicador_tempo_casa(tempo_meses)
 
     if colaborador.cargo_id in [1, 2, 7]:
-        cargo_salario = CargoSalario.query.filter(
-            CargoSalario.cargo_id == 1,
-            CargoSalario.data <= data_fechamento,
-        ).order_by(CargoSalario.data.desc()).first()
+        cargo_salario = (
+            CargoSalario.query.filter(
+                CargoSalario.cargo_id == 1,
+                CargoSalario.data <= data_fechamento,
+            )
+            .order_by(CargoSalario.data.desc())
+            .first()
+        )
     else:
-        cargo_salario = CargoSalario.query.filter(
-            CargoSalario.cargo_id == 3,
-            CargoSalario.data <= data_fechamento,
-        ).order_by(CargoSalario.data.desc()).first()
+        cargo_salario = (
+            CargoSalario.query.filter(
+                CargoSalario.cargo_id == 3,
+                CargoSalario.data <= data_fechamento,
+            )
+            .order_by(CargoSalario.data.desc())
+            .first()
+        )
 
     salario_base = cargo_salario.salario if cargo_salario else None
     salario_base_plr = (float(salario_base) * mult) if salario_base is not None else None
     return {
-        'tempo_casa_meses': tempo_meses,
-        'salario_base': salario_base,
-        'multiplicador': mult,
-        'salario_base_plr': salario_base_plr,
+        "tempo_casa_meses": tempo_meses,
+        "salario_base": salario_base,
+        "multiplicador": mult,
+        "salario_base_plr": salario_base_plr,
     }

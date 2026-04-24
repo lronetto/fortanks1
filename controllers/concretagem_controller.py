@@ -1,1 +1,1 @@
-from controllers.operacional.concretagem_controller import *
+from controllers.operacional.concretagem import *

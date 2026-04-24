@@ -19,7 +19,7 @@ from models.colaborador import Colaborador
 from models.cargo_salario import CargoSalario
 from models.cargo import Cargo
 from models.departamento import Departamento
-from utils.utils import valor_para_str
+from utils.parser import IntToStr
 
 from . import plr_bp
 
@@ -167,7 +167,7 @@ def _parse_valor_efetivo(key: str, val):
     if val is None or (isinstance(val, float) and pd.isna(val)):
         return None
     if key == 'cpf':
-        dig = re.sub(r'\D', '', valor_para_str(val, '') or '')
+        dig = re.sub(r'\D', '', IntToStr(val, '') or '')
         if not dig or len(dig) > 11:
             return None
         return dig.zfill(11)
@@ -175,7 +175,7 @@ def _parse_valor_efetivo(key: str, val):
         return _parse_data_efetivo(val)
     if key in _CAMPOS_DECIMAL_EFETIVO:
         return _parse_decimal_efetivo(val)
-    return valor_para_str(val, None)
+    return IntToStr(val, None)
 
 
 @plr_bp.route('/efetivo/preview-excel', methods=['POST'])

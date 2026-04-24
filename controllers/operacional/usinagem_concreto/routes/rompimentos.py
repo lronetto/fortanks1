@@ -7,141 +7,30 @@ from models.concreto import ConcretoUsinagensRompimentos, ConcretoUsinagens
 from models.database import db
 from datetime import datetime
 from decimal import Decimal
-from collections import defaultdict
 from sqlalchemy import func, case, and_, exists, select, text, desc
 from urllib.parse import unquote
 import pandas as pd
 import os
 import tempfile
 from werkzeug.utils import secure_filename
-from . import usinagem_concreto
+from .. import usinagem_concreto
+from ..services.listagem_rompimentos import montar_resposta_listar_rompimentos_api
 from utils.utils import (
     get_value_datetime,
     get_value_str,
     is_date_string,
-    calcular_data_rompimento_28_dias
 )
-
+from models.concreto.utils.qualidade import calcular_data_rompimento_28_dias
+from utils.parser import StrToDate
 
 @usinagem_concreto.route('/rompimentos/api')
 @login_required
 def listar_rompimentos_api():
     """API para listar rompimentos com filtros e agrupamento"""
-    # Verificar parâmetros
     filtrar_sem_28dias = request.args.get('sem_28dias', 'false') == 'true'
     agrupar = request.args.get('agrupar', 'false') == 'true'
-    
-    # Buscar rompimentos baseado nos filtros (sem ordenação/paginação - será feito no frontend)
-    if filtrar_sem_28dias:
-        # Buscar todas as séries
-        todas_series = db.session.query(ConcretoUsinagensRompimentos.numero_serie).distinct().all()
-        series_sem_28dias = []
-        
-        for serie_tuple in todas_series:
-            serie = serie_tuple[0]
-            # Buscar todos os rompimentos desta série
-            rompimentos_serie = ConcretoUsinagensRompimentos.query.filter_by(numero_serie=serie).all()
-            
-            # Verificar se tem rompimento de 28 dias
-            tem_28dias = False
-            for romp in rompimentos_serie:
-                if romp.data_moldagem and romp.data_rompimento:
-                    diff_days = (romp.data_rompimento - romp.data_moldagem).total_seconds() / 3600 / 24
-                    # Considerar 27-29 dias como rompimento de 28 dias (pode cair em domingo e ser 29)
-                    if 27 <= diff_days <= 29:
-                        tem_28dias = True
-                        break
-            
-            if not tem_28dias:
-                series_sem_28dias.append(serie)
-        
-        # Buscar rompimentos apenas das séries sem 28 dias
-        if series_sem_28dias:
-            query = ConcretoUsinagensRompimentos.query.filter(
-                ConcretoUsinagensRompimentos.numero_serie.in_(series_sem_28dias)
-            )
-        else:
-            query = ConcretoUsinagensRompimentos.query.filter(False)  # Query vazia
-    else:
-        query = ConcretoUsinagensRompimentos.query
-    
-    # Buscar todos os rompimentos (sem ordenação/paginação - será feito no frontend)
-    rompimentos = query.all()
-    
-    # Função auxiliar para calcular idade
-    def calcular_idade(rompimento):
-        idade_calculada = None
-        if rompimento.data_moldagem and rompimento.data_rompimento:
-            diff_hours = (rompimento.data_rompimento - rompimento.data_moldagem).total_seconds() / 3600
-            if diff_hours < 24:
-                idade_calculada = f"{int(diff_hours)}h"
-            else:
-                idade_calculada = f"{int(diff_hours / 24)}d"
-        elif rompimento.usinagem and rompimento.usinagem.data_usinagem and rompimento.data_rompimento:
-            diff_hours = (rompimento.data_rompimento - rompimento.usinagem.data_usinagem).total_seconds() / 3600
-            if diff_hours < 24:
-                idade_calculada = f"{int(diff_hours)}h"
-            else:
-                idade_calculada = f"{int(diff_hours / 24)}d"
-        elif rompimento.idade_cp is not None:
-            if rompimento.idade_cp < 24:
-                idade_calculada = f"{rompimento.idade_cp}h"
-            else:
-                idade_calculada = f"{rompimento.idade_cp}d"
-        return idade_calculada or 'N/A'
-    
-    # Função auxiliar para converter rompimento para dict
-    def rompimento_to_dict(rompimento):
-        return {
-            'id': rompimento.id,
-            'numero_serie': rompimento.numero_serie,
-            'data_moldagem': rompimento.data_moldagem.strftime('%d/%m/%Y %H:%M') if rompimento.data_moldagem else None,
-            'data_rompimento': rompimento.data_rompimento.strftime('%d/%m/%Y %H:%M'),
-            'idade': calcular_idade(rompimento),
-            'resultado': float(rompimento.resultado) if rompimento.resultado else None,
-            'tipo_rompimento': rompimento.tipo_rompimento,
-            'observacoes': rompimento.observacoes,
-            'fator_conversao': float(rompimento.fator_conversao) if rompimento.fator_conversao else 1.2
-        }
-    
-    if agrupar:
-        # Agrupar por série
-        grupos_dict = defaultdict(list)
-        for rompimento in rompimentos:
-            grupos_dict[rompimento.numero_serie].append(rompimento)
-        
-        # Criar lista de grupos (sem ordenação - será feito no frontend)
-        grupos_data = []
-        for serie, rompimentos_serie in grupos_dict.items():
-            # Buscar primeira data de moldagem
-            primeira_data_moldagem = None
-            for romp in rompimentos_serie:
-                if romp.data_moldagem:
-                    primeira_data_moldagem = romp.data_moldagem.strftime('%d/%m/%Y %H:%M')
-                    break
-            
-            grupos_data.append({
-                'numero_serie': serie,
-                'quantidade': len(rompimentos_serie),
-                'data_moldagem': primeira_data_moldagem or 'N/A',
-                'rompimentos': [rompimento_to_dict(r) for r in rompimentos_serie]
-            })
-        
-        # Retornar todos os grupos (sem paginação - será feito no frontend)
-        return jsonify({
-            'success': True,
-            'agrupado': True,
-            'grupos': grupos_data
-        })
-    else:
-        # Retornar todos os rompimentos individuais (sem paginação - será feito no frontend)
-        rompimentos_data = [rompimento_to_dict(r) for r in rompimentos]
-        
-        return jsonify({
-            'success': True,
-            'agrupado': False,
-            'rompimentos': rompimentos_data
-        })
+    payload = montar_resposta_listar_rompimentos_api(filtrar_sem_28dias, agrupar)
+    return jsonify(payload)
 
 
 @usinagem_concreto.route('/rompimentos')

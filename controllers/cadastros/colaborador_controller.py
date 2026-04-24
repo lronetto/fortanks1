@@ -24,6 +24,10 @@ from sqlalchemy.orm import joinedload
 
 from models.database import db
 from models.colaborador import Colaborador, DadosBancarios
+from models.colaborador.utils.mudanca_funcao import (
+    historico_mudanca_funcao_normalizado,
+    normalizar_id_opcional,
+)
 from models.departamento import Departamento
 from models.cargo import Cargo
 from models.usuario import Usuario
@@ -673,5 +677,150 @@ def salvar_dados_bancarios(id):
         db.session.commit()
         flash('Dados bancários cadastrados com sucesso.', 'success')
     
+    return redirect(url_for('colaborador.index'))
+
+
+@colaborador_bp.route('/<int:id>/mudanca_funcao', methods=['POST'])
+@login_required
+def salvar_mudanca_funcao(id):
+    """
+    Registra mudanças em ``mudanca_funcao`` (lista ``{data, funcao_id}``), migrando legado
+    ``dados_a``. A partir de cada data vale a função indicada; antes da primeira data
+    continua valendo ``colaboradores.cargo_id`` (não alterado por este fluxo).
+    """
+    colaborador = Colaborador.query.get_or_404(id)
+
+    def _parse_json_lista(campo):
+        raw = (request.form.get(campo) or '').strip()
+        if not raw:
+            return []
+        try:
+            parsed = json.loads(raw)
+            return parsed if isinstance(parsed, list) else []
+        except (json.JSONDecodeError, TypeError):
+            return []
+
+    def _resolver_nome_funcao_para_id(nome: str):
+        c = Cargo.query.filter_by(nome=(nome or '').strip()).first()
+        return c.id if c else None
+
+    def _item_historico_bate_exclusao(item, exc):
+        if not isinstance(exc, dict):
+            return False
+        data_item = (item.get('data') or '').strip()
+        data_exc = (exc.get('data') or '').strip()
+        if data_item != data_exc:
+            return False
+        id_exc = normalizar_id_opcional(exc.get('funcao_id'))
+        id_item = normalizar_id_opcional(item.get('funcao_id'))
+        if id_exc is not None:
+            return id_item == id_exc
+        nome_exc = (exc.get('funcao') or '').strip()
+        if nome_exc:
+            c = Cargo.query.filter_by(nome=nome_exc).first()
+            return c is not None and id_item == c.id
+        return False
+
+    exclusoes = _parse_json_lista('mudancas_excluir_json')
+
+    mudancas_json = (request.form.get('mudancas_funcao_json') or '').strip()
+    mudancas_recebidas = []
+
+    if mudancas_json:
+        try:
+            parsed = json.loads(mudancas_json)
+            if isinstance(parsed, list):
+                mudancas_recebidas = parsed
+        except (json.JSONDecodeError, TypeError):
+            mudancas_recebidas = []
+
+    mudancas_para_salvar = []
+    for item in mudancas_recebidas:
+        if not isinstance(item, dict):
+            continue
+        data_mudanca_str = (item.get('data') or '').strip()
+        cargo_id = item.get('cargo_id')
+        if not data_mudanca_str or not cargo_id:
+            continue
+        try:
+            cargo_id = int(cargo_id)
+        except (TypeError, ValueError):
+            flash('Uma das funções selecionadas é inválida.', 'danger')
+            return redirect(url_for('colaborador.index'))
+        try:
+            data_mudanca = datetime.strptime(data_mudanca_str, '%Y-%m-%d').date()
+        except ValueError:
+            flash('Uma das datas informadas é inválida.', 'danger')
+            return redirect(url_for('colaborador.index'))
+
+        cargo = Cargo.query.get(cargo_id)
+        if not cargo:
+            flash('Uma das funções selecionadas é inválida.', 'danger')
+            return redirect(url_for('colaborador.index'))
+
+        mudancas_para_salvar.append({
+            'data': data_mudanca.strftime('%Y-%m-%d'),
+            'cargo_id': cargo.id
+        })
+
+    # Fallback para formulário antigo (uma mudança por envio)
+    if not mudancas_para_salvar and not exclusoes:
+        data_mudanca_str = (request.form.get('data_mudanca') or '').strip()
+        cargo_id = request.form.get('cargo_id')
+        if not data_mudanca_str or not cargo_id:
+            flash('Informe data e função para registrar a mudança.', 'danger')
+            return redirect(url_for('colaborador.index'))
+        try:
+            cargo_id = int(cargo_id)
+        except (TypeError, ValueError):
+            flash('Função selecionada é inválida.', 'danger')
+            return redirect(url_for('colaborador.index'))
+        try:
+            data_mudanca = datetime.strptime(data_mudanca_str, '%Y-%m-%d').date()
+        except ValueError:
+            flash('Data de mudança de função inválida.', 'danger')
+            return redirect(url_for('colaborador.index'))
+        cargo = Cargo.query.get(cargo_id)
+        if not cargo:
+            flash('Função selecionada é inválida.', 'danger')
+            return redirect(url_for('colaborador.index'))
+        mudancas_para_salvar.append({
+            'data': data_mudanca.strftime('%Y-%m-%d'),
+            'cargo_id': cargo.id
+        })
+
+    dados_adicionais = colaborador.get_dados_adicionais_dict()
+    historico = historico_mudanca_funcao_normalizado(
+        dados_adicionais, resolver_nome_funcao=_resolver_nome_funcao_para_id
+    )
+
+    for exc in exclusoes:
+        historico = [h for h in historico if not _item_historico_bate_exclusao(h, exc)]
+
+    for mudanca in mudancas_para_salvar:
+        historico.append({
+            'data': mudanca['data'],
+            'funcao_id': mudanca['cargo_id']
+        })
+
+    historico.sort(key=lambda item: item.get('data', ''), reverse=True)
+
+    dados_adicionais.pop('dados_a', None)
+    dados_adicionais['mudanca_funcao'] = historico
+    colaborador.dados_adicionais = json.dumps(dados_adicionais, ensure_ascii=False)
+    # cargo_id permanece a função “base” (vigente antes da primeira data no histórico);
+    # a partir das datas em mudanca_funcao usa-se funcao_id_vigente_em / get_funcao().
+    colaborador.atualizado_em = datetime.now()
+    colaborador.save()
+
+    if mudancas_para_salvar and exclusoes:
+        flash('Mudanças de função atualizadas com sucesso.', 'success')
+    elif mudancas_para_salvar:
+        if len(mudancas_para_salvar) == 1:
+            flash('Mudança de função registrada com sucesso.', 'success')
+        else:
+            flash(f'{len(mudancas_para_salvar)} mudanças de função registradas com sucesso.', 'success')
+    elif exclusoes:
+        flash('Mudanças de função removidas com sucesso.', 'success')
     return redirect(url_for('colaborador.index'))
 

@@ -38,7 +38,7 @@ class DataTableParams:
 
         # Ordenação
         self.order_col = v.get('order[0][column]', 0,     type=int)
-        self.order_dir = v.get('order[0][dir]',    'asc')
+        self.order_dir = (v.get('order[0][dir]', 'asc') or 'asc').strip().lower()
 
         # Página para SQLAlchemy .paginate()
         self.page = (self.start // self.length) + 1 if self.length > 0 else 1

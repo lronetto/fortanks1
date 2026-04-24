@@ -85,8 +85,8 @@ Este documento lista funções utilitárias e aponta duplicidades/sobreposiçõe
 ## `utils/concretagem_previsto_cronograma.py`
 - `pecas_previsto_por_mes_alinhado(...)`.
 
-## `utils/plr_calculo.py` e `utils/plr_import_planilha.py`
-- Cálculo de PLR e importação de planilhas (`.xls/.xlsx`).
+## `models/plr/utils/` (`calculo.py`, `importacao_planilha.py`)
+- Cálculo de PLR e importação de planilhas (`.xls/.xlsx`); constantes da planilha em `models/plr/constants.py`.
 
 ## `utils/relatorio_financeiro.py`
 - `dados_relatorio_financeiro(...)` e `gerar_relatorio_financeiro(...)`.

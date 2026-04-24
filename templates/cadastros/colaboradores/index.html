@@ -50,11 +50,12 @@
                     </thead>
                     <tbody>
                         {% for colaborador in colaboradores %}
+                        {% set cg_vigente_lista = colaborador.get_funcao() %}
                         <tr data-colaborador-id="{{ colaborador.id }}">
                             <td class="text-center"><input type="checkbox" class="selecionar-colaborador" value="{{ colaborador.id }}"></td>
                             <td>{{ colaborador.id }}</td>
                             <td>{{ colaborador.nome }}</td>
-                            <td>{{ colaborador.cargo.nome }}</td>
+                            <td>{{ cg_vigente_lista.nome if cg_vigente_lista else '—' }}</td>
                             <td>{{ colaborador.departamento.nome }}</td>
                             <td>
                                 <span class="badge 
@@ -73,6 +74,7 @@
                                     <ul class="dropdown-menu dropdown-menu-end">
                                         <li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#visualizarColaboradorModal{{colaborador.id}}"><i class="fas fa-eye text-info"></i> Visualizar</button></li>
                                         <li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#editarColaboradorModal{{colaborador.id}}"><i class="fas fa-edit text-primary"></i> Editar</button></li>
+                                        <li><button type="button" class="dropdown-item" data-bs-toggle="modal" data-bs-target="#mudancaFuncaoModal{{colaborador.id}}"><i class="fas fa-user-tag text-warning"></i> Mudança de Função</button></li>
                                         <li><button type="button" class="dropdown-item btn-ver-ficha-epi" data-id="{{ colaborador.id }}" data-nome="{{ colaborador.nome }}"><i class="fas fa-address-card text-secondary"></i> Ficha EPI</button></li>
                                         <li><button type="button" class="dropdown-item btn-dados-bancarios" data-id="{{ colaborador.id }}" data-nome="{{ colaborador.nome }}"><i class="fas fa-university text-info"></i> Dados Bancários</button></li>
                                         <li><hr class="dropdown-divider"></li>
@@ -284,6 +286,7 @@
 
 <!-- Modais de Edição para cada colaborador -->
 {% for colaborador in colaboradores %}
+{% set da = colaborador.get_dados_adicionais_dict() %}
 <div class="modal fade" id="editarColaboradorModal{{colaborador.id}}" tabindex="-1">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -294,7 +297,6 @@
             <form method="POST" action="{{ url_for('colaborador.editar', id=colaborador.id) }}" id="editarColaboradorForm{{colaborador.id}}">
                 <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
                 <div class="modal-body">
-                    {% set da = colaborador.get_dados_adicionais_dict() %}
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <label for="nome{{colaborador.id}}" class="form-label">Nome *</label>
@@ -404,6 +406,96 @@
     </div>
 </div>
 
+<!-- Modal de Mudança de Função -->
+<div class="modal fade" id="mudancaFuncaoModal{{colaborador.id}}" tabindex="-1">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title">Mudança de Função - {{ colaborador.nome }}</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <form method="POST" action="{{ url_for('colaborador.salvar_mudanca_funcao', id=colaborador.id) }}">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <input type="hidden" name="mudancas_funcao_json" class="mudancas-funcao-json" value="[]">
+                <input type="hidden" name="mudancas_excluir_json" class="mudancas-excluir-json" value="[]">
+                <div class="modal-body">
+                    {% set cg_vigente_mud = colaborador.get_funcao() %}
+                    <div class="row mb-3">
+                        <div class="col-md-3">
+                            <label for="data_mudanca{{colaborador.id}}" class="form-label">Data da Mudança *</label>
+                            <input type="date" class="form-control campo-data-mudanca" id="data_mudanca{{colaborador.id}}" name="data_mudanca">
+                        </div>
+                        <div class="col-md-7">
+                            <label for="cargo_mudanca{{colaborador.id}}" class="form-label">Nova Função *</label>
+                            <select class="form-select campo-cargo-mudanca" id="cargo_mudanca{{colaborador.id}}" name="cargo_id">
+                                <option value="">Selecione a função...</option>
+                                {% for cargo in cargos %}
+                                <option value="{{ cargo.id }}" {% if cg_vigente_mud and cg_vigente_mud.id == cargo.id %}selected{% endif %}>{{ cargo.nome }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+                        <div class="col-md-2 d-flex align-items-end">
+                            <button type="button" class="btn btn-outline-primary w-100 btn-adicionar-mudanca-funcao">
+                                <i class="fas fa-plus"></i> Adicionar
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm align-middle mb-0">
+                            <thead>
+                                <tr>
+                                    <th style="width: 180px;">Data</th>
+                                    <th>Função</th>
+                                    <th style="width: 90px;" class="text-center">Ações</th>
+                                </tr>
+                            </thead>
+                            <tbody class="tbody-mudancas-funcao">
+                                {% if 'mudanca_funcao' in da %}
+                                    {% set historico_mudancas = da.get('mudanca_funcao') or [] %}
+                                {% else %}
+                                    {% set historico_mudancas = da.get('dados_a', []) %}
+                                {% endif %}
+                                {% if historico_mudancas %}
+                                    {% for mudanca in historico_mudancas|sort(attribute='data', reverse=True) %}
+                                    {% set fid = mudanca.get('funcao_id') or mudanca.get('cargo_id') %}
+                                    {% if fid %}
+                                        {% set _cargo_match = cargos|selectattr('id', 'equalto', fid|int)|list %}
+                                    {% else %}
+                                        {% set _cargo_match = [] %}
+                                    {% endif %}
+                                    {% set nome_funcao_exibicao = mudanca.get('funcao') or (_cargo_match[0].nome if _cargo_match else '') or '-' %}
+                                    <tr class="linha-mudanca-salva"
+                                        data-data-iso="{{ mudanca.get('data', '') }}"
+                                        data-funcao-id="{{ mudanca.get('funcao_id', '') or mudanca.get('cargo_id', '') }}"
+                                        data-funcao-nome="{{ nome_funcao_exibicao|e }}">
+                                        <td>{{ mudanca.get('data', '-') }}</td>
+                                        <td>{{ nome_funcao_exibicao }}</td>
+                                        <td class="text-center">
+                                            <button type="button" class="btn btn-sm btn-outline-danger btn-remover-mudanca" title="Excluir">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                        </td>
+                                    </tr>
+                                    {% endfor %}
+                                {% else %}
+                                    <tr class="js-sem-mudanca">
+                                        <td colspan="3" class="text-center text-muted">Nenhuma mudança de função registrada.</td>
+                                    </tr>
+                                {% endif %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" class="btn btn-primary">Salvar Mudança</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
 <!-- Modal de Visualização -->
 <div class="modal fade" id="visualizarColaboradorModal{{colaborador.id}}" tabindex="-1">
     <div class="modal-dialog modal-lg">
@@ -414,12 +506,13 @@
             </div>
             <div class="modal-body">
                 <div class="container-fluid">
+                    {% set cg_vigente_vis = colaborador.get_funcao() or colaborador.cargo %}
                     <div class="row mb-3">
                         <div class="col-md-6">
                             <p><strong>Nome:</strong> {{colaborador.nome}}</p>
                         </div>
                         <div class="col-md-6">
-                            <p><strong>Cargo:</strong> {{colaborador.cargo.nome}}</p>
+                            <p><strong>Cargo (vigente):</strong> {{ cg_vigente_vis.nome if cg_vigente_vis else '—' }}</p>
                         </div>
                     </div>
                     <div class="row mb-3">
@@ -780,6 +873,155 @@ document.addEventListener('DOMContentLoaded', function() {
 
     // Chamada inicial para configurar o estado da tabela (ex: se já começa vazia)
     filtrarTabela();
+
+    // Script para Modal de Mudança de Função
+    document.querySelectorAll('.modal[id^="mudancaFuncaoModal"]').forEach(modal => {
+        const formMudanca = modal.querySelector('form');
+        const campoData = modal.querySelector('.campo-data-mudanca');
+        const campoCargo = modal.querySelector('.campo-cargo-mudanca');
+        const btnAdicionarMudanca = modal.querySelector('.btn-adicionar-mudanca-funcao');
+        const tbodyMudancas = modal.querySelector('.tbody-mudancas-funcao');
+        const inputMudancasJson = modal.querySelector('.mudancas-funcao-json');
+        const inputExcluirJson = modal.querySelector('.mudancas-excluir-json');
+
+        if (!formMudanca || !campoData || !campoCargo || !btnAdicionarMudanca || !tbodyMudancas || !inputMudancasJson || !inputExcluirJson) {
+            return;
+        }
+
+        const mudancasPendentes = [];
+        const mudancasExcluir = [];
+
+        function novoUidMudanca() {
+            if (window.crypto && typeof crypto.randomUUID === 'function') {
+                return crypto.randomUUID();
+            }
+            return `m-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        }
+
+        function payloadMudancasParaServidor() {
+            return mudancasPendentes.map(({ data, cargo_id }) => ({ data, cargo_id }));
+        }
+
+        function atualizarJsonMudancas() {
+            inputMudancasJson.value = JSON.stringify(payloadMudancasParaServidor());
+        }
+
+        function atualizarJsonExcluir() {
+            inputExcluirJson.value = JSON.stringify(mudancasExcluir);
+        }
+
+        function garantirPlaceholderSeVazio() {
+            const linhasDados = tbodyMudancas.querySelectorAll('tr:not(.js-sem-mudanca)');
+            if (!linhasDados.length) {
+                tbodyMudancas.innerHTML = '<tr class="js-sem-mudanca"><td colspan="3" class="text-center text-muted">Nenhuma mudança de função registrada.</td></tr>';
+            }
+        }
+
+        function formatarDataBR(dataIso) {
+            if (!dataIso || !dataIso.includes('-')) {
+                return dataIso || '-';
+            }
+            const [ano, mes, dia] = dataIso.split('-');
+            return `${dia}/${mes}/${ano}`;
+        }
+
+        function removerLinhaSemMudanca() {
+            const linhaSemMudanca = tbodyMudancas.querySelector('.js-sem-mudanca');
+            if (linhaSemMudanca) {
+                linhaSemMudanca.remove();
+            }
+        }
+
+        btnAdicionarMudanca.addEventListener('click', () => {
+            const dataMudanca = (campoData.value || '').trim();
+            const cargoId = (campoCargo.value || '').trim();
+            const cargoNome = (campoCargo.options[campoCargo.selectedIndex]?.text || '').trim();
+
+            if (!dataMudanca || !cargoId) {
+                alert('Informe a data e a função antes de adicionar.');
+                return;
+            }
+
+            removerLinhaSemMudanca();
+
+            const clientUid = novoUidMudanca();
+            mudancasPendentes.push({
+                client_uid: clientUid,
+                data: dataMudanca,
+                cargo_id: cargoId,
+                funcao: cargoNome
+            });
+
+            const tr = document.createElement('tr');
+            tr.classList.add('linha-mudanca-pendente');
+            tr.setAttribute('data-client-uid', clientUid);
+            tr.innerHTML = `
+                <td>${formatarDataBR(dataMudanca)}</td>
+                <td>${cargoNome}</td>
+                <td class="text-center">
+                    <button type="button" class="btn btn-sm btn-outline-danger btn-remover-mudanca" title="Remover">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </td>
+            `;
+            tbodyMudancas.insertBefore(tr, tbodyMudancas.firstChild);
+
+            atualizarJsonMudancas();
+            campoData.value = '';
+            campoCargo.value = '';
+        });
+
+        tbodyMudancas.addEventListener('click', (event) => {
+            const botaoRemover = event.target.closest('.btn-remover-mudanca');
+            if (!botaoRemover) {
+                return;
+            }
+
+            const linhaPendente = botaoRemover.closest('tr.linha-mudanca-pendente');
+            if (linhaPendente) {
+                const clientUid = linhaPendente.getAttribute('data-client-uid');
+                const idx = mudancasPendentes.findIndex(m => m.client_uid === clientUid);
+                if (idx >= 0) {
+                    mudancasPendentes.splice(idx, 1);
+                }
+                linhaPendente.remove();
+                atualizarJsonMudancas();
+                garantirPlaceholderSeVazio();
+                return;
+            }
+
+            const linhaSalva = botaoRemover.closest('tr.linha-mudanca-salva');
+            if (linhaSalva) {
+                const dataIso = (linhaSalva.dataset.dataIso || '').trim();
+                const funcaoIdRaw = (linhaSalva.dataset.funcaoId || '').trim();
+                const funcaoNome = (linhaSalva.dataset.funcaoNome || '').trim();
+                let funcaoId = null;
+                if (funcaoIdRaw) {
+                    const parsed = parseInt(funcaoIdRaw, 10);
+                    funcaoId = Number.isNaN(parsed) ? null : parsed;
+                }
+                mudancasExcluir.push({
+                    data: dataIso,
+                    funcao_id: funcaoId,
+                    funcao: funcaoNome
+                });
+                atualizarJsonExcluir();
+                linhaSalva.remove();
+                garantirPlaceholderSeVazio();
+            }
+        });
+
+        formMudanca.addEventListener('submit', (event) => {
+            atualizarJsonMudancas();
+            atualizarJsonExcluir();
+            const temAdicao = inputMudancasJson.value !== '[]';
+            const temExclusao = inputExcluirJson.value !== '[]';
+            if (!temAdicao && !temExclusao) {
+                event.preventDefault();
+                alert('Adicione ou remova mudanças de função antes de salvar.');
+            }
+        });
+    });
 
     // Script para Modal de Dados Bancários
     const dadosBancariosModalEl = document.getElementById('dadosBancariosModal');

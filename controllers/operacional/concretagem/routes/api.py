@@ -1,6 +1,5 @@
 import logging
-from collections import defaultdict
-from flask import Blueprint, render_template, redirect, request, url_for, flash, jsonify, send_file
+from flask import request, jsonify
 from models.concreto import (
     ConcretoConcretagens,
     ConcretoUsinagens,
@@ -8,45 +7,15 @@ from models.concreto import (
     limpar_data_producao_em_qualidade_str,
     qualidade_peca_remover_data_producao_de_dados_adicionais,
 )
-from models.tanque import Tanques, TanquesPecas, TanquesProdutoComposto
-from models.contrato import Contrato
-from models.centro_custo import CentroCusto
+from models.tanque import Tanques, TanquesPecas
 from models.database import db
-from models.estoque import EstoqueMovimentacoes
 from flask_login import login_required, current_user
-#from flask_wtf.csrf import csrf_exempt
 import json
-from datetime import datetime, date as date_type
-import pandas as pd
-import numpy as np
-from sqlalchemy import text, func
-from sqlalchemy.orm import joinedload
-import os
-import io
-import shutil
-from controllers.relatorios.commun import _converter_excel_para_pdf_libreoffice, _criar_arquivo_temp_projeto, _limpar_arquivo_temp
-
-# Tentar importar odfpy para suporte a ODS
-try:
-    from odf.opendocument import load
-    from odf.table import Table, TableRow, TableCell
-    from odf.text import P
-    from odf.style import PageLayout
-    from odf.namespaces import STYLENS
-    ODFPY_AVAILABLE = True
-except ImportError:
-    ODFPY_AVAILABLE = False
-    print('odfpy não está instalado. Para processar ODS diretamente, instale: pip install odfpy')
-# Definir o blueprint
-concretagem = Blueprint('concretagem', __name__, url_prefix='/concretagens')
-
-
-@concretagem.route('/')
-@login_required
-def index():
-    """Lista todas as concretagens cadastradas"""
-    return render_template('operacional/concretagens/index.html')
-
+from datetime import datetime
+from .. import concretagem
+from ..services.estado import concretagem_tem_alongamentos
+from ..services.listagens import montar_dados_api_listar, montar_resumo_pecas_nao_produzidas
+from ..services.producao import remover_movimentacoes_producao_peca_escopo_concretagens
 
 
 @concretagem.route('/api/tanque/pecas', methods=['GET'])
@@ -105,167 +74,13 @@ def get_pecas_por_tanque():
 
 
 
-# Novas rotas AJAX simplificadas
-
-def _parse_cordoalhas(conc):
-    """Retorna o dict parseado de cordoalhas ou None. Formato esperado: {"alongamentos": [...], "bobinas": [...]}."""
-    if not conc.cordoalhas or not conc.cordoalhas.strip():
-        return None
-    try:
-        cord = json.loads(conc.cordoalhas) if isinstance(conc.cordoalhas, str) else conc.cordoalhas
-        return cord if isinstance(cord, dict) else None
-    except (TypeError, json.JSONDecodeError):
-        return None
-
-
-def _concretagem_tem_alongamentos(conc):
-    """Retorna True se a concretagem tem cordoalhas válidas: 16+ alongamentos válidos e 1+ bobina(s)."""
-    cord = _parse_cordoalhas(conc)
-    if not cord:
-        return False
-    along = cord.get('alongamentos')
-    if not isinstance(along, list):
-        return False
-    validos = 0
-    for a in along:
-        if a is None or a == '' or (isinstance(a, str) and str(a).strip() == ''):
-            continue
-        try:
-            v = float(a) if not isinstance(a, (int, float)) else a
-            if v == 0:
-                continue
-            validos += 1
-        except (ValueError, TypeError):
-            continue
-    if validos < 16:
-        return False
-    bobinas = cord.get('bobinas')
-    if not isinstance(bobinas, list) or len(bobinas) < 1:
-        return False
-    return True
-
-
-def _concretagem_tem_usinagens(conc):
-    """Retorna True se pelo menos uma peça da concretagem tem séries (usinagens) referenciadas."""
-    pecas = conc.get_pecas()
-    if not pecas:
-        return False
-    for peca_item in pecas:
-        nome = peca_item.get('nome') or peca_item.get('placa')
-        tanque_id = peca_item.get('tanque_id') or peca_item.get('tanque')
-        if not nome or tanque_id is None:
-            continue
-        try:
-            tid = int(tanque_id) if isinstance(tanque_id, str) else tanque_id
-            peca = TanquesPecas.query.filter_by(nome=nome, tanque_id=tid).first()
-            if peca and peca.get_series_de_pecas():
-                return True
-        except (ValueError, TypeError):
-            continue
-    return False
-
-
-def _concretagem_formas_ok(conc):
-    """Retorna True se todas as peças têm forma definida (diferente de 0 e em branco) e todas as formas são diferentes entre si."""
-    pecas = conc.get_pecas()
-    if not pecas:
-        return False
-    formas = []
-    for peca_item in pecas:
-        forma = peca_item.get('forma')
-        if forma is None or forma == '' or forma == 0 or str(forma).strip() == '':
-            return False
-        try:
-            f = int(forma) if not isinstance(forma, int) else forma
-            formas.append(f)
-        except (ValueError, TypeError):
-            return False
-    return len(formas) == len(set(formas))
-
-
-def _concretagem_alongamentos_ok(conc):
-    """Retorna True se cordoalhas é válido: 16+ alongamentos válidos (não nulos, não vazios, ≠ 0) e 1+ bobina(s)."""
-    return _concretagem_tem_alongamentos(conc)
-
-
-def _concretagem_todas_pecas_tem_serie(conc):
-    """Retorna True se todas as peças da concretagem estão associadas a pelo menos uma série."""
-    pecas = conc.get_pecas()
-    if not pecas:
-        return False
-    for peca_item in pecas:
-        nome = peca_item.get('nome') or peca_item.get('placa')
-        tanque_id = peca_item.get('tanque_id') or peca_item.get('tanque')
-        if not nome or tanque_id is None:
-            return False
-        try:
-            tid = int(tanque_id) if isinstance(tanque_id, str) else tanque_id
-            peca = TanquesPecas.query.filter_by(nome=nome, tanque_id=tid).first()
-            if not peca or not peca.get_series_de_pecas():
-                return False
-        except (ValueError, TypeError):
-            return False
-    return True
-
-
-def _concretagem_produzida(conc):
-    """Retorna True se a concretagem tem peças e todas elas já têm data_producao (verificação por peça)."""
-    pecas = conc.get_pecas()
-    if not pecas:
-        return False
-    for peca_item in pecas:
-        nome = peca_item.get('nome') or peca_item.get('placa')
-        tanque_id = peca_item.get('tanque_id') or peca_item.get('tanque')
-        if not nome or tanque_id is None:
-            return False
-        try:
-            tid = int(tanque_id) if isinstance(tanque_id, str) else tanque_id
-            peca = TanquesPecas.query.filter_by(nome=nome, tanque_id=tid).first()
-            if not peca or not peca_obj_ja_produzida(peca):
-                return False
-        except (ValueError, TypeError):
-            return False
-    return True
-
-
-def _concretagem_concluida(conc):
-    """Concretagem está concluída quando: todas as formas colocadas (diferentes entre si), alongamentos preenchidos (≠0 e não em branco) e todas as peças associadas à série."""
-    return (
-        _concretagem_formas_ok(conc)
-        and _concretagem_alongamentos_ok(conc)
-        and _concretagem_todas_pecas_tem_serie(conc)
-    )
-
-
 @concretagem.route('/api/listar')
 @login_required
 def api_listar():
     """Retorna lista de concretagens para DataTables. Aceita ?status=concluido|em_andamento para filtrar."""
     try:
-        concretagens = ConcretoConcretagens.query.order_by(ConcretoConcretagens.data_concretagem.desc()).all()
         filtro_status = request.args.get('status', '').strip().lower()
-
-        data = []
-        for conc in concretagens:
-            concluida = _concretagem_concluida(conc)
-            status_val = 'concluido' if concluida else 'em_andamento'
-            if filtro_status and status_val != filtro_status:
-                continue
-            data.append({
-                'concretagem': conc.conc,
-                'id': conc.id,
-                'data_concretagem': conc.data_concretagem.isoformat() if conc.data_concretagem else None,
-                'pista': conc.pista,
-                'quantidade_pecas': len(conc.get_pecas()),
-                'tem_formas': _concretagem_formas_ok(conc),
-                'tem_alongamentos': _concretagem_tem_alongamentos(conc),
-                'tem_usinagens': _concretagem_tem_usinagens(conc),
-                'produzida': _concretagem_produzida(conc),
-                'status': status_val,
-                'concluida': concluida,
-                'data_cadastro': conc.data_cadastro.isoformat() if conc.data_cadastro else None
-            })
-
+        data = montar_dados_api_listar(filtro_status)
         return jsonify({'data': data})
     except Exception as e:
         logging.error(f"Erro ao listar concretagens: {str(e)}", exc_info=True)
@@ -280,49 +95,7 @@ def api_resumo_pecas_nao_produzidas():
     (sem data_producao na qualidade), agrupado por tanque e tipo da peça.
     """
     try:
-        cache_pecas = {}
-        grupos = defaultdict(int)
-        tanque_nomes = {}
-
-        def peca_cached(nome, tid):
-            key = (nome, tid)
-            if key not in cache_pecas:
-                cache_pecas[key] = TanquesPecas.query.filter_by(nome=nome, tanque_id=tid).first()
-            return cache_pecas[key]
-
-        concretagens = ConcretoConcretagens.query.order_by(ConcretoConcretagens.data_concretagem.desc()).all()
-        for conc in concretagens:
-            for item in conc.get_pecas():
-                nome = item.get('nome') or item.get('placa')
-                tanque_id_val = item.get('tanque_id') or item.get('tanque')
-                if not nome or tanque_id_val is None:
-                    continue
-                try:
-                    tid = int(tanque_id_val) if isinstance(tanque_id_val, str) else tanque_id_val
-                except (ValueError, TypeError):
-                    continue
-                peca = peca_cached(nome, tid)
-                if not peca:
-                    continue
-                if peca_obj_ja_produzida(peca):
-                    continue
-                grupos[(tid, peca.tipo or '')] += 1
-                if tid not in tanque_nomes:
-                    if peca.tanque:
-                        tanque_nomes[tid] = peca.tanque.nome
-                    else:
-                        t = Tanques.query.get(tid)
-                        tanque_nomes[tid] = t.nome if t else f'Tanque #{tid}'
-
-        linhas = []
-        for (tid, tipo) in sorted(grupos.keys(), key=lambda k: (tanque_nomes.get(k[0], str(k[0])).lower(), (k[1] or '').lower())):
-            linhas.append({
-                'tanque_id': tid,
-                'tanque_nome': tanque_nomes.get(tid, f'#{tid}'),
-                'tipo': tipo or '—',
-                'quantidade': grupos[(tid, tipo)],
-            })
-        total = sum(l['quantidade'] for l in linhas)
+        linhas, total = montar_resumo_pecas_nao_produzidas()
         return jsonify({'data': linhas, 'total_geral': total})
     except Exception as e:
         logging.error(f"Erro no resumo de peças não produzidas: {str(e)}", exc_info=True)
@@ -416,63 +189,6 @@ def api_processar_producao(id):
         return jsonify({'success': False, 'message': f'Erro ao processar produção: {str(e)}'}), 500
 
 
-def _remover_movimentacoes_producao_peca_escopo_concretagens(concretagem_ids):
-    """
-    Remove movimentações de estoque (origem_tipo producao_peca): saídas de materiais e
-    entradas do produto composto vinculado, associadas às peças/datas das concretagens
-    informadas. Usa produto composto (tanque+tipo), data da concretagem e nome da peça
-    na observação. Retorna quantidade de movimentações removidas.
-    """
-    mov_ids = set()
-    for cid in concretagem_ids:
-        conc = ConcretoConcretagens.query.get(cid)
-        if not conc or not conc.data_concretagem:
-            continue
-        dc = conc.data_concretagem
-        if isinstance(dc, datetime):
-            data_d = dc.date()
-        elif isinstance(dc, date_type):
-            data_d = dc
-        else:
-            try:
-                data_d = datetime.strptime(str(dc)[:10], '%Y-%m-%d').date()
-            except (ValueError, TypeError):
-                continue
-        for pref in conc.get_pecas():
-            try:
-                nome = (pref.get('nome') or '').strip()
-                tid = int(pref['tanque_id'])
-            except (KeyError, TypeError, ValueError):
-                continue
-            if not nome:
-                continue
-            peca_obj = TanquesPecas.query.filter_by(nome=nome, tanque_id=tid).first()
-            if not peca_obj:
-                continue
-            vinc = TanquesProdutoComposto.query.filter_by(
-                tanque_id=tid,
-                tipo_peca=peca_obj.tipo,
-            ).first()
-            if not vinc:
-                continue
-            pid = vinc.produto_composto_id
-            qry = EstoqueMovimentacoes.query.filter(
-                EstoqueMovimentacoes.origem_tipo == 'producao_peca',
-                EstoqueMovimentacoes.origem_id == pid,
-                func.date(EstoqueMovimentacoes.data_movimento) == data_d,
-                EstoqueMovimentacoes.observacao.like(f'%{nome}%'),
-            )
-            for m in qry.all():
-                mov_ids.add(m.id)
-    n = 0
-    for mid in mov_ids:
-        m = EstoqueMovimentacoes.query.get(mid)
-        if m:
-            m.delete()
-            n += 1
-    return n
-
-
 @concretagem.route('/api/desfazer-todas-producoes', methods=['POST'])
 @login_required
 def api_desfazer_todas_producoes():
@@ -537,7 +253,7 @@ def api_desfazer_todas_producoes():
         db.session.commit()
         movs_removidas = 0
         if remover_movimentacoes:
-            movs_removidas = _remover_movimentacoes_producao_peca_escopo_concretagens(concretagem_ids)
+            movs_removidas = remover_movimentacoes_producao_peca_escopo_concretagens(concretagem_ids)
         msg_parte_mov = (
             f' Movimentações de produção de peças removidas (estoque revertido): {movs_removidas}.'
             if remover_movimentacoes
@@ -769,7 +485,7 @@ def api_pecas(id):
                     print(f"[API] Erro ao parsear peças: {str(e)}")
                     logging.error(f"Erro ao parsear peças da concretagem {id}: {str(e)}")
             
-            tem_alongamentos = _concretagem_tem_alongamentos(concretagem)
+            tem_alongamentos = concretagem_tem_alongamentos(concretagem)
             return jsonify({'pecas': pecas_data, 'tem_alongamentos': tem_alongamentos})
     except Exception as e:
         db.session.rollback()
@@ -924,220 +640,3 @@ def api_salvar_usinagens(id):
         db.session.rollback()
         logging.error(f"Erro ao salvar referências de usinagens: {str(e)}", exc_info=True)
         return jsonify({'success': False, 'message': f'Erro ao salvar referências: {str(e)}'}), 500
-
-def _aplicar_layout_pagina_horizontal_ods(doc):
-    """
-    Ajusta todos os page layouts do documento ODS para orientação paisagem (horizontal)
-    e escala para caber em uma página.
-    """
-    if not ODFPY_AVAILABLE:
-        return
-    try:
-        layouts = doc.getElementsByType(PageLayout)
-        for layout in layouts:
-            for child in (layout.childNodes or []):
-                if getattr(child, 'qname', None) == (STYLENS, 'page-layout-properties'):
-                    # odfpy setAttribute usa nome normalizado: sem hífen, minúsculo
-                    child.setAttribute('printorientation', 'landscape')
-                    child.setAttribute('scaletopages', '1')
-                    break
-    except Exception as e:
-        logging.warning(f"Não foi possível aplicar layout horizontal ao ODS: {e}")
-
-
-def _processar_ods_template_inspecao_pista(ods_path, concretagem_id, concretagem):
-    """
-    Processa o template INSPECAO_PISTA.ods substituindo placeholders pelos dados das peças.
-    
-    Args:
-        ods_path: Caminho do arquivo ODS
-        concretagem_id: ID da concretagem
-        concretagem: Objeto concretagem
-    """
-    if not ODFPY_AVAILABLE:
-        raise ImportError('odfpy não está disponível. Instale com: pip install odfpy')
-    
-    try:
-        # Carregar o documento ODS
-        doc = load(ods_path)
-        
-        # Obter todas as tabelas (planilhas)
-        tables = doc.getElementsByType(Table)
-        
-        # Preparar dados das peças
-        pecas_data = concretagem.get_pecas() if concretagem else []
-        pecas_concretadas = []
-        
-        for peca_item in pecas_data:
-            peca_nome = peca_item.get('nome') or peca_item.get('placa')
-            tanque_id = peca_item.get('tanque_id') or peca_item.get('tanque')
-            forma = peca_item.get('forma', 0)
-            
-            if peca_nome and tanque_id:
-                try:
-                    tanque_id_int = int(tanque_id) if isinstance(tanque_id, str) else tanque_id
-                    peca_obj = TanquesPecas.query.filter_by(
-                        nome=peca_nome,
-                        tanque_id=tanque_id_int
-                    ).first()
-                    
-                    if peca_obj:
-                        pecas_concretadas.append({
-                            'nome': peca_nome,
-                            'tipo': peca_obj.tipo,
-                            'forma': forma,
-                            'tanque_id': tanque_id_int,
-                            'tanque_nome': peca_obj.tanque.nome if peca_obj.tanque else ''
-                        })
-                except (ValueError, TypeError) as e:
-                    logging.warning(f"Erro ao processar peça {peca_nome}: {str(e)}")
-                    continue
-        
-        # Processar todas as tabelas
-        for table in tables:
-            rows = table.getElementsByType(TableRow)
-            for row_idx, row in enumerate(rows):
-                cells = row.getElementsByType(TableCell)
-                for cell_idx, cell in enumerate(cells):
-                    # Obter o texto da célula
-                    original_text = ''
-                    paragraphs = cell.getElementsByType(P)
-                    
-                    if paragraphs:
-                        for para in paragraphs:
-                            para_text = ''
-                            for node in para.childNodes:
-                                if hasattr(node, 'data'):
-                                    para_text += str(node.data)
-                                elif hasattr(node, 'nodeValue'):
-                                    para_text += str(node.nodeValue)
-                            if para_text:
-                                original_text += para_text
-                    
-                    if not original_text:
-                        for node in cell.childNodes:
-                            if hasattr(node, 'data'):
-                                original_text += str(node.data)
-                            elif hasattr(node, 'nodeValue'):
-                                original_text += str(node.nodeValue)
-                    
-                    # Processar apenas células com texto no formato de placeholder (1 a 5 caracteres)
-                    if original_text and len(original_text.strip()) > 0 and 1 < len(original_text) <= 5:
-                        new_value = original_text
-                        
-                        # Substituir placeholders básicos
-                        new_value = new_value.replace('{1}', str(concretagem_id))
-                        new_value = new_value.replace('{4}', concretagem.data_concretagem.strftime('%d/%m/%Y') if concretagem.data_concretagem else '')
-                        new_value = new_value.replace('{7}', concretagem.pista if concretagem.pista else '')
-                        
-                        # Processar formas (0 a 12)
-                        formas = list(range(13))  # 0 a 12
-                        for forma in formas:
-                            count = 0
-                            for peca in pecas_concretadas:
-                                if peca.get('forma') == forma:
-                                    new_value = new_value.replace(f'{{{7+forma}}}', str(forma))
-                                    new_value = new_value.replace(f'{{{19+forma}}}', str(peca['nome']))
-                                    new_value = new_value.replace(f'{{{31+forma}}}', str(peca['tipo']))
-                                    
-                                    tipo_painel = 'FECHO' if peca['tipo'] == 'PF' else ('NORMAL' if peca['tipo'] in ['PN', 'P'] else 'ESPECIAL')
-                                    new_value = new_value.replace(f'{{{43+forma}}}', str(tipo_painel))
-                                    count += 1
-                            
-                            if count == 0:
-                                new_value = new_value.replace(f'{{{7+forma}}}', '')
-                                new_value = new_value.replace(f'{{{19+forma}}}', '')
-                                new_value = new_value.replace(f'{{{31+forma}}}', '')
-                                new_value = new_value.replace(f'{{{43+forma}}}', '')
-                        
-                        # Atualizar o texto da célula
-                        if new_value != original_text:
-                            # Limpar todos os parágrafos existentes
-                            paragraphs_to_remove = cell.getElementsByType(P)
-                            for para in paragraphs_to_remove:
-                                cell.removeChild(para)
-                            
-                            # Criar novo parágrafo com o texto atualizado
-                            new_para = P()
-                            new_para.addText(new_value)
-                            cell.addElement(new_para)
-        
-        # Ajustar página para orientação horizontal e caber em uma página
-        _aplicar_layout_pagina_horizontal_ods(doc)
-        
-        # Salvar documento modificado
-        doc.save(ods_path)
-        
-    except Exception as e:
-        logging.error(f"Erro ao processar template ODS: {str(e)}", exc_info=True)
-        raise
-
-@concretagem.route('/api/<int:id>/pecas/exportar-pdf', methods=['GET'])
-@login_required
-def api_exportar_pecas_pdf(id):
-    """Exporta peças de uma concretagem para PDF usando o template INSPECAO_PISTA.ods"""
-    excel_path = None
-    pdf_temp_path = None
-    
-    try:
-        concretagem = ConcretoConcretagens.query.get_or_404(id)
-        
-        # Caminho do template
-        templates_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            'controllers','templates_excel'
-        )
-        template_ods = os.path.join(templates_dir, 'INSPECAO_PISTA.ods')
-        print(f'[_api_exportar_pecas_pdf] Template ODS: {template_ods}')
-        if not os.path.exists(template_ods):
-            return jsonify({'error': 'Template INSPECAO_PISTA.ods não encontrado'}), 404
-        
-        if not ODFPY_AVAILABLE:
-            return jsonify({'error': 'odfpy não está instalado. Instale com: pip install odfpy'}), 500
-        
-        # Criar cópia temporária do template
-        excel_path = _criar_arquivo_temp_projeto(suffix='.ods', prefix='inspecao_pista_')
-        shutil.copy2(template_ods, excel_path)
-        
-        # Processar template com dados das peças
-        _processar_ods_template_inspecao_pista(excel_path, id, concretagem)
-        
-        # Converter ODS para PDF usando LibreOffice
-        generated_pdf_path = _converter_excel_para_pdf_libreoffice(excel_path)
-        
-        if not generated_pdf_path or not os.path.exists(generated_pdf_path):
-            return jsonify({
-                'error': 'Erro ao converter ODS para PDF. Verifique se o LibreOffice está instalado e configurado corretamente.'
-            }), 500
-        
-        # Verificar se o PDF foi gerado corretamente
-        pdf_size = os.path.getsize(generated_pdf_path)
-        if pdf_size == 0:
-            return jsonify({'error': 'PDF gerado está vazio'}), 500
-        
-        # Ler o PDF gerado para buffer de memória
-        output = io.BytesIO()
-        with open(generated_pdf_path, 'rb') as f:
-            output.write(f.read())
-        output.seek(0)
-        
-        # Nome do arquivo
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
-        filename = f'inspecao_pista_{id}_{timestamp}.pdf'
-        
-        return send_file(
-            output,
-            mimetype='application/pdf',
-            as_attachment=True,
-            download_name=filename
-        )
-        
-    except Exception as e:
-        logging.error(f"Erro ao exportar PDF de peças: {str(e)}", exc_info=True)
-        return jsonify({'error': f'Erro ao exportar PDF: {str(e)}'}), 500
-    finally:
-        # Limpar arquivos temporários
-        if excel_path and os.path.exists(excel_path):
-            _limpar_arquivo_temp(excel_path)
-        if 'generated_pdf_path' in locals() and generated_pdf_path and os.path.exists(generated_pdf_path):
-            _limpar_arquivo_temp(generated_pdf_path)

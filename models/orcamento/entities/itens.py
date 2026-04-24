@@ -16,11 +16,12 @@ class ItemOrcamento(db.Model):
     orcamento_id = db.Column(db.Integer, db.ForeignKey("Orcamentos.id"), nullable=False)
 
     descricao_item = db.Column(db.String(255), nullable=True)
+    unidade = db.Column(db.String(30), nullable=True)
     grupo = db.Column(db.Text, nullable=True)
     dados_adicionais = db.Column(db.Text, nullable=True)
 
     material_id = db.Column(db.Integer, db.ForeignKey("Materiais.id"), nullable=True)
-    quantidade = db.Column(db.Integer, nullable=False)
+    quantidade = db.Column(db.Numeric(28, 14), nullable=False)
     valor = db.Column(db.Numeric(10, 2), nullable=False)
     criado_em = db.Column(db.DateTime, default=datetime.now)
     atualizado_em = db.Column(db.DateTime, default=datetime.now, onupdate=datetime.now)
@@ -41,6 +42,7 @@ class ItemOrcamento(db.Model):
             "id": self.id,
             "orcamento_id": self.orcamento_id,
             "descricao_item": self.descricao_item,
+            "unidade": self.unidade,
             "grupo": self.grupo,
             "dados_adicionais": self.dados_adicionais,
             "material_id": self.material_id,

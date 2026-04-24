@@ -68,7 +68,7 @@
                                 <div class="card bg-light mb-3">
                                     <div class="card-body text-center">
                                         <h6>Cargo</h6>
-                                        <p class="mb-0 fw-bold">{{ colaborador.cargo.nome if colaborador.cargo else 'N/A' }}</p>
+                                        <p class="mb-0 fw-bold">{% set cgv = colaborador.get_funcao() or colaborador.cargo %}{{ cgv.nome if cgv else 'N/A' }}</p>
                                     </div>
                                 </div>
                             </div>

@@ -4,11 +4,12 @@ from datetime import datetime
 
 from flask import flash, jsonify, redirect, render_template, request, url_for
 from flask_login import current_user, login_required
+from sqlalchemy import case, func
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import joinedload
+from sqlalchemy.orm import aliased, joinedload
 
 from models.contrato import Contrato
-from models.orcamento import ItemOrcamento, Orcamento
+from models.orcamento import Orcamento
 from models.database import db
 from models.material import Materiais
 from models.orcamento import ItemOrcamentoReferenciaMaterial
@@ -16,13 +17,27 @@ from models.orcamento import ItemOrcamentoReferenciaMaterial
 from .. import orcamento_bp
 from ..services.edicao import payload_modal_edicao_orcamento
 from ..services.importacao import importar_planilha_orcamento
+from ..services.resumo import calcular_resumo_valores_orcamento
 
 
 @orcamento_bp.route("/", methods=["GET"])
 @login_required
 def index():
+    orcamento_pai = aliased(Orcamento)
+    grupo_orcamento_id = func.coalesce(
+        orcamento_pai.vinculado_a_orcamento_id,
+        Orcamento.vinculado_a_orcamento_id,
+        Orcamento.id,
+    )
+    ordem_no_grupo = case(
+        (Orcamento.vinculado_a_orcamento_id.is_(None), 0),
+        else_=1,
+    )
     orcamentos_recentes = (
-        Orcamento.query.order_by(Orcamento.id.desc()).limit(300).all()
+        Orcamento.query.outerjoin(orcamento_pai, orcamento_pai.id == Orcamento.vinculado_a_orcamento_id)
+        .order_by(grupo_orcamento_id.asc(), ordem_no_grupo.asc(), Orcamento.id.asc())
+        .limit(300)
+        .all()
     )
     return render_template(
         "cadastros/orcamentos/index.html",
@@ -203,11 +218,11 @@ def editar(orcamento_id):
 @login_required
 def visualizar(orcamento_id):
     orcamento = Orcamento.query.get_or_404(orcamento_id)
-    itens = orcamento.itens.order_by(ItemOrcamento.id.asc()).all()
+    resumo_valores = calcular_resumo_valores_orcamento(orcamento.id)
     return render_template(
         "cadastros/orcamentos/visualizar.html",
         orcamento=orcamento,
-        itens=itens,
+        resumo_valores=resumo_valores,
     )
 
 

@@ -1,3 +1,4 @@
 from controllers.operacional.acabamento_transporte import acabamento_transporte_bp
-from controllers.operacional.concretagem_controller import concretagem
+from controllers.operacional.concretagem import concretagem
+from controllers.operacional.usinagem_concreto import usinagem_concreto
 

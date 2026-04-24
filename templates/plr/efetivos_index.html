@@ -65,9 +65,10 @@
         </div>
     </div>
 
-    <div class="card shadow mb-4">
-        <div class="card-header py-3">
+    <div class="card shadow mb-4" data-ft-colvis="tabela-efetivos">
+        <div class="card-header py-3 d-flex align-items-center justify-content-between flex-wrap gap-2">
             <h6 class="m-0 font-weight-bold">Lista de Efetivos</h6>
+            <div class="ft-col-toggle-placeholder"></div>
         </div>
         <div class="card-body">
             <div class="table-responsive">
@@ -117,18 +118,20 @@ document.addEventListener('DOMContentLoaded', function() {
         return params;
     }
 
+    var TITULOS_EFET = ['Período', 'CPF', 'Nome', 'Função', 'Salário', 'Data nasc.', 'Data demissão', 'Seção', 'Data admissão', 'Chapa', ''];
+
     function initDataTable() {
         var $table = $('#tabela-efetivos');
-        if (!$table.length || typeof $.fn.DataTable === 'undefined') return;
+        if (!$table.length || typeof $.fn.DataTable === 'undefined' || typeof window.FT === 'undefined') return;
         if (dtInstance) {
             dtInstance.destroy();
             dtInstance = null;
         }
         var MESES_ABREV = ['', 'Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-        dtInstance = $table.DataTable({
+        dtInstance = $table.DataTable(FT.dtOpcoes({
+            serverSide: false,
             responsive: true,
             order: [[0, 'desc'], [2, 'asc']],
-            language: { url: '{{ url_for("static", filename="js/datatables-pt-BR-1.13.json") }}' },
             ajax: {
                 url: dadosUrl,
                 data: function(d) {
@@ -163,7 +166,10 @@ document.addEventListener('DOMContentLoaded', function() {
             ],
             pageLength: 25,
             dom: '<"row"<"col-sm-12 col-md-6"l><"col-sm-12 col-md-6"f>>rtip'
-        });
+        }));
+        if (FT.dtColunas) {
+            FT.dtColunas.inicializar(dtInstance, 'tabela-efetivos', TITULOS_EFET);
+        }
     }
 
     document.getElementById('formFiltroEfetivos').addEventListener('submit', function(e) {

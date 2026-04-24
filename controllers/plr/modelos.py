@@ -4,7 +4,8 @@ Rotas de Modelos de PLR e Cargos/Salários (período mês/ano + salário).
 from datetime import date
 import json
 
-from flask import request, redirect, url_for, flash, render_template
+from flask import jsonify, request, redirect, url_for, flash, render_template
+from flask_wtf.csrf import generate_csrf
 
 from models.database import db
 from models.plr import ModeloPLR
@@ -12,7 +13,10 @@ from models.cargo_salario import CargoSalario
 from models.cargo import Cargo
 from models.departamento import Departamento
 
+from utils.datatable_helper import DataTableParams
+
 from . import plr_bp
+from .services.cargos_salarios_datatables import montar_payload_cargos_salarios_datatables
 
 
 # ---------- Modelos de PLR ----------
@@ -122,10 +126,46 @@ def modelo_excluir(id):
 
 @plr_bp.route('/cargos-salarios/')
 def cargos_salarios_index():
-    """Lista vínculos cargo x mês/ano x salário."""
-    lista = CargoSalario.query.order_by(CargoSalario.data.desc()).all()
+    """Lista vínculos cargo x mês/ano x salário (tabela via DataTables server-side)."""
     cargos = Cargo.query.filter_by(status='Ativo').order_by(Cargo.nome).all()
-    return render_template('plr/cargos_salarios_index.html', itens=lista, cargos=cargos)
+    return render_template('plr/cargos_salarios_index.html', cargos=cargos)
+
+
+@plr_bp.route('/cargos-salarios/api/datatables', methods=['GET'])
+def cargos_salarios_datatables():
+    """JSON DataTables server-side para cargos x salário."""
+    dt = DataTableParams()
+    try:
+        return montar_payload_cargos_salarios_datatables(dt, generate_csrf())
+    except Exception as e:
+        return (
+            jsonify(
+                {
+                    'draw': dt.draw,
+                    'recordsTotal': 0,
+                    'recordsFiltered': 0,
+                    'data': [],
+                    'error': str(e),
+                }
+            ),
+            500,
+        )
+
+
+@plr_bp.route('/cargos-salarios/<int:id>/json')
+def cargo_salario_json(id):
+    """Dados de um registro para preencher o modal de edição."""
+    reg = CargoSalario.query.get_or_404(id)
+    return jsonify(
+        {
+            'id': reg.id,
+            'cargo_id': reg.cargo_id,
+            'cargo_nome': reg.cargo.nome if reg.cargo else '',
+            'mes': reg.mes,
+            'ano': reg.ano,
+            'salario': float(reg.salario) if reg.salario is not None else None,
+        }
+    )
 
 
 @plr_bp.route('/cargos-salarios/novo', methods=['GET', 'POST'])

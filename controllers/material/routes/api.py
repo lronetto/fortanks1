@@ -11,7 +11,7 @@ from models.estoque import Estoque, EstoqueMovimentacoes
 from models.material import Materiais
 from models.upload import Upload
 from models.unidade import Unidades
-from utils.normalizar import normalizar_str_inteiro
+from utils.parser import ToInt
 from utils.utils import parse_dados_json
 
 from .. import material_bp
@@ -73,8 +73,8 @@ def listar_json():
         resultado.append(
             {
                 "id": material.id,
-                "codigo": normalizar_str_inteiro(extras.get("codigo_sox")),
-                "codigo_erp": normalizar_str_inteiro(extras.get("codigo_alterdata")),
+                "codigo": ToInt(extras.get("codigo_sox")),
+                "codigo_erp": ToInt(extras.get("codigo_alterdata")),
                 "nome": material.nome or "",
                 "unidade": material.unidade_obj.nome if material.unidade_obj else "",
             }
@@ -118,7 +118,7 @@ def api_materiais():
         result.append(
             {
                 "id": m.id,
-                "codigo": normalizar_codigo_inteiro(extras.get("codigo_sox")),
+                "codigo": ToInt(extras.get("codigo_sox")),
                 "nome": m.nome,
                 "descricao": m.descricao,
                 "categoria": m.categoria,
@@ -247,10 +247,10 @@ def api_criar():
             ncm=data.get("ncm"),
             formula_calculo=data.get("formula_calculo") if data.get("formula_calculo") else None,
         )
-        codigo_alterdata = normalizar_codigo_inteiro(data.get("codigo_alterdata") or data.get("codigo_erp"))
+        codigo_alterdata = ToInt(data.get("codigo_alterdata") or data.get("codigo_erp"))
         extras = parse_dados_json(None)
         if codigo:
-            extras["codigo_sox"] = normalizar_codigo_inteiro(codigo)
+            extras["codigo_sox"] = ToInt(codigo)
         if codigo_alterdata:
             extras["codigo_alterdata"] = codigo_alterdata
         material.dados_adicionais = dump_dados_json(extras) if extras else None
@@ -371,16 +371,16 @@ def editar_material_ajax(id):
     return jsonify(
         {
             "id": material.id,
-            "codigo": normalizar_codigo_inteiro(extras.get("codigo_sox")),
+            "codigo": ToInt(extras.get("codigo_sox")),
             "nome": material.nome,
             "descricao": material.descricao or "",
             "categoria": material.categoria,
             "plano_conta": material.plano_conta or "",
-            "codigo_erp": normalizar_codigo_inteiro(extras.get("codigo_alterdata")),
-            "codigo_alterdata": normalizar_codigo_inteiro(extras.get("codigo_alterdata")),
-            "codigo_mega": normalizar_codigo_inteiro(extras.get("codigo_mega") or extras.get("cod_mega")),
+            "codigo_erp": ToInt(extras.get("codigo_alterdata")),
+            "codigo_alterdata": ToInt(extras.get("codigo_alterdata")),
+            "codigo_mega": ToInt(extras.get("codigo_mega") or extras.get("cod_mega")),
             "unidade": material.unidade_obj.nome if material.unidade_obj else "",
-            "mascara": normalizar_codigo_inteiro(material.mascara),
+            "mascara": ToInt(material.mascara),
             "formula_calculo": material.formula_calculo or "",
             "imagem_upload_id": img_id,
         }
@@ -400,16 +400,16 @@ def obter_material(id):
             "success": True,
             "material": {
                 "id": material.id,
-                "codigo": normalizar_codigo_inteiro(extras.get("codigo_sox")),
-                "codigo_erp": normalizar_codigo_inteiro(extras.get("codigo_alterdata")),
-                "codigo_alterdata": normalizar_codigo_inteiro(extras.get("codigo_alterdata")),
-                "codigo_mega": normalizar_codigo_inteiro(extras.get("codigo_mega") or extras.get("cod_mega")),
+                "codigo": ToInt(extras.get("codigo_sox")),
+                "codigo_erp": ToInt(extras.get("codigo_alterdata")),
+                "codigo_alterdata": ToInt(extras.get("codigo_alterdata")),
+                "codigo_mega": ToInt(extras.get("codigo_mega") or extras.get("cod_mega")),
                 "nome": material.nome or "",
                 "descricao": material.descricao or "",
                 "categoria": material.categoria or "",
                 "plano_conta": material.plano_conta or "",
                 "unidade": material.unidade or "",
-                "mascara": normalizar_codigo_inteiro(material.mascara),
+                "mascara": ToInt(material.mascara),
                 "formula_calculo": material.formula_calculo or "",
                 "imagem_upload_id": img_id,
             },
@@ -435,16 +435,16 @@ def obter_material_ajax(id):
             "success": True,
             "material": {
                 "id": material.id,
-                "codigo": normalizar_codigo_inteiro(extras.get("codigo_sox")),
-                "codigo_erp": normalizar_codigo_inteiro(extras.get("codigo_alterdata")),
-                "codigo_alterdata": normalizar_codigo_inteiro(extras.get("codigo_alterdata")),
-                "codigo_mega": normalizar_codigo_inteiro(extras.get("codigo_mega") or extras.get("cod_mega")),
+                "codigo": ToInt(extras.get("codigo_sox")),
+                "codigo_erp": ToInt(extras.get("codigo_alterdata")),
+                "codigo_alterdata": ToInt(extras.get("codigo_alterdata")),
+                "codigo_mega": ToInt(extras.get("codigo_mega") or extras.get("cod_mega")),
                 "nome": material.nome or "",
                 "descricao": material.descricao or "",
                 "categoria": material.categoria or "",
                 "plano_conta": material.plano_conta or "",
                 "unidade": material.unidade or "",
-                "mascara": normalizar_codigo_inteiro(material.mascara),
+                "mascara": ToInt(material.mascara),
                 "formula_calculo": material.formula_calculo or "",
                 "imagem_upload_id": img_id,
             },
