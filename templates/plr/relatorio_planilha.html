@@ -85,6 +85,13 @@
                         {% endfor %}
                     </select>
                 </div>
+                <div class="col-md-3">
+                    <label for="obra_centro_custo_id" class="form-label">Obra (Centro de Custo)</label>
+                    <select class="form-select" id="obra_centro_custo_id" name="obra_centro_custo_id" multiple size="1" title="Segure Ctrl para selecionar várias" disabled>
+                        <option value="">Todas</option>
+                    </select>
+                    <small class="text-muted">Ctrl+clique para múltiplas</small>
+                </div>
                 <div class="col-md-2">
                     <label for="departamento_id" class="form-label">Departamento</label>
                     <select class="form-select" id="departamento_id" name="departamento_id" multiple size="1" title="Segure Ctrl para selecionar vários">
@@ -172,6 +179,7 @@
 document.addEventListener('DOMContentLoaded', function() {
     var MESES_ABREV = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
     var dadosUrl = {{ url_for('plr.relatorio_planilha_dados') | tojson }};
+    var obrasUrl = {{ url_for('plr.relatorio_planilha_obras') | tojson }};
     var excelUrl = {{ url_for('plr.relatorio_planilha_excel') | tojson }};
     var excelFormulasUrl = {{ url_for('plr.relatorio_planilha_excel_formulas') | tojson }};
     var excelPlanilhaModUrl = {{ url_for('plr.relatorio_planilha_excel_planilha_plr') | tojson }};
@@ -289,10 +297,55 @@ document.addEventListener('DOMContentLoaded', function() {
         };
         if (ultimoFiltro.modelo_plr_id) o.modelo_plr_id = ultimoFiltro.modelo_plr_id;
         if (ultimoFiltro.equipe) o.equipe = ultimoFiltro.equipe;
+        var obras = ultimoFiltro.obras_centro_custo_ids || [];
+        if (obras.length) o.obra_centro_custo_id = obras.slice();
         var deps = ultimoFiltro.departamentos || [];
         if (deps.length) o.departamento_id = deps.slice();
         if (ultimoFiltro.salario_por_grupo) o.salario_grupo = '1';
         return o;
+    }
+
+    function carregarObrasPorPeriodo(valoresSelecionados) {
+        var sel = document.getElementById('obra_centro_custo_id');
+        if (!sel) return Promise.resolve();
+        var inicioVal = document.getElementById('periodo_inicio').value;
+        var fimVal = document.getElementById('periodo_fim').value;
+        if (!inicioVal || !fimVal) return Promise.resolve();
+
+        var ini = inicioVal.split('-');
+        var fim = fimVal.split('-');
+        if (ini.length < 2 || fim.length < 2) return Promise.resolve();
+
+        var params = new URLSearchParams();
+        params.append('ano_inicio', ini[0]);
+        params.append('mes_inicio', String(parseInt(ini[1], 10) || 1));
+        params.append('ano_fim', fim[0]);
+        params.append('mes_fim', String(parseInt(fim[1], 10) || 12));
+        var modeloVal = document.getElementById('modelo_plr_id').value;
+        if (modeloVal) params.append('modelo_plr_id', modeloVal);
+        var equipeVal = document.getElementById('equipe').value;
+        if (equipeVal) params.append('equipe', equipeVal);
+
+        sel.disabled = true;
+        sel.innerHTML = '<option value="">Carregando...</option>';
+        return fetch(obrasUrl + '?' + params.toString(), { credentials: 'same-origin' })
+            .then(function(resp) { return resp.json(); })
+            .then(function(json) {
+                var obras = (json && json.obras) ? json.obras : [];
+                var html = ['<option value="">Todas</option>'];
+                var selecionadas = Array.isArray(valoresSelecionados) ? valoresSelecionados.map(String) : [];
+                obras.forEach(function(o) {
+                    var selected = (selecionadas.indexOf(String(o.id)) >= 0) ? ' selected' : '';
+                    var label = o.label || (((o.codigo || '') + ' - ' + (o.nome || '')).replace(/^ - | - $/g, ''));
+                    html.push('<option value="' + String(o.id) + '"' + selected + '>' + label + '</option>');
+                });
+                sel.innerHTML = html.join('');
+                sel.disabled = false;
+            })
+            .catch(function() {
+                sel.innerHTML = '<option value="">Todas</option>';
+                sel.disabled = false;
+            });
     }
 
     function initOrReloadDataTablePlanilha(mesesColunas, dataFechamentoLabel) {
@@ -398,6 +451,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
             var modeloVal = document.getElementById('modelo_plr_id').value;
             var equipeVal = document.getElementById('equipe').value;
+            var obraEl = document.getElementById('obra_centro_custo_id');
+            var obrasVal = obraEl ? Array.from(obraEl.selectedOptions).map(function(o) { return o.value; }).filter(Boolean) : [];
             var depEl = document.getElementById('departamento_id');
             var departamentosVal = depEl ? Array.from(depEl.selectedOptions).map(function(o) { return o.value; }).filter(Boolean) : [];
             var sg = document.getElementById('salario_por_grupo');
@@ -408,6 +463,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 mes_fim: mesFim,
                 modelo_plr_id: modeloVal || '',
                 equipe: equipeVal || '',
+                obras_centro_custo_ids: obrasVal,
                 departamentos: departamentosVal,
                 salario_por_grupo: !!(sg && sg.checked)
             };
@@ -429,6 +485,7 @@ document.addEventListener('DOMContentLoaded', function() {
         params.append('mes_fim', ultimoFiltro.mes_fim);
         if (ultimoFiltro.modelo_plr_id) params.append('modelo_plr_id', ultimoFiltro.modelo_plr_id);
         if (ultimoFiltro.equipe) params.append('equipe', ultimoFiltro.equipe);
+        (ultimoFiltro.obras_centro_custo_ids || []).forEach(function(id) { params.append('obra_centro_custo_id', id); });
         (ultimoFiltro.departamentos || []).forEach(function(id) { params.append('departamento_id', id); });
         if (ultimoFiltro.salario_por_grupo) params.append('salario_grupo', '1');
     }
@@ -472,6 +529,7 @@ document.addEventListener('DOMContentLoaded', function() {
             mes_fim: f.mes_fim,
             modelo_plr_id: f.modelo_plr_id || '',
             equipe: f.equipe || '',
+            obras_centro_custo_ids: f.obras_centro_custo_ids || [],
             departamentos: f.departamentos || [],
             salario_por_grupo: !!f.salario_por_grupo
         };
@@ -480,7 +538,18 @@ document.addEventListener('DOMContentLoaded', function() {
         );
         showCardPlanilha(window.PLANILHA_BOOT.data_fechamento || '');
         initOrReloadDataTablePlanilha(mc, window.PLANILHA_BOOT.data_fechamento || '');
+        carregarObrasPorPeriodo(ultimoFiltro.obras_centro_custo_ids || []);
+    } else {
+        carregarObrasPorPeriodo([]);
     }
+
+    ['periodo_inicio', 'periodo_fim', 'modelo_plr_id', 'equipe'].forEach(function(id) {
+        var el = document.getElementById(id);
+        if (!el) return;
+        el.addEventListener('change', function() {
+            carregarObrasPorPeriodo([]);
+        });
+    });
 });
 </script>
 {% endblock %}

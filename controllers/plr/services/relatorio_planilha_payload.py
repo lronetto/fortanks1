@@ -30,7 +30,8 @@ def parse_filtros_planilha(values: Mapping[str, Any]) -> tuple[str | None, dict 
 
     Retorna ``(mensagem_erro, None)`` ou ``(None, filtros_dict)`` com chaves:
     ``ano_inicio``, ``mes_inicio``, ``ano_fim``, ``mes_fim``, ``modelo_plr_id``,
-    ``equipe_filtro``, ``departamentos_ids``, ``salario_por_grupo``.
+    ``equipe_filtro``, ``departamentos_ids``, ``obras_centro_custo_ids``,
+    ``salario_por_grupo``.
     """
     ano_inicio = values.get('ano_inicio') or values.get('ano')
     ano_fim = values.get('ano_fim') or ano_inicio
@@ -38,6 +39,9 @@ def parse_filtros_planilha(values: Mapping[str, Any]) -> tuple[str | None, dict 
     mes_fim = values.get('mes_fim', '12')
     modelo_plr_id = values.get('modelo_plr_id', '') or ''
     equipe_filtro = (values.get('equipe') or '').strip() or None
+    obras_centro_custo_ids = [
+        int(x) for x in _getlist(values, 'obra_centro_custo_id') if x and str(x).isdigit()
+    ]
     departamentos_ids = [
         int(x) for x in _getlist(values, 'departamento_id') if x and str(x).isdigit()
     ]
@@ -64,6 +68,7 @@ def parse_filtros_planilha(values: Mapping[str, Any]) -> tuple[str | None, dict 
         'mes_fim': mes_fim,
         'modelo_plr_id': modelo_plr_id,
         'equipe_filtro': equipe_filtro,
+        'obras_centro_custo_ids': obras_centro_custo_ids or None,
         'departamentos_ids': departamentos_ids or None,
         'salario_por_grupo': salario_por_grupo,
     }
@@ -86,6 +91,7 @@ def filtros_para_template_boot(filtros: dict) -> dict:
         'mes_fim': mf,
         'modelo_plr_id': filtros.get('modelo_plr_id') or '',
         'equipe': (filtros.get('equipe_filtro') or ''),
+        'obras_centro_custo_ids': [str(x) for x in (filtros.get('obras_centro_custo_ids') or [])],
         'departamentos': [str(x) for x in dep],
         'salario_por_grupo': bool(filtros.get('salario_por_grupo')),
     }
@@ -114,6 +120,7 @@ def carregar_payload_planilha(filtros: dict) -> dict:
         filtros['mes_fim'],
         filtros['modelo_plr_id'],
         filtros['equipe_filtro'],
+        filtros.get('obras_centro_custo_ids'),
         filtros['departamentos_ids'],
         salario_por_grupo=filtros.get('salario_por_grupo', False),
     )
@@ -129,6 +136,7 @@ def carregar_payload_planilha(filtros: dict) -> dict:
         data_fechamento,
         filtros.get('modelo_plr_id') or '',
         filtros.get('equipe_filtro'),
+        filtros.get('obras_centro_custo_ids'),
     )
 
     linhas_exibicao = rp.expandir_resultado_planilha_por_segmento_funcao(

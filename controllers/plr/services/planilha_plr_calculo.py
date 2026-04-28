@@ -55,7 +55,8 @@ def _criterios_headers_com_peso():
 
 
 def relatorio_planilha_calcular(ano_inicio, mes_inicio, ano_fim, mes_fim, modelo_plr_id,
-                                equipe_filtro=None, departamentos_ids=None, salario_por_grupo=False):
+                                equipe_filtro=None, obras_centro_custo_ids=None,
+                                departamentos_ids=None, salario_por_grupo=False):
     """
     Retorna (resultado, meses_colunas, data_fechamento) para o relatório planilha.
     Suporta períodos que abrangem anos diferentes.
@@ -86,6 +87,10 @@ def relatorio_planilha_calcular(ano_inicio, mes_inicio, ano_fim, mes_fim, modelo
     )
     if modelo_plr_id:
         q_av = q_av.filter(PLRColaborador.PlrModelo_id == int(modelo_plr_id))
+    if obras_centro_custo_ids:
+        ids_set = set(int(x) for x in obras_centro_custo_ids if x is not None)
+        if ids_set:
+            q_av = q_av.filter(PLRColaborador.centro_custo_id.in_(ids_set))
     avaliacoes_periodo = q_av.all()
 
     if equipe_filtro:
@@ -495,7 +500,7 @@ def _excel_cpf_para_chapa(resultado, data_inicio, data_fechamento):
 
 
 def _excel_criterios_por_colab_mes(resultado, meses_colunas, data_inicio, data_fechamento,
-                                   modelo_plr_id, equipe_filtro):
+                                   modelo_plr_id, equipe_filtro, obras_centro_custo_ids=None):
     """Mapa (colaborador_id, (mes, ano)) -> dict de critérios (média por tipo)."""
     criterios_por_colab_mes = {}
     if not resultado or not meses_colunas:
@@ -511,6 +516,10 @@ def _excel_criterios_por_colab_mes(resultado, meses_colunas, data_inicio, data_f
     )
     if modelo_plr_id:
         q_crit = q_crit.filter(PLRColaborador.PlrModelo_id == int(modelo_plr_id))
+    if obras_centro_custo_ids:
+        ids_set = set(int(x) for x in obras_centro_custo_ids if x is not None)
+        if ids_set:
+            q_crit = q_crit.filter(PLRColaborador.centro_custo_id.in_(ids_set))
     avaliacoes_crit = q_crit.all()
     if equipe_filtro:
         avaliacoes_crit = [

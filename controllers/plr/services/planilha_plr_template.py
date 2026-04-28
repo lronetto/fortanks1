@@ -25,6 +25,7 @@ from openpyxl.utils import get_column_letter
 from models.cargo import Cargo
 from models.cargo_salario import CargoSalario
 from models.colaborador.utils.mudanca_funcao import funcao_id_vigente_em
+from models.plr import PLRColaborador
 
 from models.plr.constants import (
     CARGO_AJUDANTE,
@@ -318,6 +319,99 @@ def _resolve_template_month_sheet(wb, meses_colunas: list[tuple[int, int]]) -> s
 def _nome_aba_excel_seguro(title: str) -> str:
     t = re.sub(r'[\[\]:*?/\\]', ' ', title).strip()
     return t[:31] if len(t) > 31 else t
+
+
+def _nome_aba_unico(wb, title: str) -> str:
+    """Gera nome de aba seguro e único (limite 31 chars)."""
+    base = _nome_aba_excel_seguro(title) or 'Aba'
+    if base not in wb.sheetnames:
+        return base
+    i = 2
+    while True:
+        sufixo = f' ({i})'
+        max_base = 31 - len(sufixo)
+        cand = f'{base[:max_base]}{sufixo}'
+        if cand not in wb.sheetnames:
+            return cand
+        i += 1
+
+
+def _reordenar_abas_pagamento_juntas(wb, aba_base: str, abas_filhas: list[str]) -> None:
+    """
+    Reordena para manter abas de pagamento contíguas:
+    [aba_base, filhas...] na posição original da aba_base.
+    """
+    if aba_base not in wb.sheetnames:
+        return
+    grupo = [aba_base] + [n for n in abas_filhas if n in wb.sheetnames and n != aba_base]
+    if len(grupo) <= 1:
+        return
+    sheets = list(wb._sheets)
+    by_name = {ws.title: ws for ws in sheets}
+    base_idx = next((i for i, ws in enumerate(sheets) if ws.title == aba_base), None)
+    if base_idx is None:
+        return
+    restantes = [ws for ws in sheets if ws.title not in set(grupo)]
+    novas = restantes[:base_idx] + [by_name[n] for n in grupo if n in by_name] + restantes[base_idx:]
+    wb._sheets = novas
+
+
+def _mapa_obras_por_colaborador(
+    colaborador_ids: list[int],
+    data_inicio: date,
+    data_fechamento: date,
+) -> dict[int, set[tuple[int, str, str]]]:
+    """
+    Mapa colaborador_id -> {(obra_id, codigo, nome), ...} no período.
+    """
+    out: dict[int, set[tuple[int, str, str]]] = {}
+    if not colaborador_ids:
+        return out
+    avals = (
+        PLRColaborador.query.filter(
+            PLRColaborador.colaborador_id.in_(colaborador_ids),
+            PLRColaborador.data >= data_inicio,
+            PLRColaborador.data <= data_fechamento,
+        )
+        .all()
+    )
+    for av in avals:
+        if not av.centro_custo_id:
+            continue
+        cc = av.centro_custo
+        cod = (cc.codigo.strip() if cc and cc.codigo else '')
+        nome = (cc.nome.strip() if cc and cc.nome else '')
+        out.setdefault(av.colaborador_id, set()).add((int(av.centro_custo_id), cod, nome))
+    return out
+
+
+def _mapa_obras_por_colaborador_mes(
+    colaborador_ids: list[int],
+    data_inicio: date,
+    data_fechamento: date,
+) -> dict[int, dict[tuple[int, int], set[int]]]:
+    """
+    Mapa colaborador_id -> {(mes, ano): {obra_id, ...}} no período.
+    """
+    out: dict[int, dict[tuple[int, int], set[int]]] = {}
+    if not colaborador_ids:
+        return out
+    avals = (
+        PLRColaborador.query.filter(
+            PLRColaborador.colaborador_id.in_(colaborador_ids),
+            PLRColaborador.data >= data_inicio,
+            PLRColaborador.data <= data_fechamento,
+        )
+        .all()
+    )
+    for av in avals:
+        if not av.centro_custo_id or not av.data:
+            continue
+        out.setdefault(av.colaborador_id, {}).setdefault(
+            (int(av.data.month), int(av.data.year)),
+            set(),
+        ).add(int(av.centro_custo_id))
+    return out
 
 
 def _limpa_linhas_dados_mes(ws, min_row: int = 35, max_row: int = 500):
@@ -662,12 +756,15 @@ def gerar_planilha_plr_xlsx_template_io(
     num_meses = len(meses_colunas)
     col_ini_meses = 11
 
-    if 'PAGAMENTO MOD' in wb.sheetnames:
-        ws_p = wb['PAGAMENTO MOD']
-
+    def _preencher_aba_pagamento(
+        ws_p,
+        resultado_pagamento: list[dict],
+        obra_id_aba: int | None = None,
+        obras_por_colab_mes: dict[int, dict[tuple[int, int], set[int]]] | None = None,
+    ):
         col_map = _pagamento_mapa_colunas(num_meses)
         col_max_layout = max(col_map['sal_atual'] + 8, ws_p.max_column or 28, 36)
-        n_linhas_dados = _n_linhas_pagamento(resultado, data_inicio, data_fechamento)
+        n_linhas_dados = _n_linhas_pagamento(resultado_pagamento, data_inicio, data_fechamento)
 
         snap_pag_primeira: list[dict] = []
         snap_pag_meio: list[dict] = []
@@ -704,7 +801,7 @@ def gerar_planilha_plr_xlsx_template_io(
         col_primeiro_mes = get_column_letter(PAGAMENTO_COL_MES_INI)
         col_ultimo_mes = get_column_letter(PAGAMENTO_COL_MES_INI + max(0, num_meses - 1))
 
-        for linha_res in resultado:
+        for linha_res in resultado_pagamento:
             colab = linha_res['colaborador']
             if not colab:
                 continue
@@ -718,6 +815,25 @@ def gerar_planilha_plr_xlsx_template_io(
                 continue
 
             for seg_i, seg in enumerate(segs):
+                if obra_id_aba is not None and obras_por_colab_mes is not None:
+                    soma_mes_obra = 0.0
+                    pcts_meses = linha_res.get('pcts_meses') or []
+                    for idx_m, (mm, aa) in enumerate(meses_colunas):
+                        if not segmento_intersecta_mes(seg['inicio'], seg['fim'], mm, aa):
+                            continue
+                        obras_mes = obras_por_colab_mes.get(colab.id, {}).get((mm, aa), set())
+                        if obra_id_aba not in obras_mes:
+                            continue
+                        pct_val = pcts_meses[idx_m] if idx_m < len(pcts_meses) else None
+                        if pct_val is None:
+                            continue
+                        try:
+                            soma_mes_obra += float(pct_val)
+                        except (TypeError, ValueError):
+                            continue
+                    if soma_mes_obra <= 0:
+                        continue
+
                 ref_seg_fim = min(seg['fim'], data_fechamento)
                 if colab.data_demissao and colab.data_demissao <= data_fechamento:
                     ref_seg_fim = min(ref_seg_fim, colab.data_demissao)
@@ -758,14 +874,22 @@ def gerar_planilha_plr_xlsx_template_io(
                     for i_m, tab_name in enumerate(titulos_abas_export):
                         ci = col_ini_meses + i_m
                         qt = _quote_sheet(tab_name)
-                        ws_p.cell(
-                            row=row_p,
-                            column=ci,
-                            value=(
-                                f'=IFERROR(INDEX({qt}!$Q:$Q,'
-                                f'MATCH($A{row_p},{qt}!$A:$A,0)),"")'
-                            ),
-                        )
+                        mes_ref = meses_colunas[i_m]
+                        permitido_mes = True
+                        if obra_id_aba is not None and obras_por_colab_mes is not None:
+                            obras_mes = obras_por_colab_mes.get(colab.id, {}).get(mes_ref, set())
+                            permitido_mes = obra_id_aba in obras_mes
+                        if permitido_mes:
+                            ws_p.cell(
+                                row=row_p,
+                                column=ci,
+                                value=(
+                                    f'=IFERROR(INDEX({qt}!$Q:$Q,'
+                                    f'MATCH($A{row_p},{qt}!$A:$A,0)),"")'
+                                ),
+                            )
+                        else:
+                            ws_p.cell(row=row_p, column=ci, value=None)
 
                 rng_meses = f'{col_primeiro_mes}{row_p}:{col_ultimo_mes}{row_p}'
                 ws_p.cell(
@@ -776,7 +900,7 @@ def gerar_planilha_plr_xlsx_template_io(
                 ws_p.cell(
                     row=row_p,
                     column=col_map['p_med'],
-                    value=f'=IFERROR(AVERAGE({rng_meses}),"")',
+                    value=f'=IFERROR(SUM({rng_meses})/{max(1, num_meses)},"")',
                 )
 
                 letter_i = get_column_letter(9)
@@ -855,8 +979,8 @@ def gerar_planilha_plr_xlsx_template_io(
                 row=total_row,
                 column=col_valor,
                 value=(
-                    f'=SUM({letter_valor}{PAGAMENTO_ROW_DATA_FIRST}:'
-                    f'{letter_valor}{ultima_linha_dado})'
+                    f'=ROUND(SUM({letter_valor}{PAGAMENTO_ROW_DATA_FIRST}:'
+                    f'{letter_valor}{ultima_linha_dado}),2)'
                 ),
             )
         ws_p.cell(row=total_row, column=col_valor).number_format = FMT_EXCEL_MOEDA_CONTABIL
@@ -864,6 +988,56 @@ def gerar_planilha_plr_xlsx_template_io(
             cell_u = ws_p.cell(row=total_row, column=PAGAMENTO_COL_VALOR)
             if isinstance(cell_u.value, str) and str(cell_u.value).startswith('='):
                 cell_u.value = None
+
+    if 'PAGAMENTO MOD' in wb.sheetnames:
+        ws_p = wb['PAGAMENTO MOD']
+        colaboradores_ids = [
+            r['colaborador'].id for r in resultado if r.get('colaborador') and r['colaborador'].id
+        ]
+        obras_por_colab = _mapa_obras_por_colaborador(colaboradores_ids, data_inicio, data_fechamento)
+        obras_por_colab_mes = _mapa_obras_por_colaborador_mes(
+            colaboradores_ids,
+            data_inicio,
+            data_fechamento,
+        )
+        obras_todas: dict[int, tuple[str, str]] = {}
+        for obras_set in obras_por_colab.values():
+            for obra_id, cod, nome in obras_set:
+                obras_todas[obra_id] = (cod, nome)
+
+        obras_ordenadas = sorted(
+            obras_todas.items(),
+            key=lambda it: ((it[1][0] or ''), (it[1][1] or '')),
+        )
+        abas_obras: list[tuple[int, str]] = []
+        for obra_id, (cod, nome) in obras_ordenadas:
+            label = (f'{cod}').strip(' -')
+            titulo = _nome_aba_unico(wb, f'PAGAMENTO {label}')
+            ws_obra = wb.copy_worksheet(ws_p)
+            ws_obra.title = titulo
+            abas_obras.append((obra_id, titulo))
+
+        _preencher_aba_pagamento(ws_p, resultado)
+
+        for obra_id, titulo in abas_obras:
+            ws_obra = wb[titulo]
+            resultado_obra = [
+                r for r in resultado
+                if r.get('colaborador')
+                and obra_id in {x[0] for x in obras_por_colab.get(r['colaborador'].id, set())}
+            ]
+            _preencher_aba_pagamento(
+                ws_obra,
+                resultado_obra,
+                obra_id_aba=obra_id,
+                obras_por_colab_mes=obras_por_colab_mes,
+            )
+
+        _reordenar_abas_pagamento_juntas(
+            wb,
+            'PAGAMENTO MOD',
+            [t for _, t in abas_obras],
+        )
 
     output = BytesIO()
     wb.save(output)

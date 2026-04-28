@@ -1,11 +1,14 @@
 """Página HTML e endpoint JSON legado do relatório planilha PLR."""
 
-from datetime import datetime
+from datetime import date, datetime, timedelta
 
 from flask import flash, jsonify, redirect, render_template, request, url_for
 
+from models.centro_custo import CentroCusto
+from models.database import db
 from models.departamento import Departamento
 from models.plr import ModeloPLR
+from models.plr import PLRColaborador
 
 from .. import plr_bp
 from ..services.avaliacoes import equipes_distintas_plr as _equipes_distintas_plr
@@ -51,6 +54,64 @@ def relatorio_planilha_dados():
     )
 
 
+@plr_bp.route('/relatorio-planilha/obras')
+def relatorio_planilha_obras():
+    """Lista obras (centros de custo) únicas nas avaliações do período informado."""
+    err, filtros = parse_filtros_planilha(request.values)
+    if err:
+        return jsonify({'error': err, 'obras': []}), 400
+
+    ano_i = int(filtros['ano_inicio'])
+    mes_i = int(filtros['mes_inicio'])
+    ano_f = int(filtros['ano_fim'])
+    mes_f = int(filtros['mes_fim'])
+    data_inicio = date(ano_i, mes_i, 1)
+    data_fim = date(ano_f, mes_f, 1) + timedelta(days=32)
+    data_fim = data_fim.replace(day=1) - timedelta(days=1)
+
+    q = (
+        db.session.query(CentroCusto.id, CentroCusto.codigo, CentroCusto.nome)
+        .join(PLRColaborador, PLRColaborador.centro_custo_id == CentroCusto.id)
+        .filter(
+            PLRColaborador.data >= data_inicio,
+            PLRColaborador.data <= data_fim,
+        )
+    )
+    if filtros.get('modelo_plr_id'):
+        q = q.filter(PLRColaborador.PlrModelo_id == int(filtros['modelo_plr_id']))
+    if filtros.get('equipe_filtro'):
+        equipe = filtros['equipe_filtro']
+        avals = (
+            PLRColaborador.query.filter(
+                PLRColaborador.data >= data_inicio,
+                PLRColaborador.data <= data_fim,
+            )
+            .all()
+        )
+        ids_av = {
+            av.id
+            for av in avals
+            if av.equipe_alocada and isinstance(av.equipe_alocada, list)
+            and equipe in [str(e).strip() for e in av.equipe_alocada if e]
+        }
+        if ids_av:
+            q = q.filter(PLRColaborador.id.in_(ids_av))
+        else:
+            return jsonify({'obras': []})
+
+    rows = q.distinct().order_by(CentroCusto.codigo.asc(), CentroCusto.nome.asc()).all()
+    obras = [
+        {
+            'id': str(row.id),
+            'codigo': row.codigo or '',
+            'nome': row.nome or '',
+            'label': f"{(row.codigo or '').strip()} - {(row.nome or '').strip()}".strip(' -'),
+        }
+        for row in rows
+    ]
+    return jsonify({'obras': obras})
+
+
 def _render_planilha(modelos_list, equipes, departamentos, ano_sugerido, planilha_json=None):
     return render_template(
         'plr/relatorio_planilha.html',
@@ -76,6 +137,9 @@ def relatorio_planilha():
         departamentos_ids = [int(x) for x in request.form.getlist('departamento_id') if x and str(x).isdigit()]
         periodo_inicio = request.form.get('periodo_inicio')
         periodo_fim = request.form.get('periodo_fim')
+        obras_centro_custo_ids = [
+            int(x) for x in request.form.getlist('obra_centro_custo_id') if x and str(x).isdigit()
+        ]
 
         if periodo_inicio and periodo_fim:
             parts_i = periodo_inicio.split('-')
@@ -106,6 +170,7 @@ def relatorio_planilha():
             'mes_fim': mes_fim,
             'modelo_plr_id': modelo_plr_id or '',
             'equipe_filtro': equipe_filtro,
+            'obras_centro_custo_ids': obras_centro_custo_ids or None,
             'departamentos_ids': departamentos_ids or None,
             'salario_por_grupo': salario_pg,
         }
