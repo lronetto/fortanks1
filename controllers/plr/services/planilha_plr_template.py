@@ -3,9 +3,10 @@ Geração do relatório PLR preenchendo o template controllers/templates_excel/P
 
 Uma aba por mês (cópia da aba MES ou de uma aba-mês existente) e aba PAGAMENTO MOD.
 Linhas de dados mensais: col. A id ``{colaborador_id}-{índice_segmento}`` (MATCH na PAGAMENTO);
-a partir da col. B (linha 35). Critérios e P (%) só no mês em que o segmento vigora; demais
+a partir da col. B (bloco de dados a partir da linha 35: estilos 35 / 36 / 38). Critérios e P (%) só no mês em que o segmento vigora; demais
 meses da linha em branco. P (%) mês e acumulado em
-fórmulas; na PAGAMENTO MOD, meses/SOMA/P média/salário PLR/VPO/valor também em fórmulas.
+fórmulas; na PAGAMENTO MOD, meses/SOMA/P média/salário PLR/VPO/valor também em fórmulas
+(reserva de dados 25–28: estilos 25 / 26 / 28; total a partir da linha 29).
 Colaboradores com mudança de função no período geram uma linha por segmento.
 """
 from __future__ import annotations
@@ -18,7 +19,7 @@ from io import BytesIO
 from pathlib import Path
 
 from openpyxl import load_workbook
-from openpyxl.styles import Border
+from openpyxl.styles import Font
 from openpyxl.utils import get_column_letter
 
 from models.cargo import Cargo
@@ -47,10 +48,26 @@ ABAS_MES_REGEX = re.compile(
 )
 
 FMT_EXCEL_PCT = '0.00%'
+FMT_EXCEL_DATA = 'dd/mm/yyyy'
+# Contábil (BRL) — padrão Excel: positivo; negativo entre parênteses; zero; texto
+FMT_EXCEL_MOEDA_CONTABIL = (
+    '_("R$ "* #.##0,00_);_("R$ "* (#.##0,00);_("R$ "* "-"??_);_(@_)'
+)
 
-# Template PAGAMENTO MOD: dados 25–81; linha 82 em diante = total e rodapé (preservar)
+# Aba mês: template com 4 linhas de reserva (35–38): 35 = primeira, 36 = meio (copiar ao inserir),
+# 38 = última linha de dados; após a linha 71 replicamos o estilo da linha 36. Col. A = chave (MATCH).
+MES_ROW_DATA_FIRST = 35
+MES_ROW_STYLE_MIDDLE = 36
+MES_ROW_STYLE_LAST_DATA = 38
+MES_ROW_FORMAT_LAST = 71
+MES_MAX_COL_STYLE = 31
+FONT_INDEX_BRANCO = 'FFFFFF'
+
+# PAGAMENTO MOD: reserva 25–28 (primeira / meio / última); linha 29+ = total e rodapé (preservar).
 PAGAMENTO_ROW_DATA_FIRST = 25
-PAGAMENTO_ROW_TOTAL_FIRST = 82
+PAGAMENTO_ROW_STYLE_MIDDLE = 26
+PAGAMENTO_ROW_STYLE_LAST_DATA = 28
+PAGAMENTO_ROW_TOTAL_FIRST = 29
 PAGAMENTO_ROWS_DATA_TEMPLATE = PAGAMENTO_ROW_TOTAL_FIRST - PAGAMENTO_ROW_DATA_FIRST
 
 # Template: meses em K–P (até 6); totais fixos Q–U, anotação V, Sal. atualizado X (col. 24)
@@ -328,25 +345,131 @@ def _formula_pct_mes_soma_criterios(row: int, col_ini: int = 13, col_fim: int = 
     return f'=SUM({c0}{row}:{c1}{row})'
 
 
-def _captura_bordas_linha(ws, row: int, max_col: int) -> dict[int, Border]:
-    """Copia o estilo de borda de cada célula da linha (para reaplicar após delete_rows)."""
-    out: dict[int, Border] = {}
+def _celula_estilo_snapshot(cell):
+    """Borda, preenchimento, alinhamento, número e fonte (para reaplicar após insert_rows)."""
+    fl = cell.fill
+    return {
+        'border': copy(cell.border),
+        'fill': copy(fl) if fl is not None else None,
+        'alignment': copy(cell.alignment) if cell.alignment is not None else None,
+        'number_format': cell.number_format,
+        'font': copy(cell.font) if cell.font is not None else None,
+    }
+
+
+def _aplica_estilo_celula_de_snapshot(snap: dict, dst) -> None:
+    """Replica estilo do snapshot na célula destino, preservando ``dst.value``."""
+    v = dst.value
+    if snap.get('border') is not None:
+        dst.border = copy(snap['border'])
+    fill = snap.get('fill')
+    if fill is not None and getattr(fill, 'fill_type', None) not in (None, 'none', 'None', ''):
+        dst.fill = copy(fill)
+    al = snap.get('alignment')
+    if al is not None:
+        dst.alignment = copy(al)
+    dst.number_format = snap.get('number_format') or 'General'
+    ft = snap.get('font')
+    if ft is not None and getattr(ft, 'name', None) is not None:
+        dst.font = copy(ft)
+    dst.value = v
+
+
+def _snapshot_linha_estilo(ws, row: int, max_col: int) -> list[dict]:
+    return [_celula_estilo_snapshot(ws.cell(row=row, column=c)) for c in range(1, max_col + 1)]
+
+
+def _aplica_snapshot_linha_estilo(ws, row: int, snaps: list[dict], max_col: int) -> None:
     for c in range(1, max_col + 1):
-        out[c] = copy(ws.cell(row=row, column=c).border)
-    return out
+        _aplica_estilo_celula_de_snapshot(snaps[c - 1], ws.cell(row=row, column=c))
 
 
-def _aplica_bordas_linha(ws, row: int, bordas_ref: dict[int, Border], max_col: int) -> None:
-    """Reaplica bordas capturadas na linha modelo (colunas extras repetem a última referência)."""
-    if not bordas_ref:
+def _pagamento_remove_merges_desde_footer(ws, linha_min: int) -> list[dict]:
+    """
+    Desfaz merges cuja primeira linha >= ``linha_min`` (rodapé do template a partir da linha do total).
+    Retorna metadados para recriar após delete_rows/insert_rows (openpyxl não ajusta merges).
+    """
+    salvos: list[dict] = []
+    for m in list(ws.merged_cells.ranges):
+        if m.min_row >= linha_min:
+            tl = ws.cell(m.min_row, m.min_col)
+            salvos.append(
+                {
+                    'min_r': m.min_row,
+                    'max_r': m.max_row,
+                    'min_c': m.min_col,
+                    'max_c': m.max_col,
+                    'value': tl.value,
+                }
+            )
+    for m in list(ws.merged_cells.ranges):
+        if m.min_row >= linha_min:
+            ws.unmerge_cells(str(m))
+    return salvos
+
+
+def _pagamento_remerge_footer_deslocado(ws, salvos: list[dict], n_linhas_dados: int) -> None:
+    """Recria merges do rodapé: linhas originais >= total passam por -4 (bloco dados) + n inseridas."""
+    for s in salvos:
+        nr1 = s['min_r'] - PAGAMENTO_ROWS_DATA_TEMPLATE + n_linhas_dados
+        nr2 = s['max_r'] - PAGAMENTO_ROWS_DATA_TEMPLATE + n_linhas_dados
+        ws.merge_cells(start_row=nr1, start_column=s['min_c'], end_row=nr2, end_column=s['max_c'])
+        ws.cell(nr1, s['min_c']).value = s['value']
+
+
+def _aplica_fonte_index_branco(cell) -> None:
+    """Coluna A (id linha/segmento): branco, mantendo tamanho/negrito quando houver fonte de referência."""
+    old = cell.font
+    if old and getattr(old, 'name', None):
+        cell.font = Font(
+            name=old.name,
+            sz=old.sz,
+            b=old.b,
+            i=old.i,
+            u=old.u,
+            strike=old.strike,
+            color=FONT_INDEX_BRANCO,
+        )
+    else:
+        cell.font = Font(color=FONT_INDEX_BRANCO)
+
+
+def _copia_estilo_celula_aba_mes(proveniencia, destino) -> None:
+    """
+    Copia borda, preenchimento, alinhamento, número e fonte da célula modelo
+    na célula de destino, mantendo o valor de destino.
+    """
+    src, dst = proveniencia, destino
+    v = dst.value
+    if src.border is not None:
+        dst.border = copy(src.border)
+    if src.fill is not None and getattr(src.fill, 'fill_type', None) not in (None, 'none', 'None', ''):
+        dst.fill = copy(src.fill)
+    if src.alignment is not None:
+        dst.alignment = copy(src.alignment)
+    dst.number_format = src.number_format
+    if src.font is not None and getattr(src.font, 'name', None) is not None:
+        dst.font = copy(src.font)
+    dst.value = v
+
+
+def _estende_formatacao_aba_mes_fim_template(
+    ws,
+    ultima_linha_dados: int,
+    ref_row: int = MES_ROW_STYLE_MIDDLE,
+    max_col: int = MES_MAX_COL_STYLE,
+    ref_ws=None,
+) -> None:
+    """Repete a formatação da ``ref_row`` (linha 36 = meio) nas linhas após ``MES_ROW_FORMAT_LAST``."""
+    if ultima_linha_dados <= MES_ROW_FORMAT_LAST:
         return
-    ultima_ref = max(bordas_ref.keys())
-    fallback = bordas_ref[ultima_ref]
-    for c in range(1, max_col + 1):
-        bd = bordas_ref.get(c)
-        if bd is None:
-            bd = bordas_ref.get(min(c, ultima_ref), fallback)
-        ws.cell(row=row, column=c).border = copy(bd)
+    src = ref_ws if ref_ws is not None else ws
+    for r in range(MES_ROW_FORMAT_LAST + 1, ultima_linha_dados + 1):
+        for c in range(1, max_col + 1):
+            _copia_estilo_celula_aba_mes(
+                src.cell(row=ref_row, column=c),
+                ws.cell(row=r, column=c),
+            )
 
 
 def _formula_acum_media_abas(row: int, idx_mes: int, titulos_abas: list[str]) -> str:
@@ -476,12 +599,15 @@ def gerar_planilha_plr_xlsx_template_io(
                 if chapa is not None:
                     cel_chapa_m.number_format = '@'
                 ws_novo.cell(row=row, column=4, value=colab.data_admissao)
+                ws_novo.cell(row=row, column=4).number_format = FMT_EXCEL_DATA
                 ws_novo.cell(row=row, column=5, value=dem_f)
+                ws_novo.cell(row=row, column=5).number_format = FMT_EXCEL_DATA
                 ws_novo.cell(row=row, column=6, value=None)
                 ws_novo.cell(row=row, column=7, value=None)
                 ws_novo.cell(row=row, column=8, value=None)
                 ws_novo.cell(row=row, column=9, value='MOD')
                 ws_novo.cell(row=row, column=10, value=trans_d)
+                ws_novo.cell(row=row, column=10).number_format = FMT_EXCEL_DATA
                 ws_novo.cell(row=row, column=11, value=(colab.nome or '').upper())
                 ws_novo.cell(row=row, column=12, value=nome_funcao)
                 ws_novo.cell(row=row, column=13, value=assid)
@@ -501,6 +627,36 @@ def gerar_planilha_plr_xlsx_template_io(
 
                 row += 1
 
+        # Primeira (35), meio (36) e última (38) do template em ``base``; linhas 71+ usam estilo da 36.
+        last_data = row - 1
+        if last_data >= MES_ROW_DATA_FIRST:
+            n_linhas_mes = last_data - MES_ROW_DATA_FIRST + 1
+            for r in range(MES_ROW_DATA_FIRST, last_data + 1):
+                i = r - MES_ROW_DATA_FIRST
+                if n_linhas_mes == 1:
+                    ref_r = MES_ROW_DATA_FIRST
+                elif i == 0:
+                    ref_r = MES_ROW_DATA_FIRST
+                elif i == n_linhas_mes - 1:
+                    ref_r = MES_ROW_STYLE_LAST_DATA
+                else:
+                    ref_r = MES_ROW_STYLE_MIDDLE
+                for c in range(1, MES_MAX_COL_STYLE + 1):
+                    _copia_estilo_celula_aba_mes(base.cell(row=ref_r, column=c), ws_novo.cell(row=r, column=c))
+            _estende_formatacao_aba_mes_fim_template(ws_novo, last_data, ref_ws=base)
+            for r in range(MES_ROW_DATA_FIRST, last_data + 1):
+                c17 = ws_novo.cell(row=r, column=17)
+                for col_data in (4, 5, 10):
+                    ws_novo.cell(row=r, column=col_data).number_format = FMT_EXCEL_DATA
+                if isinstance(c17.value, str) and str(c17.value).startswith('='):
+                    for col_pct in range(13, 19):
+                        ws_novo.cell(row=r, column=col_pct).number_format = FMT_EXCEL_PCT
+                cv = ws_novo.cell(row=r, column=3).value
+                if cv is not None and _chapa_texto_7_digitos(cv):
+                    ws_novo.cell(row=r, column=3).number_format = '@'
+            for r in range(MES_ROW_DATA_FIRST, last_data + 1):
+                _aplica_fonte_index_branco(ws_novo.cell(row=r, column=1))
+
     wb.remove(base)
 
     num_meses = len(meses_colunas)
@@ -513,14 +669,21 @@ def gerar_planilha_plr_xlsx_template_io(
         col_max_layout = max(col_map['sal_atual'] + 8, ws_p.max_column or 28, 36)
         n_linhas_dados = _n_linhas_pagamento(resultado, data_inicio, data_fechamento)
 
-        borda_ref_pagamento: dict[int, Border] = {}
-        if ws_p.max_row >= PAGAMENTO_ROW_DATA_FIRST:
-            borda_ref_pagamento = _captura_bordas_linha(ws_p, PAGAMENTO_ROW_DATA_FIRST, col_max_layout)
+        snap_pag_primeira: list[dict] = []
+        snap_pag_meio: list[dict] = []
+        snap_pag_ultima: list[dict] = []
+        if ws_p.max_row >= PAGAMENTO_ROW_STYLE_LAST_DATA:
+            snap_pag_primeira = _snapshot_linha_estilo(ws_p, PAGAMENTO_ROW_DATA_FIRST, col_max_layout)
+            snap_pag_meio = _snapshot_linha_estilo(ws_p, PAGAMENTO_ROW_STYLE_MIDDLE, col_max_layout)
+            snap_pag_ultima = _snapshot_linha_estilo(ws_p, PAGAMENTO_ROW_STYLE_LAST_DATA, col_max_layout)
 
+        merges_footer: list[dict] = []
         if ws_p.max_row >= PAGAMENTO_ROW_TOTAL_FIRST:
+            merges_footer = _pagamento_remove_merges_desde_footer(ws_p, PAGAMENTO_ROW_TOTAL_FIRST)
             ws_p.delete_rows(PAGAMENTO_ROW_DATA_FIRST, PAGAMENTO_ROWS_DATA_TEMPLATE)
             if n_linhas_dados > 0:
                 ws_p.insert_rows(PAGAMENTO_ROW_DATA_FIRST, n_linhas_dados)
+            _pagamento_remerge_footer_deslocado(ws_p, merges_footer, n_linhas_dados)
         elif ws_p.max_row >= PAGAMENTO_ROW_DATA_FIRST:
             ws_p.delete_rows(PAGAMENTO_ROW_DATA_FIRST, ws_p.max_row - PAGAMENTO_ROW_DATA_FIRST + 1)
             if n_linhas_dados > 0:
@@ -563,7 +726,10 @@ def gerar_planilha_plr_xlsx_template_io(
                 cargo = _cargo_por_id(fid)
                 nome_funcao = cargo.nome if cargo else '-'
 
-                tempo_m = tempo_de_casa_meses(colab.data_admissao, ref_seg_fim)
+                # Tempo de casa: mesmo do relatório (admissão → fechamento ou demissão), não o fim do segmento.
+                tempo_m = linha_res.get('tempo_casa_meses')
+                if tempo_m is None:
+                    tempo_m = tempo_de_casa_meses(colab.data_admissao, ref_seg_fim)
                 sal_cargo = _cargo_id_salario_atualizado(fid, salario_por_grupo)
                 # Sal. atualizado: vigência na data de referência do segmento (fim capado ao fechamento);
                 # não depende da data de início do período da planilha.
@@ -572,7 +738,8 @@ def gerar_planilha_plr_xlsx_template_io(
                 adm_s = colab.data_admissao
                 dem_s = colab.data_demissao if colab.data_demissao else data_fechamento
 
-                ws_p.cell(row=row_p, column=1, value=f'{colab.id}-{seg_i}')
+                c_idx = ws_p.cell(row=row_p, column=1, value=f'{colab.id}-{seg_i}')
+                _aplica_fonte_index_branco(c_idx)
                 ws_p.cell(row=row_p, column=2, value=cpf)
                 cel_chapa_p = ws_p.cell(row=row_p, column=3, value=chapa)
                 if chapa is not None:
@@ -582,6 +749,8 @@ def gerar_planilha_plr_xlsx_template_io(
                 ws_p.cell(row=row_p, column=6, value=None)
                 ws_p.cell(row=row_p, column=7, value=adm_s)
                 ws_p.cell(row=row_p, column=8, value=dem_s)
+                ws_p.cell(row=row_p, column=7).number_format = FMT_EXCEL_DATA
+                ws_p.cell(row=row_p, column=8).number_format = FMT_EXCEL_DATA
                 ws_p.cell(row=row_p, column=9, value=tempo_m)
                 ws_p.cell(row=row_p, column=10, value=nome_funcao)
 
@@ -626,7 +795,7 @@ def gerar_planilha_plr_xlsx_template_io(
                     column=col_map['sal_plr'],
                     value=(
                         f'=IF(ISNUMBER({letter_sal_x}{row_p}),'
-                        f'IF({letter_i}{row_p}>18,{letter_sal_x}{row_p}*1.2,{letter_sal_x}{row_p}),"")'
+                        f'IF({letter_i}{row_p}>=18,{letter_sal_x}{row_p}*1.2,{letter_sal_x}{row_p}),"")'
                     ),
                 )
                 ws_p.cell(
@@ -654,9 +823,20 @@ def gerar_planilha_plr_xlsx_template_io(
                     col_map['valor'],
                     col_map['sal_atual'],
                 ):
-                    ws_p.cell(row=row_p, column=col_moeda).number_format = r'R$ #,##0.00'
+                    ws_p.cell(row=row_p, column=col_moeda).number_format = FMT_EXCEL_MOEDA_CONTABIL
 
-                _aplica_bordas_linha(ws_p, row_p, borda_ref_pagamento, col_max_layout)
+                idx_p = row_p - PAGAMENTO_ROW_DATA_FIRST
+                if snap_pag_primeira and snap_pag_meio and snap_pag_ultima:
+                    if n_linhas_dados == 1:
+                        _aplica_snapshot_linha_estilo(ws_p, row_p, snap_pag_primeira, col_max_layout)
+                    elif idx_p == 0:
+                        _aplica_snapshot_linha_estilo(ws_p, row_p, snap_pag_primeira, col_max_layout)
+                    elif idx_p == n_linhas_dados - 1:
+                        _aplica_snapshot_linha_estilo(ws_p, row_p, snap_pag_ultima, col_max_layout)
+                    else:
+                        _aplica_snapshot_linha_estilo(ws_p, row_p, snap_pag_meio, col_max_layout)
+                ws_p.cell(row=row_p, column=7).number_format = FMT_EXCEL_DATA
+                ws_p.cell(row=row_p, column=8).number_format = FMT_EXCEL_DATA
 
                 row_p += 1
 
@@ -679,7 +859,7 @@ def gerar_planilha_plr_xlsx_template_io(
                     f'{letter_valor}{ultima_linha_dado})'
                 ),
             )
-        ws_p.cell(row=total_row, column=col_valor).number_format = r'R$ #,##0.00'
+        ws_p.cell(row=total_row, column=col_valor).number_format = FMT_EXCEL_MOEDA_CONTABIL
         if col_valor != PAGAMENTO_COL_VALOR:
             cell_u = ws_p.cell(row=total_row, column=PAGAMENTO_COL_VALOR)
             if isinstance(cell_u.value, str) and str(cell_u.value).startswith('='):

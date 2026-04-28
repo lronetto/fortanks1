@@ -199,7 +199,9 @@ def expandir_resultado_planilha_por_segmento_funcao(
     Uma linha por segmento de função no período (mesma regra de ``segmentos_funcao_periodo``
     na exportação MOD). Percentuais por mês só aparecem nos meses em que o segmento cruza o mês;
     SOMA e P seguem a mesma lógica do cálculo único (soma só meses com valor; P = soma / N meses
-    do relatório). Salário atualizado / base PLR / VPO alinham às fórmulas da aba PAGAMENTO MOD.
+    do relatório). ``tempo_casa_meses`` e ``data_fechamento`` vêm do registro base (admissão até
+    fechamento do período ou demissão, se anterior) — não variam por segmento. Salário atualizado /
+    base PLR / VPO por segmento alinham às fórmulas da aba PAGAMENTO MOD.
     """
     from .planilha_plr_template import (
         segmentos_funcao_periodo,
@@ -273,10 +275,14 @@ def expandir_resultado_planilha_por_segmento_funcao(
                     soma_pct += p
 
             p_val = (soma_pct / num_meses) if num_meses else None
-            tempo_m = tempo_de_casa_meses(colab.data_admissao, ref_seg_fim)
+            tempo_global = base.get('tempo_casa_meses')
+            try:
+                tempo_global_int = int(tempo_global) if tempo_global is not None else 0
+            except (TypeError, ValueError):
+                tempo_global_int = 0
             sal_cargo = _cargo_id_salario_atualizado(fid, salario_por_grupo)
             sal_x = _salario_cargo_em(sal_cargo, ref_seg_fim)
-            mult = 1.2 if tempo_m > 18 else 1.0
+            mult = 1.2 if tempo_global_int >= 18 else 1.0
             sal_base_plr = (float(sal_x) * mult) if sal_x is not None else None
             vpo = (
                 (sal_base_plr / 12.0) * 6 * (float(p_val) / 100.0)
@@ -292,7 +298,6 @@ def expandir_resultado_planilha_por_segmento_funcao(
                     'segmento_inicio': seg_i_ini,
                     'segmento_fim': seg_i_fim,
                     'nome_funcao_planilha': nome_funcao,
-                    'tempo_casa_meses': tempo_m,
                     'pcts_meses': pcts_seg,
                     'soma': round(soma_pct, 2) if soma_pct else None,
                     'p': round(p_val, 2) if p_val is not None else None,
@@ -541,8 +546,9 @@ def _excel_criterios_por_colab_mes(resultado, meses_colunas, data_inicio, data_f
             for tipo, lst in valores.items()
         }
 
-    # Sobrescrever Assiduidade com dados de PlrAssiduidade quando existir (faltas -> %)
+    # PlrAssiduidade (faltas -> %) só em (colab, mês) com avaliação PLR — alinhado ao DataTables.
     meses_set = set(meses_colunas)
+    meses_com_aval = set(acumulado.keys())
     assid_records = PlrAssiduidade.query.filter(
         PlrAssiduidade.colaborador_id.in_(colab_ids),
     ).all()
@@ -550,11 +556,9 @@ def _excel_criterios_por_colab_mes(resultado, meses_colunas, data_inicio, data_f
         mes_key = (rec.mes, rec.ano)
         if mes_key not in meses_set:
             continue
+        if (rec.colaborador_id, mes_key) not in meses_com_aval:
+            continue
         pct = assiduidade_pct_por_faltas(rec.faltas)
-        if rec.colaborador_id not in criterios_por_colab_mes:
-            criterios_por_colab_mes[rec.colaborador_id] = {}
-        if mes_key not in criterios_por_colab_mes[rec.colaborador_id]:
-            criterios_por_colab_mes[rec.colaborador_id][mes_key] = {}
         criterios_por_colab_mes[rec.colaborador_id][mes_key]['Assiduidade'] = pct
 
     return criterios_por_colab_mes

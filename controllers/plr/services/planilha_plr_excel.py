@@ -19,6 +19,7 @@ from .planilha_plr_calculo import (
     _titulo_aba_mes,
     _criterios_headers_com_peso,
 )
+from .planilha_plr_template import FMT_EXCEL_MOEDA_CONTABIL
 
 
 def _valor_criterio_para_excel_pct(val):
@@ -135,7 +136,7 @@ def _excel_aba_resumo(wb, resultado, meses_colunas, cpf_para_chapa, estilos):
     cell_total_label.alignment = estilos['right_align']
     cell_total_label.border = estilos['thin_border']
     cell_total_val = ws.cell(row=total_row, column=num_cols)
-    cell_total_val.number_format = r'R$ #,##0.00'
+    cell_total_val.number_format = FMT_EXCEL_MOEDA_CONTABIL
     cell_total_val.font = Font(bold=True)
     cell_total_val.alignment = estilos['right_align']
     cell_total_val.border = estilos['thin_border']
@@ -189,7 +190,7 @@ def _excel_aba_resumo(wb, resultado, meses_colunas, cpf_para_chapa, estilos):
     for col_idx in (p_col + 1, p_col + 2, p_col + 3):
         for col in ws.iter_cols(min_row=2, max_row=ws.max_row, min_col=col_idx, max_col=col_idx):
             for cell in col:
-                cell.number_format = r'R$ #,##0.00'
+                cell.number_format = FMT_EXCEL_MOEDA_CONTABIL
                 cell.alignment = right
 
 
@@ -274,7 +275,7 @@ def _excel_aba_resumo_formulas(wb, resultado, meses_colunas, cpf_para_chapa, est
     cell_total_label.border = estilos['thin_border']
     cell_total_val = ws.cell(row=total_row, column=num_cols)
     cell_total_val.value = f'=SUM({letter_valor_total}2:{letter_valor_total}{last_data_row})'
-    cell_total_val.number_format = r'R$ #,##0.00'
+    cell_total_val.number_format = FMT_EXCEL_MOEDA_CONTABIL
     cell_total_val.font = Font(bold=True)
     cell_total_val.alignment = estilos['right_align']
     cell_total_val.border = estilos['thin_border']
@@ -320,7 +321,7 @@ def _excel_aba_resumo_formulas(wb, resultado, meses_colunas, cpf_para_chapa, est
     for col_idx in (col_salario, col_vpo, col_valor_total):
         for col in ws.iter_cols(min_row=2, max_row=ws.max_row, min_col=col_idx, max_col=col_idx):
             for cell in col:
-                cell.number_format = r'R$ #,##0.00'
+                cell.number_format = FMT_EXCEL_MOEDA_CONTABIL
                 cell.alignment = right
 
 
