@@ -2,7 +2,9 @@
 from __future__ import annotations
 
 import base64
+import json
 import logging
+import os
 from datetime import datetime
 
 from sqlalchemy import Text
@@ -92,10 +94,78 @@ class Upload(db.Model):
             db.session.rollback()
             raise
 
+    def _storage_config(self):
+        """Retorna configuracao de storage salva em dados_adicionais."""
+        if not self.dados_adicionais:
+            return None
+        try:
+            dados = json.loads(self.dados_adicionais)
+        except Exception:
+            return None
+        if not isinstance(dados, dict):
+            return None
+        storage = dados.get("storage")
+        if not isinstance(storage, dict):
+            return None
+        if storage.get("provider") != "minio":
+            return None
+        if not storage.get("bucket") or not storage.get("object_key"):
+            return None
+        return storage
+
+    def _buscar_blob_no_minio(self):
+        """Baixa bytes do MinIO quando o upload ja foi migrado."""
+        storage = self._storage_config()
+        if not storage:
+            return None
+
+        endpoint = (os.getenv("MINIO_ENDPOINT") or "").strip()
+        access_key = (os.getenv("MINIO_ACCESS_KEY") or "").strip()
+        secret_key = (os.getenv("MINIO_SECRET_KEY") or "").strip()
+        secure = (os.getenv("MINIO_SECURE") or "").strip().lower() in {
+            "1",
+            "true",
+            "yes",
+            "y",
+            "on",
+        }
+        if not endpoint or not access_key or not secret_key:
+            return None
+
+        try:
+            from minio import Minio
+        except Exception:
+            logging.exception("Cliente MinIO nao disponivel para leitura de Upload id=%s", self.id)
+            return None
+
+        client = Minio(
+            endpoint=endpoint,
+            access_key=access_key,
+            secret_key=secret_key,
+            secure=secure,
+        )
+        response = None
+        try:
+            response = client.get_object(storage["bucket"], storage["object_key"])
+            return response.read()
+        except Exception:
+            logging.exception("Falha ao buscar Upload id=%s no MinIO", self.id)
+            return None
+        finally:
+            if response is not None:
+                response.close()
+                response.release_conn()
+
     def get_blob(self):
-        """Retorna o blob decodificado (bytes)."""
+        """Retorna bytes do arquivo: MinIO (novo) com fallback para blob legado."""
+        conteudo_minio = self._buscar_blob_no_minio()
+        if conteudo_minio is not None:
+            return conteudo_minio
         if self.blob:
-            return base64.b64decode(self.blob)
+            try:
+                return base64.b64decode(self.blob)
+            except Exception:
+                logging.exception("Falha ao decodificar blob legado do Upload id=%s", self.id)
         return None
 
     def delete(self):
