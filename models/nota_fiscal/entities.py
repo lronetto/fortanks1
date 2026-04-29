@@ -1,7 +1,7 @@
 from models.database import db
 from datetime import datetime
 from sqlalchemy.orm import defer
-from sqlalchemy import func
+from sqlalchemy import SmallInteger, func
 
 import json
 from flask_login import current_user
@@ -17,6 +17,7 @@ from models.logs import Logs
 from models.unidade import UnidadesConversao, get_conversao_unidade, comparar_unidades,Unidades
 import xmltodict
 
+from utils.utils import parse_dados_json
 from .constants import (
     CNPJS_FILIAIS,
     CNPJS_MATRIZ,
@@ -145,8 +146,20 @@ class NotaFiscal(db.Model):
                     pdf_data = Arquivei(chave_acesso=self.chave_acesso)
                     #print(f'pdf_data: {pdf_data}')
                     logger.debug("id: %s chave: %s", self.id, self.chave_acesso)
-                    self.upload = Upload.registrar('NotaFiscal', self.id, 1, filename=f'{self.chave_acesso}.pdf', mimetype='application/pdf', blob=pdf_data.pdf)
+                    self.upload = Upload.registrar(
+                        pai='NotaFiscal',
+                        pai_id=self.id,
+                        tipo=1,
+                        filename=f'{self.chave_acesso}.pdf',
+                        mimetype='application/pdf',
+                        blob=pdf_data.pdf,
+                        dados_adicionais=self.dados_adicionais
+                    )
                 else:
+                    if 'storage' not in upload.dados_adicionais:
+                        pdf_data = Arquivei(chave_acesso=self.chave_acesso, pdf=True)
+                        upload.blob = pdf_data.pdf
+                        upload.save()
                     self.upload = upload
                 #print('self.upload: ',self.upload)
     def extrair_tipo_nota(self):
@@ -193,9 +206,7 @@ class NotaFiscal(db.Model):
     def get_cte(self):
         cte = NotaFiscal.query.filter(
             NotaFiscal.tipo == 2,
-            func.json_unquote(
-                func.json_extract(NotaFiscal.dados_adicionais, "$.chave_nf")
-            ) == self.chave_acesso
+            pg_json_text_path(NotaFiscal.dados_adicionais, "chave_nf") == self.chave_acesso,
         ).first()
         if cte:
             return cte
@@ -205,21 +216,19 @@ class NotaFiscal(db.Model):
             logger.debug("get_pdf: %s chave: %s", self.id, self.chave_acesso)
 
             if self.chave_acesso:
-                arquivei = Arquivei(chave_acesso=self.chave_acesso)
-                if arquivei.pdf:
-                    if self.id:
-                        
-                    self.upload = Upload.registrar(
-                        'NotaFiscal', 
-                        self.id, 
-                        1, 
-                        filename=f'{self.chave_acesso}.pdf', 
-                        mimetype='application/pdf', 
-                        blob=arquivei.pdf,
-                        dados_adicionais=self.dados_adicionais
-                    )
-                    return self.upload.get_blob()
-        return None
+                pdf_data = Arquivei(chave_acesso=self.chave_acesso, pdf=True)
+                if not pdf_data.pdf:
+                    return None
+                self.upload = Upload.registrar(
+                    pai='NotaFiscal',
+                    pai_id=self.id,
+                    tipo=1,
+                    filename=f'{self.chave_acesso}.pdf',
+                    mimetype='application/pdf',
+                    blob=pdf_data.pdf
+                )
+                return self.upload
+ 
     def get_xml_json(self):
         dictvar  = xmltodict.parse(base64.b64decode(self.xml_data).decode('utf-8'))
         return dictvar
@@ -531,7 +540,7 @@ class NotaFiscalItem(db.Model):
 
     
     # Status de importação para estoque
-    importado_estoque = db.Column(db.Boolean, default=False)
+    importado_estoque = db.Column(SmallInteger, nullable=False, default=0)
     data_importacao_estoque = db.Column(db.DateTime, nullable=True)
     usuario_importacao_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=True)
     usuario_importacao = db.relationship('Usuario', foreign_keys=[usuario_importacao_id])
@@ -603,7 +612,7 @@ class NotaFiscalItem(db.Model):
                     NotaFiscalItem.codigo == self.codigo,
                     NotaFiscalItem.nota_fiscal.has(NotaFiscal.cnpj_emitente == self.nota_fiscal.cnpj_emitente),
                     NotaFiscalItem.material_id.isnot(None),
-                    NotaFiscalItem.importado_estoque == True
+                    NotaFiscalItem.importado_estoque == 1
                 ).order_by(NotaFiscalItem.data_importacao_estoque.asc()).first()
                 
                 if item_anterior and item_anterior.material_id:
@@ -614,7 +623,7 @@ class NotaFiscalItem(db.Model):
                 item_anterior = NotaFiscalItem.query.filter(
                     NotaFiscalItem.descricao == self.descricao,
                     NotaFiscalItem.material_id.isnot(None),
-                    NotaFiscalItem.importado_estoque == True
+                    NotaFiscalItem.importado_estoque == 1
                 ).order_by(NotaFiscalItem.data_importacao_estoque.asc()).first()
                 
                 if item_anterior and item_anterior.material_id:
@@ -954,7 +963,7 @@ class NotaFiscalItem(db.Model):
             
         
             # Para importação automática (sem local/tipo especificado), marcar como importado
-            self.importado_estoque = True
+            self.importado_estoque = 1
             self.data_importacao_estoque = datetime.now()
             self.usuario_importacao_id = usuario_id
             self.status_importacao = 'importado'

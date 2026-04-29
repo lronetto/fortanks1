@@ -28,8 +28,28 @@ def gerar_pdf(id):
     `notaId` em alguns lugares. Mantemos comportamento original (buscar Upload por ID).
     """
     try:
-        upload = Upload().get_pdf(id_upload=id)
-        response = make_response(upload)
+        upload = Upload.query.get_or_404(id)
+        print(f'upload.pai_id: {upload.pai_id}')
+        print(f'upload.dados_adicionais: {upload.dados_adicionais}')
+        blob = upload.get_blob()
+        if not blob or upload.dados_adicionais is None:
+            nota = NotaFiscal.query.get(upload.pai_id)
+            print(f'nota: {nota}')
+            print(f'nota.chave_acesso: {nota.chave_acesso}')
+            if nota:
+                pdf_data = Arquivei(chave_acesso=nota.chave_acesso, pdf=True)
+                if pdf_data.pdf:
+                    upload.blob = pdf_data.pdf
+                    upload.save()   
+        pdf_bytes = blob if blob else upload.blob
+        if pdf_bytes is None:
+            flash(
+                "PDF indisponível: o arquivo não foi encontrado no armazenamento (ex.: MinIO) "
+                "ou ainda não foi migrado.",
+                "danger",
+            )
+            return redirect(url_for("nota_fiscal.index"))
+        response = make_response(pdf_bytes)
         response.headers["Content-Type"] = "application/pdf"
         response.headers["Content-Disposition"] = f"inline; filename=documento_{id}.pdf"
         return response
@@ -131,10 +151,12 @@ def api_excluir_documento(doc_id):
 @login_required
 def api_visualizar_documento(doc_id):
     try:
-        documento = Upload.query.get_or_404(doc_id)
-        response = make_response(base64.b64decode(documento.blob))
-        response.headers["Content-Type"] = documento.mimetype
-        response.headers["Content-Disposition"] = f"inline; filename={documento.filename}"
+        documento = Upload.get_pdf(id_upload=doc_id)
+        if documento is None:
+            return jsonify({"error": "Documento PDF indisponível no armazenamento."}), 404
+        response = make_response(documento)
+        response.headers["Content-Type"] = "application/pdf"
+        response.headers["Content-Disposition"] = f"inline; filename=documento_{doc_id}.pdf"
         return response
     except Exception as e:
         logger.error(f"Erro ao visualizar documento: {str(e)}")
