@@ -2,11 +2,13 @@
 from __future__ import annotations
 
 import base64
+import hashlib
+import io
 import json
 import logging
 import os
 from datetime import datetime
-
+from sqlalchemy.orm import defer
 from sqlalchemy import Text
 
 from models.database import db
@@ -85,10 +87,98 @@ class Upload(db.Model):
             "blob": self.blob,
         }
 
+    def _bool_env(self, nome: str, default: bool = False) -> bool:
+        valor = os.getenv(nome)
+        if valor is None:
+            return default
+        return valor.strip().lower() in {"1", "true", "yes", "y", "on"}
+
+    def _dados_adicionais_dict(self) -> dict:
+        da = self.dados_adicionais
+        if not da:
+            return {}
+        if isinstance(da, dict):
+            return da
+        try:
+            dados = json.loads(da)
+            if isinstance(dados, dict):
+                return dados
+        except Exception:
+            pass
+        return {"_raw": da}
+
+    def _object_key_minio(self) -> str:
+        pai = str(self.pai or "sem-pai").strip().lower()
+        pai = "".join(ch if ch.isalnum() or ch in "._-" else "-" for ch in pai).strip("-") or "sem-pai"
+        pai_id = str(self.pai_id or "sem-pai-id").strip().lower()
+        pai_id = "".join(ch if ch.isalnum() or ch in "._-" else "-" for ch in pai_id).strip("-") or "sem-pai-id"
+        nome = os.path.basename(self.filename or "arquivo.bin")
+        nome = "".join(ch if ch.isalnum() or ch in "._-" else "_" for ch in nome) or "arquivo.bin"
+        return f"uploads/{pai}/{pai_id}/{self.id}_{nome}"
+
+    def _enviar_blob_para_minio(self) -> bool:
+        """Envia blob legado para MinIO e salva metadados no registro."""
+        if not self.blob or not self.id:
+            return False
+        if not self._bool_env("MINIO_UPLOAD_WRITE_ENABLED", default=True):
+            return False
+
+        endpoint = (os.getenv("MINIO_ENDPOINT") or "").strip()
+        access_key = (os.getenv("MINIO_ACCESS_KEY") or "").strip()
+        secret_key = (os.getenv("MINIO_SECRET_KEY") or "").strip()
+        bucket = (os.getenv("MINIO_BUCKET_UPLOADS") or "sfortanks").strip()
+        secure = self._bool_env("MINIO_SECURE", default=False)
+        if not endpoint or not access_key or not secret_key or not bucket:
+            return False
+
+        try:
+            from minio import Minio
+        except Exception:
+            logging.exception("Cliente MinIO indisponivel para Upload id=%s", self.id)
+            return False
+
+        dados_bytes = self.get_blob()
+        if dados_bytes is None:
+            return False
+
+        client = Minio(endpoint=endpoint, access_key=access_key, secret_key=secret_key, secure=secure)
+        object_key = self._object_key_minio()
+        try:
+            if not client.bucket_exists(bucket):
+                client.make_bucket(bucket)
+            resultado = client.put_object(
+                bucket_name=bucket,
+                object_name=object_key,
+                data=io.BytesIO(dados_bytes),
+                length=len(dados_bytes),
+                content_type=self.mimetype or "application/octet-stream",
+            )
+        except Exception:
+            logging.exception("Falha ao enviar Upload id=%s para MinIO", self.id)
+            return False
+
+        dados = self._dados_adicionais_dict()
+        dados["storage"] = {
+            "provider": "minio",
+            "bucket": bucket,
+            "object_key": object_key,
+            "etag": resultado.etag,
+            "size": len(dados_bytes),
+            "sha256": hashlib.sha256(dados_bytes).hexdigest(),
+            "migrado_em": datetime.utcnow().isoformat(),
+        }
+        self.dados_adicionais = dados
+        if self._bool_env("MINIO_CLEAR_BLOB_ON_WRITE", default=True):
+            self.blob = None
+        return True
+
     def save(self):
         try:
             db.session.add(self)
             db.session.commit()
+            if self._enviar_blob_para_minio():
+                db.session.add(self)
+                db.session.commit()
         except Exception as e:
             logging.exception("Erro ao salvar Upload: %s", e)
             db.session.rollback()
@@ -98,10 +188,13 @@ class Upload(db.Model):
         """Retorna configuracao de storage salva em dados_adicionais."""
         if not self.dados_adicionais:
             return None
-        try:
-            dados = json.loads(self.dados_adicionais)
-        except Exception:
-            return None
+        raw = self.dados_adicionais
+        dados = raw if isinstance(raw, dict) else None
+        if dados is None:
+            try:
+                dados = json.loads(raw)
+            except Exception:
+                return None
         if not isinstance(dados, dict):
             return None
         storage = dados.get("storage")
@@ -155,19 +248,33 @@ class Upload(db.Model):
             if response is not None:
                 response.close()
                 response.release_conn()
-
+    
     def get_blob(self):
         """Retorna bytes do arquivo: MinIO (novo) com fallback para blob legado."""
         conteudo_minio = self._buscar_blob_no_minio()
         if conteudo_minio is not None:
+            print(f'conteudo_minio: ')
             return conteudo_minio
         if self.blob:
             try:
+                print(f'self.blob:')
                 return base64.b64decode(self.blob)
             except Exception:
                 logging.exception("Falha ao decodificar blob legado do Upload id=%s", self.id)
         return None
-
+    def get_pdf(self,nota_id=None,id_upload=None):
+        
+        if nota_id:
+            upload = Upload.query.options(defer(Upload.blob)).filter(Upload.pai_id == nota_id, Upload.pai == 'NotaFiscal', Upload.tipo == 1).first()
+        elif id_upload:
+            upload = Upload.query.options(defer(Upload.blob)).filter(Upload.id == id_upload).first()
+        else:
+            return None
+        print(f'id: {nota_id}, id_upload: {id_upload}')
+        if upload:
+            return upload.get_blob()
+        else:
+            return None
     def delete(self):
         try:
             db.session.delete(self)

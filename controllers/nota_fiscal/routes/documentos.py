@@ -28,10 +28,10 @@ def gerar_pdf(id):
     `notaId` em alguns lugares. Mantemos comportamento original (buscar Upload por ID).
     """
     try:
-        upload = Upload.query.get_or_404(id)
-        response = make_response(base64.b64decode(upload.blob))
+        upload = Upload().get_pdf(id_upload=id)
+        response = make_response(upload)
         response.headers["Content-Type"] = "application/pdf"
-        response.headers["Content-Disposition"] = f"inline; filename=documento_{upload.id}.pdf"
+        response.headers["Content-Disposition"] = f"inline; filename=documento_{id}.pdf"
         return response
     except Exception as e:
         logger.error(f"Erro ao gerar PDF: {str(e)}")

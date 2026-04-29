@@ -207,6 +207,8 @@ class NotaFiscal(db.Model):
             if self.chave_acesso:
                 arquivei = Arquivei(chave_acesso=self.chave_acesso)
                 if arquivei.pdf:
+                    if self.id:
+                        
                     self.upload = Upload.registrar(
                         'NotaFiscal', 
                         self.id, 
@@ -216,7 +218,7 @@ class NotaFiscal(db.Model):
                         blob=arquivei.pdf,
                         dados_adicionais=self.dados_adicionais
                     )
-                    return self.upload
+                    return self.upload.get_blob()
         return None
     def get_xml_json(self):
         dictvar  = xmltodict.parse(base64.b64decode(self.xml_data).decode('utf-8'))

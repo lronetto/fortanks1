@@ -31,11 +31,11 @@ def _build_db_uri():
     uri = os.environ.get('DATABASE_URI')
     if uri:
         return uri
-    db_password = os.environ.get('DB_PASSWORD', '')
-    db_host = os.environ.get('DB_HOST', '192.168.8.10')
-    db_port = os.environ.get('DB_PORT', '3306')
-    db_name = os.environ.get('DB_NAME', 'sfortanks')
-    db_user = os.environ.get('DB_USER', 'remote')
+    db_password = os.environ.get('DB_MYSQL_PASSWORD', '')
+    db_host = os.environ.get('DB_MYSQL_HOST', '192.168.8.10')
+    db_port = os.environ.get('DB_MYSQL_PORT', '3306')
+    db_name = os.environ.get('DB_MYSQL_NAME', 'sfortanks')
+    db_user = os.environ.get('DB_MYSQL_USER', 'remote')
     return f'mysql+pymysql://{db_user}:{quote_plus(db_password)}@{db_host}:{db_port}/{db_name}'
 
 
