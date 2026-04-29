@@ -204,66 +204,20 @@ class NotaFiscal(db.Model):
         if not self.upload:
             logger.debug("get_pdf: %s chave: %s", self.id, self.chave_acesso)
 
-            # Qualquer query/commit aqui pode disparar autoflush e falhar se existir alguma
-            # NotaFiscal pendente no session com PK None. Protegemos tudo com no_autoflush.
-            with db.session.no_autoflush:
-                # Se não temos id, tentamos recarregar do banco pela chave antes de buscar Upload.
-                if self.id is None and self.chave_acesso:
-                    nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso == self.chave_acesso).first()
-                    if nota:
-                        for key, value in nota.__dict__.items():
-                            if key.startswith('_'):
-                                continue
-                            setattr(self, key, value)
-
-                up = None
-                if self.id is not None:
-                    up = Upload.query.options(defer(Upload.blob)).filter_by(
-                        pai='NotaFiscal',
-                        pai_id=self.id,
-                        tipo=1
-                    ).first()
-
-                if not up:
-                    up = Upload.query.options(defer(Upload.blob)).filter_by(
-                        pai='NotaFiscal',
-                        filename=f'{self.chave_acesso}.pdf',
-                        tipo=1
-                    ).first()
-
-                if up:
-                    # Se já existe upload com filename, e agora temos id, vinculamos.
-                    if self.id is not None and up.pai_id != self.id:
-                        up.pai_id = self.id
-                        up.save()
-                    self.upload = up
-                else:
-                    if self.dados_adicionais:
-                        dados_json = json.loads(self.dados_adicionais) if isinstance(self.dados_adicionais, str) else self.dados_adicionais
-                        if isinstance(dados_json, dict) and dados_json.get('id'):
-                            pdf_data = Arquivei(chave_acesso=dados_json.get('id'), pdf=True)
-                        else:
-                            pdf_data = Arquivei(chave_acesso=self.chave_acesso, pdf=True)
-                    else:
-                        pdf_data = Arquivei(chave_acesso=self.chave_acesso, pdf=True)
-
-                    if not pdf_data.pdf:
-                        return None
-
-                    # Se ainda não temos id, evitamos criar Upload (isso faz commit e pode causar flush).
-                    if self.id is None:
-                        self.pdf = pdf_data.pdf
-                        return self.pdf
-
+            if self.chave_acesso:
+                arquivei = Arquivei(chave_acesso=self.chave_acesso)
+                if arquivei.pdf:
                     self.upload = Upload.registrar(
-                        pai='NotaFiscal',
-                        pai_id=self.id,
-                        tipo=1,
-                        filename=f'{self.chave_acesso}.pdf',
-                        mimetype='application/pdf',
-                        blob=pdf_data.pdf
+                        'NotaFiscal', 
+                        self.id, 
+                        1, 
+                        filename=f'{self.chave_acesso}.pdf', 
+                        mimetype='application/pdf', 
+                        blob=arquivei.pdf,
+                        dados_adicionais=self.dados_adicionais
                     )
-        return self.upload
+                    return self.upload
+        return None
     def get_xml_json(self):
         dictvar  = xmltodict.parse(base64.b64decode(self.xml_data).decode('utf-8'))
         return dictvar
