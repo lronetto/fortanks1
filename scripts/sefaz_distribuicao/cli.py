@@ -65,6 +65,21 @@ def main() -> int:
         "--nsu-inicial-cte", default="0",
         help="NSU a partir do qual buscar CTes (default 0 = tudo).",
     )
+    parser.add_argument(
+        "--dry-run", action="store_true",
+        help="Baixa da SEFAZ mas NÃO chama NotaFiscal() (não persiste no banco). "
+             "Use para validar certificado, autenticação, período e endpoints.",
+    )
+    parser.add_argument(
+        "--saida", default=None,
+        help="Pasta para gravar os XMLs baixados em <pasta>/{nfe,cte,nfse}/<chave>.xml. "
+             "Útil em --dry-run para inspecionar o que veio da SEFAZ.",
+    )
+    parser.add_argument(
+        "--max", dest="max_documentos", type=int, default=0,
+        help="Limita o número de documentos por tipo (NFe/CTe/NFSe). 0=ilimitado. "
+             "Use 1 ou 2 para um smoke-test rápido.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -84,6 +99,9 @@ def main() -> int:
             incluir_nfse=not args.sem_nfse,
             nsu_inicial_nfe=args.nsu_inicial_nfe,
             nsu_inicial_cte=args.nsu_inicial_cte,
+            dry_run=args.dry_run,
+            pasta_saida=args.saida,
+            max_documentos=args.max_documentos,
         )
 
     print("\n===== Resumo =====")

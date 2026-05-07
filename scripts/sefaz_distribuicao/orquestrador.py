@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import base64
 import logging
+import os
 from dataclasses import dataclass, field
 from datetime import date
 from typing import List, Optional
@@ -127,6 +128,13 @@ def _ingerir(xml: str, chave_provavel: Optional[str], resumo: Resumo, tipo_label
             resumo.nfse_erro += 1
 
 
+def _gravar_em_disco(diretorio: str, sub: str, nome: str, xml: str) -> None:
+    pasta = os.path.join(diretorio, sub)
+    os.makedirs(pasta, exist_ok=True)
+    with open(os.path.join(pasta, f"{nome}.xml"), "w", encoding="utf-8") as fp:
+        fp.write(xml)
+
+
 def baixar_e_importar(
     caminho_pfx: str,
     senha_certificado: str,
@@ -139,55 +147,87 @@ def baixar_e_importar(
     incluir_nfse: bool = True,
     nsu_inicial_nfe: str = "0",
     nsu_inicial_cte: str = "0",
+    dry_run: bool = False,
+    pasta_saida: Optional[str] = None,
+    max_documentos: int = 0,
 ) -> Resumo:
     """
     Baixa NFe + CTe (Distribuição DF-e) + NFSe Nacional (ADN) do CNPJ
     no período, e importa cada XML pelo pipeline `NotaFiscal(xml_data=...)`.
 
     PRÉ-REQUISITO: deve ser chamada dentro de um Flask `app_context()`,
-    para que `db.session` esteja disponível.
+    para que `db.session` esteja disponível (apenas quando `dry_run=False`).
+
+    Args:
+        dry_run: se True, NÃO chama `NotaFiscal()` — apenas baixa, conta e
+            (opcionalmente) grava os XMLs em `pasta_saida`. Não toca no banco.
+            Use para validar conexão com a SEFAZ, certificado e período antes
+            de comprometer dados.
+        pasta_saida: quando dry_run=True (ou para guardar uma cópia), salva
+            os XMLs em `pasta_saida/{nfe,cte,nfse}/<chave>.xml`.
+        max_documentos: corta após N documentos por tipo (NFe/CTe/NFSe).
+            Use 0 para ilimitado. Útil em smoke-tests rápidos.
     """
     cert = CertificadoA1(caminho_pfx=caminho_pfx, senha=senha_certificado)
     cnpj = "".join(filter(str.isdigit, cnpj)).zfill(14)
     resumo = Resumo()
 
+    def _processar(xml: str, chave: Optional[str], tipo: str) -> None:
+        if pasta_saida:
+            _gravar_em_disco(pasta_saida, tipo, chave or "sem-chave", xml)
+        if dry_run:
+            return
+        _ingerir(xml, chave, resumo, tipo_label=tipo)
+
     # --- NFe -----------------------------------------------------------
-    log.info("=== NFeDistribuicaoDFe (CNPJ %s) ===", cnpj)
+    log.info("=== NFeDistribuicaoDFe (CNPJ %s, ambiente=%d) ===", cnpj, ambiente)
     todas_nfe: List[DocumentoXML] = []
     for pagina in nfe_distribuicao.consultar(
         cert, cnpj, uf_autor=uf_autor, ambiente=ambiente, nsu_inicial=nsu_inicial_nfe
     ):
         todas_nfe.extend(pagina.documentos)
+        if max_documentos and len(todas_nfe) >= max_documentos:
+            log.info("NFe: limite de %d atingido, parando paginação.", max_documentos)
+            break
     nfe_no_periodo = filtrar_por_data(todas_nfe, data_inicial, data_final)
+    if max_documentos:
+        nfe_no_periodo = nfe_no_periodo[:max_documentos]
     resumo.nfe_baixadas = len(nfe_no_periodo)
     log.info("NFe: %d documentos no período (de %d totais).", len(nfe_no_periodo), len(todas_nfe))
     for doc in nfe_no_periodo:
-        _ingerir(doc.xml, doc.chave, resumo, tipo_label="nfe")
+        _processar(doc.xml, doc.chave, "nfe")
 
     # --- CTe -----------------------------------------------------------
-    log.info("=== CTeDistribuicaoDFe (CNPJ %s) ===", cnpj)
+    log.info("=== CTeDistribuicaoDFe (CNPJ %s, ambiente=%d) ===", cnpj, ambiente)
     todas_cte: List[DocumentoXML] = []
     for pagina in cte_distribuicao.consultar(
         cert, cnpj, uf_autor=uf_autor, ambiente=ambiente, nsu_inicial=nsu_inicial_cte
     ):
         todas_cte.extend(pagina.documentos)
+        if max_documentos and len(todas_cte) >= max_documentos:
+            log.info("CTe: limite de %d atingido, parando paginação.", max_documentos)
+            break
     cte_no_periodo = filtrar_por_data(todas_cte, data_inicial, data_final)
+    if max_documentos:
+        cte_no_periodo = cte_no_periodo[:max_documentos]
     resumo.cte_baixados = len(cte_no_periodo)
     log.info("CTe: %d documentos no período (de %d totais).", len(cte_no_periodo), len(todas_cte))
     for doc in cte_no_periodo:
-        _ingerir(doc.xml, doc.chave, resumo, tipo_label="cte")
+        _processar(doc.xml, doc.chave, "cte")
 
     # --- NFSe Nacional -------------------------------------------------
     if incluir_nfse:
-        log.info("=== ADN NFSe Nacional (CNPJ %s) ===", cnpj)
+        log.info("=== ADN NFSe Nacional (CNPJ %s, ambiente=%d) ===", cnpj, ambiente)
         try:
             nfses = nfse_nacional.baixar_periodo(
                 cert, cnpj, data_inicial, data_final, ambiente=ambiente
             )
+            if max_documentos:
+                nfses = nfses[:max_documentos]
             resumo.nfse_baixadas = len(nfses)
             log.info("NFSe: %d documentos no período.", len(nfses))
             for n in nfses:
-                _ingerir(n.xml, n.chave_acesso, resumo, tipo_label="nfse")
+                _processar(n.xml, n.chave_acesso, "nfse")
         except Exception as exc:  # noqa: BLE001
             log.warning(
                 "ADN indisponível ou município não aderente ao Sistema Nacional "
@@ -198,10 +238,11 @@ def baixar_e_importar(
             resumo.erros.append(f"NFSe ADN: {exc}")
 
     log.info(
-        "Resumo: baixadas=%d importadas=%d existentes=%d erros=%d",
+        "Resumo: baixadas=%d importadas=%d existentes=%d erros=%d (dry_run=%s)",
         resumo.total_baixadas,
         resumo.total_importadas,
         len(resumo.chaves_existentes),
         len(resumo.erros),
+        dry_run,
     )
     return resumo
