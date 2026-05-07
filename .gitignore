@@ -123,6 +123,7 @@ Thumbs.db
 *.p12
 *.bak
 *.old
+*.pfx
 
 # Outros
 *.log
