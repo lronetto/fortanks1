@@ -31,7 +31,7 @@ from xml.etree import ElementTree as ET
 
 import requests
 
-from .cert_utils import CertificadoA1, materializar_pem
+from ..utils.cert_utils import CertificadoA1, materializar_pem
 
 log = logging.getLogger(__name__)
 

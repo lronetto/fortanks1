@@ -1,13 +1,16 @@
 """
-Download de XMLs fiscais (NFe, CTe, NFSe) usando o certificado A1 da
-empresa, integrado ao pipeline `models.nota_fiscal.NotaFiscal`.
+Orquestração DB-aware do download de XMLs fiscais.
 
-Submódulos:
-    cert_utils         - carregamento e uso do certificado A1 (.pfx/.p12)
-    nfe_distribuicao   - cliente SOAP do WS NFeDistribuicaoDFe
-    cte_distribuicao   - cliente SOAP do WS CTeDistribuicaoDFe
-    nfse_nacional      - cliente REST do ADN (NFSe Nacional)
-    orquestrador       - função `baixar_e_importar` que faz o pipeline completo
+A camada de domínio (clientes HTTP, dataclasses, BuscadorXMLs) vive em
+`models.sefaz_distribuicao`. Este pacote acrescenta:
+
+    orquestrador      - integra o BuscadorXMLs com models.nota_fiscal.NotaFiscal
+    cli               - entrypoint argparse com app.app_context()
+    checkpoint        - persistência simples (arquivo) do último NSU
+    testar_import     - smoke-test isolado do pipeline NotaFiscal
+
+Para um modelo sem acesso ao banco, use diretamente
+`from models.sefaz_distribuicao import BuscadorXMLs`.
 """
 
 from .orquestrador import Resumo, baixar_e_importar

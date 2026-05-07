@@ -20,8 +20,8 @@ from xml.etree import ElementTree as ET
 
 import requests
 
-from .cert_utils import CertificadoA1, materializar_pem
-from .nfe_distribuicao import DocumentoXML, ResultadoConsulta, _parse_dh
+from ..utils.cert_utils import CertificadoA1, materializar_pem
+from .cliente_nfe import DocumentoXML, ResultadoConsulta, _parse_dh
 
 log = logging.getLogger(__name__)
 

@@ -30,9 +30,16 @@ from datetime import date
 from pathlib import Path
 from typing import List, Optional
 
-from . import checkpoint, cte_distribuicao, nfe_distribuicao, nfse_nacional
-from .cert_utils import CertificadoA1
-from .nfe_distribuicao import DocumentoXML, filtrar_por_data
+from models.sefaz_distribuicao import CertificadoA1
+from models.sefaz_distribuicao.services import (
+    DocumentoXML,
+    cliente_cte,
+    cliente_nfe,
+    cliente_nfse,
+    filtrar_por_data,
+)
+
+from . import checkpoint
 
 log = logging.getLogger(__name__)
 
@@ -297,7 +304,7 @@ def baixar_e_importar(
     # --- NFe -----------------------------------------------------------
     log.info("=== NFeDistribuicaoDFe (CNPJ %s, ambiente=%d) ===", cnpj, ambiente)
     todas_nfe: List[DocumentoXML] = []
-    for pagina in nfe_distribuicao.consultar(
+    for pagina in cliente_nfe.consultar(
         cert, cnpj, uf_autor=uf_autor, ambiente=ambiente, nsu_inicial=nsu_inicial_nfe
     ):
         todas_nfe.extend(pagina.documentos)
@@ -318,7 +325,7 @@ def baixar_e_importar(
     # --- CTe -----------------------------------------------------------
     log.info("=== CTeDistribuicaoDFe (CNPJ %s, ambiente=%d) ===", cnpj, ambiente)
     todas_cte: List[DocumentoXML] = []
-    for pagina in cte_distribuicao.consultar(
+    for pagina in cliente_cte.consultar(
         cert, cnpj, uf_autor=uf_autor, ambiente=ambiente, nsu_inicial=nsu_inicial_cte
     ):
         todas_cte.extend(pagina.documentos)
@@ -339,7 +346,7 @@ def baixar_e_importar(
     if incluir_nfse:
         log.info("=== ADN NFSe Nacional (CNPJ %s, ambiente=%d) ===", cnpj, ambiente)
         try:
-            nfses = nfse_nacional.baixar_periodo(
+            nfses = cliente_nfse.baixar_periodo(
                 cert, cnpj, data_inicial, data_final, ambiente=ambiente
             )
             if max_documentos:
