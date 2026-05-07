@@ -74,12 +74,88 @@ def _xml_para_base64(xml: str) -> str:
     return base64.b64encode(xml.encode("utf-8")).decode("ascii")
 
 
-def _ingerir(xml: str, chave_provavel: Optional[str], resumo: Resumo, tipo_label: str) -> None:
+# Mapeamento entre rótulo interno e os valores numéricos persistidos em
+# `NotaFiscal.tipo` (ver comentários em models/nota_fiscal/entities.py).
+_TIPOS_DB = {
+    "nfe": (0, 1),
+    "cte": (2,),
+    "nfse": (3,),
+}
+
+
+def _persistir_nsu(nf, nsu: str) -> None:
+    """Grava `nsu_distribuicao` em `dados_adicionais` se ainda não estiver lá."""
+    if not nsu:
+        return
+    from models.database import db
+    from utils.utils import parse_dados_json, set_dados_json_item
+
+    dados = parse_dados_json(getattr(nf, "dados_adicionais", None))
+    if dados.get("nsu_distribuicao"):
+        return
+    nf.dados_adicionais = set_dados_json_item(
+        getattr(nf, "dados_adicionais", None), "nsu_distribuicao", nsu
+    )
+    db.session.add(nf)
+    db.session.commit()
+
+
+def _maior_nsu_no_banco(cnpj: str, tipo_label: str) -> str:
+    """
+    Lê o maior `nsu_distribuicao` já gravado em NotaFiscal.dados_adicionais
+    para o CNPJ informado (como emitente ou destinatário) e o tipo desejado.
+    Retorna '0' se nenhum encontrado.
+    """
+    from sqlalchemy import or_
+    from sqlalchemy.orm import load_only
+
+    from models.nota_fiscal import NotaFiscal
+    from utils.utils import parse_dados_json
+
+    tipos = _TIPOS_DB.get(tipo_label, ())
+    if not tipos:
+        return "0"
+    notas = (
+        NotaFiscal.query.filter(
+            NotaFiscal.tipo.in_(tipos),
+            or_(
+                NotaFiscal.cnpj_emitente == cnpj,
+                NotaFiscal.cnpj_destinatario == cnpj,
+            ),
+            NotaFiscal.dados_adicionais.contains('"nsu_distribuicao"'),
+        )
+        .options(load_only(NotaFiscal.dados_adicionais))
+        .all()
+    )
+    max_nsu = 0
+    for n in notas:
+        valor = parse_dados_json(n.dados_adicionais).get("nsu_distribuicao")
+        if not valor:
+            continue
+        try:
+            inteiro = int(valor)
+        except (TypeError, ValueError):
+            continue
+        if inteiro > max_nsu:
+            max_nsu = inteiro
+    return f"{max_nsu:015d}" if max_nsu else "0"
+
+
+def _ingerir(
+    xml: str,
+    chave_provavel: Optional[str],
+    resumo: Resumo,
+    tipo_label: str,
+    nsu: Optional[str] = None,
+) -> None:
     """
     Importa um XML pelo pipeline existente: `NotaFiscal(xml_data=xml_b64)`.
 
     O construtor faz: detecta tipo, parseia, persiste no banco e popula `id`.
     Se a chave já existir, ele apenas referencia o registro existente.
+
+    Após o save, grava `nsu_distribuicao` dentro de `dados_adicionais` para
+    permitir, em execuções futuras, retomar do maior NSU sem usar arquivo.
     """
     # Import local para não exigir contexto Flask quando alguém só usa
     # os clientes nfe_distribuicao/cte_distribuicao isoladamente.
@@ -111,6 +187,8 @@ def _ingerir(xml: str, chave_provavel: Optional[str], resumo: Resumo, tipo_label
             resumo.cte_ja_existentes += 1
         else:
             resumo.nfse_ja_existentes += 1
+        if getattr(nf, "id", None):
+            _persistir_nsu(nf, nsu or "")
     elif getattr(nf, "id", None):
         resumo.chaves_importadas.append(chave_real)
         if tipo_label == "nfe":
@@ -119,6 +197,7 @@ def _ingerir(xml: str, chave_provavel: Optional[str], resumo: Resumo, tipo_label
             resumo.cte_importados += 1
         else:
             resumo.nfse_importadas += 1
+        _persistir_nsu(nf, nsu or "")
     else:
         resumo.erros.append(f"{tipo_label} {chave_log}: NotaFiscal não persistiu (sem id)")
         if tipo_label == "nfe":
@@ -182,18 +261,38 @@ def baixar_e_importar(
         checkpoint.resetar(cnpj, "nfe", checkpoint_dir)
         checkpoint.resetar(cnpj, "cte", checkpoint_dir)
 
+    # Resolve o NSU inicial em três níveis: (1) o que o caller passou,
+    # (2) o maior NSU já persistido em NotaFiscal.dados_adicionais,
+    # (3) o checkpoint em arquivo (útil em dry_run e como fallback).
     if nsu_inicial_nfe is None:
-        nsu_inicial_nfe = checkpoint.ler(cnpj, "nfe", checkpoint_dir)
+        if not dry_run and not resetar_checkpoint:
+            try:
+                nsu_inicial_nfe = _maior_nsu_no_banco(cnpj, "nfe")
+            except Exception as exc:  # noqa: BLE001
+                log.warning("Falha ao ler NSU NFe do banco: %s", exc)
+                nsu_inicial_nfe = "0"
+        if not nsu_inicial_nfe or nsu_inicial_nfe == "0":
+            nsu_inicial_nfe = checkpoint.ler(cnpj, "nfe", checkpoint_dir)
     if nsu_inicial_cte is None:
-        nsu_inicial_cte = checkpoint.ler(cnpj, "cte", checkpoint_dir)
-    log.info("Checkpoints: NFe ultNSU=%s, CTe ultNSU=%s", nsu_inicial_nfe, nsu_inicial_cte)
+        if not dry_run and not resetar_checkpoint:
+            try:
+                nsu_inicial_cte = _maior_nsu_no_banco(cnpj, "cte")
+            except Exception as exc:  # noqa: BLE001
+                log.warning("Falha ao ler NSU CTe do banco: %s", exc)
+                nsu_inicial_cte = "0"
+        if not nsu_inicial_cte or nsu_inicial_cte == "0":
+            nsu_inicial_cte = checkpoint.ler(cnpj, "cte", checkpoint_dir)
+    log.info("NSU inicial: NFe=%s, CTe=%s", nsu_inicial_nfe, nsu_inicial_cte)
 
-    def _processar(xml: str, chave: Optional[str], tipo: str) -> None:
+    def _processar(xml: str, chave: Optional[str], tipo: str, nsu: Optional[str] = None) -> None:
         if pasta_saida:
-            _gravar_em_disco(pasta_saida, tipo, chave or "sem-chave", xml)
+            nome = (
+                f"{nsu}_{chave}" if nsu and chave else (chave or nsu or "sem-chave")
+            )
+            _gravar_em_disco(pasta_saida, tipo, nome, xml)
         if dry_run:
             return
-        _ingerir(xml, chave, resumo, tipo_label=tipo)
+        _ingerir(xml, chave, resumo, tipo_label=tipo, nsu=nsu)
 
     # --- NFe -----------------------------------------------------------
     log.info("=== NFeDistribuicaoDFe (CNPJ %s, ambiente=%d) ===", cnpj, ambiente)
@@ -214,7 +313,7 @@ def baixar_e_importar(
     resumo.nfe_baixadas = len(nfe_no_periodo)
     log.info("NFe: %d documentos no período (de %d totais).", len(nfe_no_periodo), len(todas_nfe))
     for doc in nfe_no_periodo:
-        _processar(doc.xml, doc.chave, "nfe")
+        _processar(doc.xml, doc.chave, "nfe", nsu=doc.nsu)
 
     # --- CTe -----------------------------------------------------------
     log.info("=== CTeDistribuicaoDFe (CNPJ %s, ambiente=%d) ===", cnpj, ambiente)
@@ -234,7 +333,7 @@ def baixar_e_importar(
     resumo.cte_baixados = len(cte_no_periodo)
     log.info("CTe: %d documentos no período (de %d totais).", len(cte_no_periodo), len(todas_cte))
     for doc in cte_no_periodo:
-        _processar(doc.xml, doc.chave, "cte")
+        _processar(doc.xml, doc.chave, "cte", nsu=doc.nsu)
 
     # --- NFSe Nacional -------------------------------------------------
     if incluir_nfse:
