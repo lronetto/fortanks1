@@ -136,6 +136,13 @@ def main() -> int:
         "--nsu-cte", default=None,
         help="Sobrepõe o cursor de CTe para esta execução.",
     )
+    parser.add_argument(
+        "--filtrar-data", action="store_true",
+        help="Aplica filtro por SEFAZ_DATA_INICIO/SEFAZ_DATA_FIM. "
+             "Por default NÃO filtra: o cursor de NSU já é o 'filtro' natural "
+             "(documentos novos desde a última execução). "
+             "Eventos como cancelamento/CCe não têm dhEmi e seriam descartados pelo filtro.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -180,7 +187,8 @@ def main() -> int:
     print(f"CNPJ        : {cnpj}")
     print(f"UF          : {uf}")
     print(f"Ambiente    : {ambiente} ({'PRODUCAO' if ambiente == 1 else 'HOMOLOGACAO'})")
-    print(f"Periodo     : {data_inicio} a {data_fim}")
+    print(f"Periodo NFSe: {data_inicio} a {data_fim}  (NFe/CTe usam cursor de NSU)")
+    print(f"Filtro data : {'SIM (--filtrar-data)' if args.filtrar_data else 'NÃO (recomendado)'}")
     print(f"Max/tipo    : {max_documentos or 'ilimitado'}")
     print(f"Cursor NFe  : {nsu_nfe}{'  [primeira execucao]' if primeira else ''}")
     print(f"Cursor CTe  : {nsu_cte}")
@@ -191,14 +199,24 @@ def main() -> int:
     cert = CertificadoA1(caminho_pfx=pfx, senha=senha)
     bus = BuscadorXMLs(cert, cnpj=cnpj, uf_autor=uf, ambiente=ambiente)
 
+    # NFSe (ADN) precisa de intervalo. NFe/CTe usam o NSU como cursor — o
+    # filtro de data é opcional, e quando aplicado descarta também eventos
+    # (cancelamento, CCe, manifestação) que não têm dhEmi.
     lote: LoteDownload = bus.buscar(
         ultimo_nsu_nfe=nsu_nfe,
         ultimo_nsu_cte=nsu_cte,
-        data_inicial=data_inicio,
-        data_final=data_fim,
+        data_inicial=data_inicio if args.filtrar_data else None,
+        data_final=data_fim if args.filtrar_data else None,
         incluir_nfse=incluir_nfse,
         max_documentos=max_documentos,
     )
+
+    # Breakdown por schema (útil pra entender o que veio: NFe, evento, resumo, ...).
+    contagem_schemas: dict[str, int] = {}
+    for xml in lote:
+        contagem_schemas[xml.schema or "(sem schema)"] = (
+            contagem_schemas.get(xml.schema or "(sem schema)", 0) + 1
+        )
 
     arquivos_gravados: list[Path] = []
     for xml in lote:
@@ -211,10 +229,15 @@ def main() -> int:
     _gravar_cursor(novo_nfe, novo_cte)
 
     print("\n===== Resultado =====")
+    print(f"Filtro de data : {'ON (--filtrar-data)' if args.filtrar_data else 'OFF (cursor de NSU)'}")
     print(f"NFe baixadas   : {len(lote.nfe)}")
     print(f"CTe baixados   : {len(lote.cte)}")
     print(f"NFSe baixadas  : {len(lote.nfse)}")
     print(f"Total no disco : {len(arquivos_gravados)} arquivo(s)")
+    if contagem_schemas:
+        print("\nSchemas recebidos:")
+        for schema, qtd in sorted(contagem_schemas.items(), key=lambda x: -x[1]):
+            print(f"  {qtd:>4} x {schema}")
     print(f"\nCursor salvo em {ARQUIVO_CURSOR.relative_to(_root)}:")
     print(f"  NFe ultNSU = {novo_nfe}  (maxNSU = {lote.max_nsu_nfe})")
     print(f"  CTe ultNSU = {novo_cte}  (maxNSU = {lote.max_nsu_cte})")
