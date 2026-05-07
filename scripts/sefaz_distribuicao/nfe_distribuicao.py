@@ -101,6 +101,12 @@ def _parse_resposta(xml_resposta: bytes) -> ResultadoConsulta:
     max_nsu = ret.findtext(f"{{{NS_NFE}}}maxNSU", default="0")
 
     # 138 = Documento(s) localizado(s); 137 = Nenhum doc localizado
+    if cstat == "656":
+        raise RuntimeError(
+            "SEFAZ aplicou bloqueio de Consumo Indevido (cStat=656). "
+            "Aguarde 1 hora e use checkpoint de NSU (--checkpoint-dir / nsu_inicial) "
+            "para não chamar com ultNSU=0 repetidamente."
+        )
     if cstat not in {"137", "138"}:
         raise RuntimeError(f"SEFAZ rejeitou consulta: cStat={cstat} xMotivo={xmotivo}")
 

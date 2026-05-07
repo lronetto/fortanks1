@@ -98,6 +98,12 @@ def _parse_resposta(xml_resposta: bytes) -> ResultadoConsulta:
     ult_nsu = ret.findtext(f"{{{NS_CTE}}}ultNSU", default="0")
     max_nsu = ret.findtext(f"{{{NS_CTE}}}maxNSU", default="0")
 
+    if cstat == "656":
+        raise RuntimeError(
+            "SEFAZ-CTe aplicou bloqueio de Consumo Indevido (cStat=656). "
+            "Aguarde 1 hora e use checkpoint de NSU (--checkpoint-dir / nsu_inicial) "
+            "para não chamar com ultNSU=0 repetidamente."
+        )
     if cstat not in {"137", "138"}:
         raise RuntimeError(f"SEFAZ-CTe rejeitou: cStat={cstat} xMotivo={xmotivo}")
 

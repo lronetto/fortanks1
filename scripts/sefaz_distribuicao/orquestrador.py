@@ -27,9 +27,10 @@ import logging
 import os
 from dataclasses import dataclass, field
 from datetime import date
+from pathlib import Path
 from typing import List, Optional
 
-from . import cte_distribuicao, nfe_distribuicao, nfse_nacional
+from . import checkpoint, cte_distribuicao, nfe_distribuicao, nfse_nacional
 from .cert_utils import CertificadoA1
 from .nfe_distribuicao import DocumentoXML, filtrar_por_data
 
@@ -145,11 +146,13 @@ def baixar_e_importar(
     uf_autor: int = 35,
     ambiente: int = 1,
     incluir_nfse: bool = True,
-    nsu_inicial_nfe: str = "0",
-    nsu_inicial_cte: str = "0",
+    nsu_inicial_nfe: Optional[str] = None,
+    nsu_inicial_cte: Optional[str] = None,
     dry_run: bool = False,
     pasta_saida: Optional[str] = None,
     max_documentos: int = 0,
+    checkpoint_dir: Optional[Path] = None,
+    resetar_checkpoint: bool = False,
 ) -> Resumo:
     """
     Baixa NFe + CTe (Distribuição DF-e) + NFSe Nacional (ADN) do CNPJ
@@ -161,16 +164,29 @@ def baixar_e_importar(
     Args:
         dry_run: se True, NÃO chama `NotaFiscal()` — apenas baixa, conta e
             (opcionalmente) grava os XMLs em `pasta_saida`. Não toca no banco.
-            Use para validar conexão com a SEFAZ, certificado e período antes
-            de comprometer dados.
-        pasta_saida: quando dry_run=True (ou para guardar uma cópia), salva
-            os XMLs em `pasta_saida/{nfe,cte,nfse}/<chave>.xml`.
-        max_documentos: corta após N documentos por tipo (NFe/CTe/NFSe).
-            Use 0 para ilimitado. Útil em smoke-tests rápidos.
+        pasta_saida: salva os XMLs em `pasta_saida/{nfe,cte,nfse}/<chave>.xml`.
+        max_documentos: corta após N documentos por tipo (0 = ilimitado).
+        nsu_inicial_nfe / nsu_inicial_cte: se fornecidos, sobrescrevem o
+            checkpoint persistido. Use None para usar o checkpoint salvo
+            (ou "0" na primeira execução).
+        checkpoint_dir: pasta onde gravar o `ultNSU` por (CNPJ, tipo).
+            Default: ~/.fortanks/sefaz_nsu/. Crucial para evitar bloqueio
+            cStat=656 ("Consumo Indevido") da SEFAZ ao reusar ultNSU=0.
+        resetar_checkpoint: se True, ignora e apaga checkpoint existente.
     """
     cert = CertificadoA1(caminho_pfx=caminho_pfx, senha=senha_certificado)
     cnpj = "".join(filter(str.isdigit, cnpj)).zfill(14)
     resumo = Resumo()
+
+    if resetar_checkpoint:
+        checkpoint.resetar(cnpj, "nfe", checkpoint_dir)
+        checkpoint.resetar(cnpj, "cte", checkpoint_dir)
+
+    if nsu_inicial_nfe is None:
+        nsu_inicial_nfe = checkpoint.ler(cnpj, "nfe", checkpoint_dir)
+    if nsu_inicial_cte is None:
+        nsu_inicial_cte = checkpoint.ler(cnpj, "cte", checkpoint_dir)
+    log.info("Checkpoints: NFe ultNSU=%s, CTe ultNSU=%s", nsu_inicial_nfe, nsu_inicial_cte)
 
     def _processar(xml: str, chave: Optional[str], tipo: str) -> None:
         if pasta_saida:
@@ -186,6 +202,9 @@ def baixar_e_importar(
         cert, cnpj, uf_autor=uf_autor, ambiente=ambiente, nsu_inicial=nsu_inicial_nfe
     ):
         todas_nfe.extend(pagina.documentos)
+        # Persiste o NSU IMEDIATAMENTE para próxima execução não cair em cStat=656.
+        if pagina.ultimo_nsu and pagina.ultimo_nsu != "0":
+            checkpoint.gravar(cnpj, "nfe", pagina.ultimo_nsu, checkpoint_dir)
         if max_documentos and len(todas_nfe) >= max_documentos:
             log.info("NFe: limite de %d atingido, parando paginação.", max_documentos)
             break
@@ -204,6 +223,8 @@ def baixar_e_importar(
         cert, cnpj, uf_autor=uf_autor, ambiente=ambiente, nsu_inicial=nsu_inicial_cte
     ):
         todas_cte.extend(pagina.documentos)
+        if pagina.ultimo_nsu and pagina.ultimo_nsu != "0":
+            checkpoint.gravar(cnpj, "cte", pagina.ultimo_nsu, checkpoint_dir)
         if max_documentos and len(todas_cte) >= max_documentos:
             log.info("CTe: limite de %d atingido, parando paginação.", max_documentos)
             break

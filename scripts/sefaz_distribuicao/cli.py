@@ -21,6 +21,7 @@ import logging
 import os
 import sys
 from datetime import date
+from pathlib import Path
 
 # Higieniza sys.path antes de importar o app (mesmo motivo do
 # scripts/atualizar_data_emissao_notas_xml.py: evitar que `scripts/email`
@@ -80,12 +81,27 @@ def main() -> int:
         help="Limita o número de documentos por tipo (NFe/CTe/NFSe). 0=ilimitado. "
              "Use 1 ou 2 para um smoke-test rápido.",
     )
+    parser.add_argument(
+        "--checkpoint-dir", default=None,
+        help="Pasta para gravar o ultNSU por (CNPJ, tipo). "
+             "Default: ~/.fortanks/sefaz_nsu/. Evita bloqueio cStat=656.",
+    )
+    parser.add_argument(
+        "--reset-checkpoint", action="store_true",
+        help="Apaga o checkpoint salvo e força nova consulta a partir de NSU=0.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
     )
+
+    # Quando o usuário não passa --nsu-inicial-*, manda None para o
+    # orquestrador ler do arquivo de checkpoint.
+    nsu_nfe = args.nsu_inicial_nfe if args.nsu_inicial_nfe != "0" else None
+    nsu_cte = args.nsu_inicial_cte if args.nsu_inicial_cte != "0" else None
+    checkpoint_dir = Path(args.checkpoint_dir) if args.checkpoint_dir else None
 
     with app.app_context():
         resumo = baixar_e_importar(
@@ -97,11 +113,13 @@ def main() -> int:
             uf_autor=args.uf,
             ambiente=args.ambiente,
             incluir_nfse=not args.sem_nfse,
-            nsu_inicial_nfe=args.nsu_inicial_nfe,
-            nsu_inicial_cte=args.nsu_inicial_cte,
+            nsu_inicial_nfe=nsu_nfe,
+            nsu_inicial_cte=nsu_cte,
             dry_run=args.dry_run,
             pasta_saida=args.saida,
             max_documentos=args.max_documentos,
+            checkpoint_dir=checkpoint_dir,
+            resetar_checkpoint=args.reset_checkpoint,
         )
 
     print("\n===== Resumo =====")
