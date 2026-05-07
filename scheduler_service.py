@@ -365,90 +365,97 @@ def limpar_uploads_antigos():
             logger.info("Limpeza de uploads antigos concluída com sucesso")
     except Exception as e:
         logger.error(f"Erro ao limpar uploads antigos: {str(e)}", exc_info=True)
-def processar_arquivei():
-    """Processa importações do Arquivei"""
+def processar_sefaz():
+    """
+    Baixa XMLs novos da SEFAZ Distribuição DF-e (NFe/CTe) e do ADN (NFSe Nacional)
+    e persiste cada XML como `Upload` (MinIO) + `DocumentoSefaz` (DB).
+
+    Cursor de NSU lido do próprio banco (`MAX(DocumentoSefaz.nsu)` por tipo).
+    Configuração via .env:
+        SEFAZ_PFX        caminho do .pfx/.p12
+        SEFAZ_SENHA      senha do certificado
+        SEFAZ_CNPJ       14 dígitos
+        SEFAZ_UF         opcional (default 35)
+        SEFAZ_AMBIENTE   1=produção (default), 2=homologação
+    """
     try:
         with app.app_context():
-            logs = {
-                'total': 0,
-                'erro': 0,
-                'erros': [],
-                'existente': 0,
-                'existentes': [],
-                'inserido': 0,
-                'inseridos': [],
-                'nfe': {
-                    'mensagem': [],
-                    'erro': 0,
-                    'erros': [],
-                    'existente': 0,
-                    'existentes': [],
-                    'inserido': 0,
-                    'inseridos': [],
-                },
-                'cte': {
-                    'mensagem': [],
-                    'erro': 0,
-                    'erros': [],
-                    'existente': 0,
-                    'existentes': [],
-                    'inserido': 0,
-                    'inseridos': [],
-                },
-                'nfse': {
-                    'mensagem': [],
-                    'erro': 0,
-                    'erros': [],
-                    'existente': 0,
-                    'existentes': [],
-                    'inserido': 0,
-                    'inseridos': [],
-                }
+            pfx = os.getenv("SEFAZ_PFX")
+            senha = os.getenv("SEFAZ_SENHA")
+            cnpj = os.getenv("SEFAZ_CNPJ")
+            if not (pfx and senha and cnpj):
+                logger.warning(
+                    "processar_sefaz: SEFAZ_PFX/SEFAZ_SENHA/SEFAZ_CNPJ não definidos no .env; pulando."
+                )
+                return
+            uf = int(os.getenv("SEFAZ_UF", "35"))
+            ambiente = int(os.getenv("SEFAZ_AMBIENTE", "1"))
+
+            from models.documento_sefaz import DocumentoSefaz, processar_xml
+            from models.sefaz_distribuicao import BuscadorXMLs, CertificadoA1
+
+            logger.info("Iniciando processar_sefaz (CNPJ %s, ambiente=%d)...", cnpj, ambiente)
+            cert = CertificadoA1(caminho_pfx=pfx, senha=senha)
+            bus = BuscadorXMLs(cert, cnpj=cnpj, uf_autor=uf, ambiente=ambiente)
+
+            ult_nsu_nfe = DocumentoSefaz.maior_nsu_por_tipo("nfe") or "0"
+            ult_nsu_cte = DocumentoSefaz.maior_nsu_por_tipo("cte") or "0"
+            logger.info("Cursor lido do DB: nfe=%s cte=%s", ult_nsu_nfe, ult_nsu_cte)
+
+            lote = bus.buscar(
+                ultimo_nsu_nfe=ult_nsu_nfe,
+                ultimo_nsu_cte=ult_nsu_cte,
+                # NSU já é o filtro natural; sem filtro de data para não descartar eventos.
+                incluir_nfse=False,
+            )
+
+            inseridos = 0
+            existentes = 0
+            erros: list[str] = []
+            for xml in lote:
+                try:
+                    doc = processar_xml(xml)
+                    if not doc:
+                        erros.append(f"{xml.tipo} nsu={xml.nsu}: processador devolveu None")
+                        continue
+                    # Recém-criado se data_criacao está nos últimos segundos.
+                    if doc.data_criacao and (datetime.now() - doc.data_criacao).total_seconds() < 60:
+                        inseridos += 1
+                    else:
+                        existentes += 1
+                except Exception as exc:  # noqa: BLE001
+                    logger.error(
+                        "processar_sefaz erro em xml tipo=%s nsu=%s chave=%s: %s",
+                        xml.tipo, xml.nsu, xml.chave, exc, exc_info=True,
+                    )
+                    erros.append(f"{xml.tipo} nsu={xml.nsu}: {exc}")
+                    db.session.rollback()
+
+            resumo = {
+                "nfe_baixadas": len(lote.nfe),
+                "cte_baixados": len(lote.cte),
+                "nfse_baixadas": len(lote.nfse),
+                "inseridos": inseridos,
+                "existentes": existentes,
+                "erros": len(erros),
+                "ult_nsu_nfe": lote.ultimo_nsu_nfe,
+                "max_nsu_nfe": lote.max_nsu_nfe,
+                "ult_nsu_cte": lote.ultimo_nsu_cte,
+                "max_nsu_cte": lote.max_nsu_cte,
+                "primeiros_erros": erros[:10],
             }
-            logger.info("Iniciando processamento do Arquivei...")
-            log=NotaFiscal.importar_arquivei(
-                data_inicial=(datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d'),
-                data_final=(datetime.now()).strftime('%Y-%m-%d'),tipo='nfe'
+            logger.info(
+                "processar_sefaz concluído: %d inseridos, %d existentes, %d erros (NFe %d/CTe %d)",
+                inseridos, existentes, len(erros), len(lote.nfe), len(lote.cte),
             )
-            logs['nfe'] = log
-            logs['total'] += log['total']
-            logs['erro'] += log['erro']
-            logs['erros'].extend(log['erros'])
-            logs['existente'] += log['existente']
-            logs['existentes'].extend(log['existentes'])
-            logs['inserido'] += log['inserido']
-            logs['inseridos'].extend(log['inseridos'])
-            log=NotaFiscal.importar_arquivei(
-                data_inicial=(datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d'),
-                data_final=(datetime.now()).strftime('%Y-%m-%d'),
-                tipo='cte'
-            )
-            logs['cte'] = log
-            logs['total'] += log['total']
-            logs['erro'] += log['erro']
-            logs['erros'].extend(log['erros'])
-            logs['existente'] += log['existente']
-            logs['existentes'].extend(log['existentes'])
-            logs['inserido'] += log['inserido']
-            logs['inseridos'].extend(log['inseridos'])
-            log=NotaFiscal.importar_arquivei(
-                data_inicial=(datetime.now() - timedelta(days=1)).strftime('%Y-%m-%d'),
-                data_final=(datetime.now()).strftime('%Y-%m-%d'),
-                tipo='nfse'
-            )
-            logs['nfse'] = log
-            logs['total'] += log['total']
-            logs['erro'] += log['erro']
-            logs['erros'].extend(log['erros'])
-            logs['existente'] += log['existente']
-            logs['existentes'].extend(log['existentes'])
-            logs['inserido'] += log['inserido']
-            logs['inseridos'].extend(log['inseridos'])
-            if logs['erro'] > 0 or logs['inserido'] > 0:
-                Logs(local="processar_arquivei_automatico", data=datetime.now(), texto=json_dumps_safe(logs))
-            logger.info("Processamento do Arquivei concluído com sucesso")
+            if inseridos > 0 or erros:
+                Logs(
+                    local="processar_sefaz_automatico",
+                    data=datetime.now(),
+                    texto=json_dumps_safe(resumo),
+                )
     except Exception as e:
-        logger.error(f"Erro ao processar Arquivei: {str(e)}", exc_info=True)
+        logger.error(f"Erro ao processar SEFAZ: {str(e)}", exc_info=True)
 
 
 def job_email5min():
@@ -548,7 +555,7 @@ def job_hora():
     try:
         with app.app_context():
             logger.info("Executando job horário...")
-            processar_arquivei()
+            processar_sefaz()
             logger.info("Job horário concluído")
     except Exception as e:
         logger.error(f"Erro no job horário: {str(e)}", exc_info=True)
