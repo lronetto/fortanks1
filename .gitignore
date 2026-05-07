@@ -167,3 +167,6 @@ wsgi.py
 *.pdf.*.*.*.*
 *.pdf.*.*.*.*.*
 *.pdf.*.*.*.*.*.*
+
+# Saida do teste/baixar_sefaz_real.py e demais artefatos transientes
+.tmp/
