@@ -20,6 +20,7 @@ dependencies = [
     "click==8.3.1",
     "cloudscraper>=1.2.71",
     "colorama==0.4.6",
+    "cryptography>=42.0,<46",
     "decorator==5.2.1",
     "defusedxml==0.7.1",
     "docopt==0.6.2",
