@@ -11,6 +11,7 @@ TIPOS_UPLOAD = {
     8: "foto equipamento",
     9: "imagem material",
     10: "foto transporte tanques",
+    11: "xml sefaz distribuicao",
 }
 # tipo
 # 0 - nao definido
@@ -23,5 +24,6 @@ TIPOS_UPLOAD = {
 # 8 - foto equipamento (patrimônio / models.equipamento)
 # 9 - imagem de cadastro de material (Materiais.dados_adicionais.imagem_upload_id)
 # 10 - foto opcional do registro de transporte (TanquesTransportes.dados_adicionais.foto_upload_id)
+# 11 - XML baixado da SEFAZ Distribuição DF-e / ADN (DocumentoSefaz.dados_adicionais.upload_id)
 
 NOME_TABELA = "Uploads"
