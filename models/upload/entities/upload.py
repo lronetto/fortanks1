@@ -117,61 +117,9 @@ class Upload(db.Model):
         return f"uploads/{pai}/{pai_id}/{self.id}_{nome}"
 
     def _enviar_blob_para_minio(self) -> bool:
-        """Envia blob legado para MinIO e salva metadados no registro."""
-        if not self.blob or not self.id:
-            return False
-        if not self._bool_env("MINIO_UPLOAD_WRITE_ENABLED", default=True):
-            return False
-
-        endpoint = (os.getenv("MINIO_ENDPOINT") or "").strip()
-        access_key = (os.getenv("MINIO_ACCESS_KEY") or "").strip()
-        secret_key = (os.getenv("MINIO_SECRET_KEY") or "").strip()
-        bucket = (os.getenv("MINIO_BUCKET_UPLOADS") or "sfortanks").strip()
-        secure = self._bool_env("MINIO_SECURE", default=False)
-        if not endpoint or not access_key or not secret_key or not bucket:
-            return False
-
-        try:
-            from minio import Minio
-        except Exception:
-            logging.exception("Cliente MinIO indisponivel para Upload id=%s", self.id)
-            return False
-
-        dados_bytes = self.get_blob()
-        if dados_bytes is None:
-            return False
-
-        client = Minio(endpoint=endpoint, access_key=access_key, secret_key=secret_key, secure=secure)
-        object_key = self._object_key_minio()
-        try:
-            if not client.bucket_exists(bucket):
-                client.make_bucket(bucket)
-            resultado = client.put_object(
-                bucket_name=bucket,
-                object_name=object_key,
-                data=io.BytesIO(dados_bytes),
-                length=len(dados_bytes),
-                content_type=self.mimetype or "application/octet-stream",
-            )
-        except Exception:
-            logging.exception("Falha ao enviar Upload id=%s para MinIO", self.id)
-            return False
-
-        dados = self._dados_adicionais_dict()
-        dados["storage"] = {
-            "provider": "minio",
-            "bucket": bucket,
-            "object_key": object_key,
-            "etag": resultado.etag,
-            "size": len(dados_bytes),
-            "sha256": hashlib.sha256(dados_bytes).hexdigest(),
-            "migrado_em": datetime.utcnow().isoformat(),
-        }
-        # Coluna é Text — serializa como JSON antes de atribuir.
-        self.dados_adicionais = json.dumps(dados, ensure_ascii=False)
-        if self._bool_env("MINIO_CLEAR_BLOB_ON_WRITE", default=True):
-            self.blob = None
-        return True
+        """Envia blob legado para MinIO. Delega para `services.minio_service.enviar`."""
+        from models.upload.services.minio_service import enviar
+        return enviar(self, commit=False)
 
     def save(self):
         try:

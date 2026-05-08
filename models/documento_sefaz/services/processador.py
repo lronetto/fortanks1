@@ -18,7 +18,7 @@ from typing import Optional, Tuple
 
 from models.database import db
 from models.fornecedor import Fornecedor
-from models.upload import Upload
+from models.upload import minio_service
 from utils.utils import dump_dados_json, set_dados_json_item
 
 from ..constants import (
@@ -309,10 +309,10 @@ def processar_xml(xml_baixado, *, sobrescrever: bool = False) -> Optional[Docume
     db.session.add(doc)
     db.session.commit()
 
-    # ----- Upload do XML (MinIO) -----
+    # ----- Upload do XML (DB + MinIO via service) -----
     nome_arquivo = f"{tipo}_{chave or nsu or doc.id}.xml"
     try:
-        upload = Upload.registrar(
+        upload = minio_service.criar_e_enviar(
             pai="DocumentoSefaz",
             pai_id=doc.id,
             tipo=UPLOAD_TIPO_XML,
