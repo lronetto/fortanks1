@@ -21,17 +21,27 @@ class DocumentoSefaz(db.Model):
     __tablename__ = NOME_TABELA
 
     id = db.Column(db.Integer, primary_key=True)
-    tipo = db.Column(db.String(10), nullable=False, index=True)  # 'nfe' | 'cte' | 'nfse'
-    data = db.Column(db.DateTime, nullable=True, index=True)  # data de emissão
+    # Subtipos (definidos por schema do docZip):
+    #   nfe, nfe_resumo, nfe_resEvento, nfe_procEvento
+    #   cte, cte_resumo, cte_resEvento, cte_procEvento
+    #   nfse
+    tipo = db.Column(db.String(20), nullable=False, index=True)
+    data = db.Column(db.DateTime, nullable=True, index=True)
     fornecedor_id = db.Column(
         db.Integer, db.ForeignKey("fornecedores.id"), nullable=True, index=True
     )
     valor_total = db.Column(db.Numeric(15, 2), nullable=True)
     dados_adicionais = db.Column(db.Text, nullable=True)
     nsu = db.Column(db.String(20), nullable=True, index=True)
-    chave_acesso = db.Column(db.String(50), unique=True, nullable=True, index=True)
+    # NÃO é unique: eventos compartilham chNFe com o documento original;
+    # a unicidade é em (tipo, nsu).
+    chave_acesso = db.Column(db.String(50), nullable=True, index=True)
     data_criacao = db.Column(
         db.DateTime, default=datetime.now, nullable=False, index=True
+    )
+
+    __table_args__ = (
+        db.UniqueConstraint("tipo", "nsu", name="uq_documentos_sefaz_tipo_nsu"),
     )
 
     fornecedor = db.relationship("Fornecedor", lazy="joined")
@@ -58,11 +68,27 @@ class DocumentoSefaz(db.Model):
         return f"<DocumentoSefaz {self.id} {self.tipo} chave={self.chave_acesso} nsu={self.nsu}>"
 
     @classmethod
-    def maior_nsu_por_tipo(cls, tipo: str) -> str:
-        """Retorna o maior NSU já gravado para um tipo. '0' se não houver."""
+    def maior_nsu_por_tipo(cls, tipo_servico: str) -> str:
+        """
+        Retorna o maior NSU já gravado para um tipo *de serviço*.
+
+        `tipo_servico` aceita 'nfe' ou 'cte' (filtra todos os subtipos
+        relacionados: nfe + nfe_resumo + nfe_resEvento + nfe_procEvento;
+        idem para cte). Para qualquer outro valor, filtra exato.
+        '0' se não houver.
+        """
         from sqlalchemy import func
 
-        valor = (
-            db.session.query(func.max(cls.nsu)).filter(cls.tipo == tipo).scalar()
-        )
+        if tipo_servico in ("nfe", "cte"):
+            valor = (
+                db.session.query(func.max(cls.nsu))
+                .filter(cls.tipo.startswith(tipo_servico))
+                .scalar()
+            )
+        else:
+            valor = (
+                db.session.query(func.max(cls.nsu))
+                .filter(cls.tipo == tipo_servico)
+                .scalar()
+            )
         return valor or "0"
