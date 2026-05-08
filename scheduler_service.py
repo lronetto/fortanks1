@@ -365,29 +365,64 @@ def limpar_uploads_antigos():
             logger.info("Limpeza de uploads antigos concluída com sucesso")
     except Exception as e:
         logger.error(f"Erro ao limpar uploads antigos: {str(e)}", exc_info=True)
-def _ingerir_um(xml, processar_xml, pendentes) -> tuple[bool, bool, str | None]:
+def _consumir_lote_sefaz_xmls(xml_iteravel, *, processar_xml_fn, pendentes, cliente_mi) -> tuple[int, int, list[str]]:
     """
-    Tenta ingerir 1 XmlBaixado: persiste em DB+MinIO via `processar_xml`.
-    Retorna (inserido, existente, erro). Em sucesso, remove o pendente do disco.
+    Para cada XML: SAVEPOINT isolado na sessão SQLAlchemy; um único COMMIT ao final.
+    Os arquivos pendentes no disco só são removidos após o commit bem-sucedido,
+    garantindo WAL consistente caso o commit falhe.
     """
-    try:
-        doc = processar_xml(xml)
-    except Exception as exc:  # noqa: BLE001
-        db.session.rollback()
-        logger.error(
-            "ingestao falhou tipo=%s nsu=%s chave=%s: %s",
-            xml.tipo, xml.nsu, xml.chave, exc, exc_info=True,
-        )
-        return False, False, f"{xml.tipo} nsu={xml.nsu}: {exc}"
-    if not doc:
-        return False, False, f"{xml.tipo} nsu={xml.nsu}: processador devolveu None"
-    # Sucesso (novo OU já existente) → remove o arquivo pendente.
-    pendentes.remover(xml)
-    inserido = bool(
-        doc.data_criacao
-        and (datetime.now() - doc.data_criacao).total_seconds() < 60
-    )
-    return inserido, not inserido, None
+    confirmados = []
+    erros: list[str] = []
+
+    def _marcar_inserido(doc) -> bool:
+        dc = getattr(doc, "data_criacao", None)
+        return bool(dc and (datetime.now() - dc).total_seconds() < 120)
+
+    for xml in xml_iteravel:
+        try:
+            with db.session.begin_nested():
+                doc = processar_xml_fn(
+                    xml,
+                    commit_sessao=False,
+                    cliente_minio=cliente_mi,
+                )
+                if not doc:
+                    raise RuntimeError("processador devolveu None")
+        except Exception as exc:  # noqa: BLE001
+            logger.error(
+                "ingestao (lote) falhou tipo=%s nsu=%s chave=%s: %s",
+                getattr(xml, "tipo", ""),
+                getattr(xml, "nsu", ""),
+                getattr(xml, "chave", ""),
+                exc,
+                exc_info=True,
+            )
+            erros.append(f"{xml.tipo} nsu={xml.nsu}: {exc}")
+            continue
+
+        confirmados.append((xml, doc))
+
+    if confirmados:
+        try:
+            db.session.commit()
+        except Exception as exc:  # noqa: BLE001
+            db.session.rollback()
+            logger.error("Commit do lote SEFAZ falhou: %s", exc, exc_info=True)
+            for xml, doc in confirmados:
+                erros.append(
+                    f"{xml.tipo} nsu={xml.nsu}: commit lote perdido ({doc.id}): {exc}"
+                )
+            return 0, 0, erros
+
+    inseridos = existentes = 0
+    for xml, doc in confirmados:
+        pendentes.remover(xml)
+        if _marcar_inserido(doc):
+            inseridos += 1
+        else:
+            existentes += 1
+
+    return inseridos, existentes, erros
 
 
 def processar_sefaz():
@@ -430,27 +465,33 @@ def processar_sefaz():
             erros: list[str] = []
             re_processados = 0
 
+            from models.upload.services import minio_service
+
+            cliente_mi = minio_service.obter_cliente()
+
             # ---- 1) Drena pendentes do disco antes de chamar a SEFAZ. ----
             qtd_pendentes = pendentes.contar()
             if qtd_pendentes:
                 logger.info("Re-processando %d pendente(s) do disco...", qtd_pendentes)
-                for xml in pendentes.listar():
-                    ins, ex, err = _ingerir_um(xml, processar_xml, pendentes)
-                    if ins:
-                        inseridos += 1
-                        re_processados += 1
-                    if ex:
-                        existentes += 1
-                    if err:
-                        erros.append(f"[pendente] {err}")
+                lista_reproc = list(pendentes.listar())
+                ins_p, ex_p, er_p = _consumir_lote_sefaz_xmls(
+                    lista_reproc,
+                    processar_xml_fn=processar_xml,
+                    pendentes=pendentes,
+                    cliente_mi=cliente_mi,
+                )
+                inseridos += ins_p
+                existentes += ex_p
+                re_processados += ins_p
+                erros.extend(f"[pendente] {msg}" for msg in er_p)
 
             # ---- 2) Consulta SEFAZ. ----
             logger.info("Iniciando processar_sefaz (CNPJ %s, ambiente=%d)...", cnpj, ambiente)
             cert = CertificadoA1(caminho_pfx=pfx, senha=senha)
             bus = BuscadorXMLs(cert, cnpj=cnpj, uf_autor=uf, ambiente=ambiente)
 
-            ult_nsu_nfe = DocumentoSefaz.maior_nsu_por_tipo("nfe") or "0"
-            ult_nsu_cte = DocumentoSefaz.maior_nsu_por_tipo("cte") or "0"
+            ult_nsu_nfe = "000000000000001" if DocumentoSefaz.maior_nsu_por_tipo("nfe") in [None, "0", 0] else DocumentoSefaz.maior_nsu_por_tipo("nfe")
+            ult_nsu_cte = "000000000000001" if DocumentoSefaz.maior_nsu_por_tipo("cte") in [None, "0", 0] else DocumentoSefaz.maior_nsu_por_tipo("cte")
             logger.info("Cursor lido do DB: nfe=%s cte=%s", ult_nsu_nfe, ult_nsu_cte)
 
             lote = bus.buscar(
@@ -460,25 +501,37 @@ def processar_sefaz():
                 incluir_nfse=False,
             )
 
-            # ---- 3) Para cada XML: WAL em disco -> tenta ingerir -> remove em sucesso. ----
-            for xml in lote:
+            xmls_para_wal_e_ingerir = list(lote)
+            xml_pos_wal: list = []
+
+            logger.info(
+                "lote: %s NFe, %s CTE, %s NFSe (total %s)",
+                len(lote.nfe),
+                len(lote.cte),
+                len(lote.nfse),
+                len(xmls_para_wal_e_ingerir),
+            )
+            # ---- 3) WAL em disco por item; ingestão DB+MinIO num único COMMIT ao final ----
+            for xml in xmls_para_wal_e_ingerir:
                 try:
                     pendentes.salvar(xml)  # WAL: garante recuperação em caso de falha
+                    xml_pos_wal.append(xml)
                 except Exception as exc:  # noqa: BLE001
                     logger.error(
                         "Falha ao gravar pendente em disco tipo=%s nsu=%s: %s",
                         xml.tipo, xml.nsu, exc, exc_info=True,
                     )
                     erros.append(f"{xml.tipo} nsu={xml.nsu}: pendente disco: {exc}")
-                    continue
 
-                ins, ex, err = _ingerir_um(xml, processar_xml, pendentes)
-                if ins:
-                    inseridos += 1
-                if ex:
-                    existentes += 1
-                if err:
-                    erros.append(err)
+            ins_l, ex_l, er_l = _consumir_lote_sefaz_xmls(
+                xml_pos_wal,
+                processar_xml_fn=processar_xml,
+                pendentes=pendentes,
+                cliente_mi=cliente_mi,
+            )
+            inseridos += ins_l
+            existentes += ex_l
+            erros.extend(er_l)
 
             resumo = {
                 "nfe_baixadas": len(lote.nfe),
@@ -661,6 +714,7 @@ def main():
     
     try:
         #job_diario()
+        #processar_sefaz()
         job_email5min()
         scheduler = iniciar_scheduler()
         logger.info("Serviço de scheduler em execução. Pressione Ctrl+C para parar.")

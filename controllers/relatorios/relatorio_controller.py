@@ -318,8 +318,9 @@ def relatorio_notas_exportar():
         for nota in notas:
             total += nota[0].valor_total
             # XML
-            if nota[0].xml_data:
-                xml_bytes = base64.b64decode(nota[0].xml_data)
+            xd = nota[0].get_xml_data()
+            if xd:
+                xml_bytes = base64.b64decode(xd)
                 zipf.writestr(f'NF {nota[0].numero_nf}.xml', xml_bytes)
             # PDF
             if nota[1] and nota[1].blob:

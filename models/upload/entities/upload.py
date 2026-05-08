@@ -15,8 +15,8 @@ from models.database import db
 
 from ..constants import NOME_TABELA
 from ..utils.armazenamento import normalizar_blob_para_armazenamento
-
-
+from logging import getLogger
+logger = getLogger(__name__)
 class Upload(db.Model):
     __tablename__ = NOME_TABELA
 
@@ -201,12 +201,11 @@ class Upload(db.Model):
     def get_blob(self):
         """Retorna bytes do arquivo: MinIO (novo) com fallback para blob legado."""
         conteudo_minio = self._buscar_blob_no_minio()
+        logger.info(f'get_blob upload id: {self.id}')
         if conteudo_minio is not None:
-            print(f'conteudo_minio: ')
             return conteudo_minio
         if self.blob:
             try:
-                print(f'self.blob:')
                 return base64.b64decode(self.blob)
             except Exception:
                 logging.exception("Falha ao decodificar blob legado do Upload id=%s", self.id)

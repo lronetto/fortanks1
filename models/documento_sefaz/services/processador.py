@@ -19,6 +19,7 @@ from typing import Optional, Tuple
 from models.database import db
 from models.fornecedor import Fornecedor
 from models.upload import minio_service
+from models.upload.entities import Upload
 from utils.utils import dump_dados_json, set_dados_json_item
 
 from ..constants import (
@@ -221,13 +222,24 @@ def _extrair_evento(xml_str: str) -> dict:
 # Função pública
 # --------------------------------------------------------------------------
 
-def processar_xml(xml_baixado, *, sobrescrever: bool = False) -> Optional[DocumentoSefaz]:
+def processar_xml(
+    xml_baixado,
+    *,
+    sobrescrever: bool = False,
+    commit_sessao: bool = True,
+    cliente_minio=None,
+) -> Optional[DocumentoSefaz]:
     """
     Persiste um `XmlBaixado` (de `models.sefaz_distribuicao`) como
     `Upload` (MinIO) + `DocumentoSefaz` (DB).
 
     Idempotente por (tipo, nsu). Quando `sobrescrever=True`, atualiza
     o registro existente em vez de retornar.
+
+    Args:
+        commit_sessao: quando False, apenas `flush()` — o chamador deve usar
+            SAVEPOINT / `commit()` no fim do lote para menores round-trips.
+        cliente_minio: cliente reutilizável em lote (opcional).
     """
     schema = xml_baixado.schema or ""
     tipo = _detectar_tipo(schema, xml_baixado.xml, xml_baixado.tipo)
@@ -275,7 +287,10 @@ def processar_xml(xml_baixado, *, sobrescrever: bool = False) -> Optional[Docume
     if cnpj_para_fornecedor and nome_emit:
         try:
             fornecedor = Fornecedor(
-                nome=nome_emit, cnpj=cnpj_para_fornecedor, estado=None
+                nome=nome_emit,
+                cnpj=cnpj_para_fornecedor,
+                estado=None,
+                persistir_agora=commit_sessao,
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning("Falha em Fornecedor %s: %s", cnpj_para_fornecedor, exc)
@@ -307,26 +322,48 @@ def processar_xml(xml_baixado, *, sobrescrever: bool = False) -> Optional[Docume
     doc.nsu = nsu
     doc.chave_acesso = chave
     db.session.add(doc)
-    db.session.commit()
+    if commit_sessao:
+        db.session.commit()
+    else:
+        db.session.flush()
 
     # ----- Upload do XML (DB + MinIO via service) -----
     nome_arquivo = f"{tipo}_{chave or nsu or doc.id}.xml"
+    blob_bytes = xml_baixado.xml.encode("utf-8")
+    upload_inst: Optional[Upload] = None
     try:
-        upload = minio_service.criar_e_enviar(
+        upload_inst = Upload(
             pai="DocumentoSefaz",
             pai_id=doc.id,
             tipo=UPLOAD_TIPO_XML,
             filename=nome_arquivo,
             mimetype="application/xml",
-            blob=xml_baixado.xml.encode("utf-8"),
+            blob=blob_bytes,
         )
+        db.session.add(upload_inst)
+        db.session.flush()
+        minio_ok = minio_service.enviar(
+            upload_inst,
+            client=cliente_minio,
+            commit=commit_sessao,
+        )
+        if not minio_ok:
+            logger.error(
+                "Upload MinIO falhou doc %s upload_id=%s",
+                doc.id,
+                upload_inst.id,
+            )
+            return doc
     except Exception as exc:  # noqa: BLE001
         logger.error("Upload falhou para doc %s: %s", doc.id, exc, exc_info=True)
         return doc
 
     doc.dados_adicionais = set_dados_json_item(
-        doc.dados_adicionais, DA_UPLOAD_ID, upload.id
+        doc.dados_adicionais, DA_UPLOAD_ID, upload_inst.id
     )
     db.session.add(doc)
-    db.session.commit()
+    if commit_sessao:
+        db.session.commit()
+    else:
+        db.session.flush()
     return doc

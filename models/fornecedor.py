@@ -24,7 +24,7 @@ class Fornecedor(db.Model):
     # Relacionamento com pedidos de compra
     pedidos_compra = db.relationship('PedidoCompra', back_populates='fornecedor', lazy='dynamic')
 
-    def __init__(self, nome, cnpj, estado, contatos=None, enderecos=None):
+    def __init__(self, nome, cnpj, estado, contatos=None, enderecos=None, *, persistir_agora=True):
         self.nome = nome
         self.cnpj = cnpj
         self.estado = estado
@@ -32,7 +32,11 @@ class Fornecedor(db.Model):
         self.enderecos = enderecos
         fornecedor = Fornecedor.query.filter_by(cnpj=cnpj).first()
         if not fornecedor:
-            self.save()
+            if persistir_agora:
+                self.save()
+            else:
+                db.session.add(self)
+                db.session.flush()
         else:
             self.id = fornecedor.id
             self.nome = fornecedor.nome

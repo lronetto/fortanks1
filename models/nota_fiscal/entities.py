@@ -19,17 +19,19 @@ import xmltodict
 
 from utils.utils import parse_dados_json
 from .constants import (
+    ARQUIVEI_API_ID,
+    ARQUIVEI_API_KEY,
     CNPJS_FILIAIS,
     CNPJS_MATRIZ,
     CNPJS_MATRIZ_FILIAIS,
     CFOPS_COMPRA,
     CFOPS_VENDA,
     CFOPS_TRANSFERENCIA,
+    DA_XML_UPLOAD_ID,
 )
 from .movimentacao_estoque import determinar_movimentacoes_estoque
 
 logger = logging.getLogger(__name__)
-from models.nota_fiscal.constants import ARQUIVEI_API_ID, ARQUIVEI_API_KEY
 
 # Nota Fiscal
 #tipo 0 - NFe
@@ -99,69 +101,18 @@ class NotaFiscal(db.Model):
         self.upload = None
         self.cancelada = cancelada
         self.xml_data = xml_data
-        if data and not xml_data:
-           
-            self.xml_data = data.get('xml',None) 
-
-            self.chave_acesso = data.get('chave_acesso',None)
-        nota = None
-        # Durante o __init__ essa instância pode estar "meio preenchida" e/ou já ter sido
-        # adicionada ao session por algum processar_*; qualquer query aqui dispara autoflush.
-        # Para evitar FlushError (tentativa de UPDATE com PK NULL), fazemos a busca sem autoflush.
-        if self.chave_acesso:
-            with db.session.no_autoflush:
-                nota = NotaFiscal.query.filter(NotaFiscal.chave_acesso == self.chave_acesso).first()
-            if nota:
-                for key, value in nota.__dict__.items():
-                    # nunca copiar estado interno do SQLAlchemy (ex: _sa_instance_state)
-                    if key.startswith('_'):
-                        continue
-                    setattr(self, key, value)
-            
-        if not tipo and not nota:
-            self.extrair_tipo_nota()
-
-        if self.tipo and not nota:
-            if self.tipo == 'nfe':
-                self.processar_nfe()
-            elif self.tipo == 'cte':
-                self.processar_cte()
-            elif self.tipo == 'nfse':
-                self.processar_nfse()
-             
-        # Se a chave veio via `data`, o parâmetro `chave_acesso` pode estar None.
-        # Neste caso, usamos `self.chave_acesso` para recarregar do banco e obter o `id`.
         
-                
+
+    def processar_nota_fiscal(self,xml_data=None,chave_acesso=None,id=None):
+        if xml_data:
+            self.xml_data = xml_data
+        if chave_acesso:
+            self.chave_acesso = chave_acesso
         if id:
-            nota = NotaFiscal.query.get_or_404(id)
-            if nota:
-                for key, value in nota.__dict__.items():
-                    if key.startswith('_'):
-                        continue
-                    setattr(self, key, value)
-                    
-                upload = Upload.query.filter_by(pai='NotaFiscal', pai_id=self.id, tipo=1).first()
-                if not upload:
-                    pdf_data = Arquivei(chave_acesso=self.chave_acesso)
-                    #print(f'pdf_data: {pdf_data}')
-                    logger.debug("id: %s chave: %s", self.id, self.chave_acesso)
-                    self.upload = Upload.registrar(
-                        pai='NotaFiscal',
-                        pai_id=self.id,
-                        tipo=1,
-                        filename=f'{self.chave_acesso}.pdf',
-                        mimetype='application/pdf',
-                        blob=pdf_data.pdf,
-                        dados_adicionais=self.dados_adicionais
-                    )
-                else:
-                    if 'storage' not in upload.dados_adicionais:
-                        pdf_data = Arquivei(chave_acesso=self.chave_acesso, pdf=True)
-                        upload.blob = pdf_data.pdf
-                        upload.save()
-                    self.upload = upload
-                #print('self.upload: ',self.upload)
+            self.id = id
+        self.processar_nota_fiscal()
+        self.processar_nfe()
+        self.processar_cte()
     def extrair_tipo_nota(self):
         """
         Extrai o tipo de nota fiscal do XML
@@ -229,8 +180,63 @@ class NotaFiscal(db.Model):
                 )
                 return self.upload
  
+    def get_xml_data(self):
+        """
+        XML em base64, nesta ordem:
+        1) coluna legada / memória durante importação (`xml_data`);
+        2) `DocumentoSefaz` (chave + tipo nfe/cte/nfse) → `upload_id` → `Upload`;
+        3) `dados_adicionais.xml_upload_id` ou `Upload` tipo XML da nota (legado).
+        """
+        raw = getattr(self, "xml_data", None)
+        if raw is not None and str(raw).strip():
+            return raw
+
+        chave = getattr(self, "chave_acesso", None)
+        if chave:
+            from models.documento_sefaz.services.xml_por_chave_nota import (
+                obter_upload_xml_pela_chave_nota,
+            )
+
+            up = obter_upload_xml_pela_chave_nota(chave)
+            if up:
+                blob = up.get_blob()
+                if blob:
+                    if isinstance(blob, (bytes, bytearray)):
+                        return base64.b64encode(bytes(blob)).decode("ascii")
+                    return blob
+
+        if not getattr(self, "id", None):
+            return None
+        from models.upload.constants import TIPO_UPLOAD_XML_NOTA_FISCAL
+
+        da = parse_dados_json(self.dados_adicionais)
+        uid = da.get(DA_XML_UPLOAD_ID)
+        upload = None
+        if uid is not None:
+            try:
+                upload = db.session.get(Upload, int(uid))
+            except (TypeError, ValueError):
+                upload = None
+        if not upload:
+            upload = Upload.query.filter_by(
+                pai="NotaFiscal",
+                pai_id=self.id,
+                tipo=TIPO_UPLOAD_XML_NOTA_FISCAL,
+            ).first()
+        if not upload:
+            return None
+        blob = upload.get_blob()
+        if not blob:
+            return None
+        if isinstance(blob, (bytes, bytearray)):
+            return base64.b64encode(bytes(blob)).decode("ascii")
+        return blob
+
     def get_xml_json(self):
-        dictvar  = xmltodict.parse(base64.b64decode(self.xml_data).decode('utf-8'))
+        xd = self.get_xml_data()
+        if not xd:
+            return {}
+        dictvar = xmltodict.parse(base64.b64decode(xd).decode("utf-8"))
         return dictvar
     def get_vencimento(self):
         # Primeiro tentar obter do dados_adicionais (mais rápido, já está processado)
@@ -342,15 +348,27 @@ class NotaFiscal(db.Model):
 
     def extrair_dados_xml_cte(self):
         from .parsing.xml_extracao import extrair_dados_xml_cte as _extrair_cte
-        return _extrair_cte(self.xml_data)
+
+        xd = self.get_xml_data()
+        if not xd:
+            return None, None
+        return _extrair_cte(xd)
 
     def extrair_dados_xml_nfe(self):
         from .parsing.xml_extracao import extrair_dados_xml_nfe as _extrair_nfe
-        return _extrair_nfe(self.xml_data)
+
+        xd = self.get_xml_data()
+        if not xd:
+            return None, None
+        return _extrair_nfe(xd)
 
     def extrair_dados_xml_nfse(self):
         from .parsing.xml_extracao import extrair_dados_xml_nfse as _extrair_nfse
-        return _extrair_nfse(self.xml_data)
+
+        xd = self.get_xml_data()
+        if not xd:
+            return None, None
+        return _extrair_nfse(xd)
 
     def vincular_automaticamente(self):
         """

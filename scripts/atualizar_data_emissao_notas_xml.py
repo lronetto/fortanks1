@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-Recalcula e grava apenas o campo data_emissao de cada NotaFiscal a partir do XML bruto (xml_data).
+Recalcula e grava apenas o campo data_emissao de cada NotaFiscal a partir do XML bruto:
+coluna `xml_data` (legado) ou `Upload` referenciado em `dados_adicionais.xml_upload_id`.
 
 Ordem de leitura no XML: primeiro valor em dhEmi; se não houver, DataEmissao; se não houver, dEmi.
 Usa o mesmo parser ISO (_parse_nfe_data_emissao_xml) da importação de NF-e.
@@ -34,6 +35,8 @@ _root = os.path.abspath(os.path.join(_script_dir, ".."))
 sys.path = [p for p in sys.path if os.path.abspath(p) != _script_dir]
 if _root not in sys.path:
     sys.path.insert(0, _root)
+
+from sqlalchemy import or_
 
 from app import app
 from models.database import db
@@ -178,7 +181,12 @@ def main():
     }
 
     with app.app_context():
-        q = NotaFiscal.query.filter(NotaFiscal.xml_data.isnot(None))
+        q = NotaFiscal.query.filter(
+            or_(
+                NotaFiscal.xml_data.isnot(None),
+                NotaFiscal.dados_adicionais.contains('"xml_upload_id"'),
+            )
+        )
         if args.tipo is not None:
             q = q.filter(NotaFiscal.tipo == args.tipo)
         q = q.order_by(NotaFiscal.id.asc())
@@ -189,7 +197,7 @@ def main():
         for nf in q:
             stats["processadas"] += 1
             try:
-                novo = data_emissao_do_xml_bruto(nf.xml_data)
+                novo = data_emissao_do_xml_bruto(nf.get_xml_data())
                 if novo is None:
                     stats["sem_data_xml"] += 1
                     logger.warning(

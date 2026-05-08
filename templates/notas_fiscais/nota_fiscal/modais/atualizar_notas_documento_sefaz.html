@@ -1,0 +1,138 @@
+<!-- Atualização de NotaFiscal a partir de XMLs já gravados em documentos_sefaz (Distribuição DF-e) -->
+<div class="modal fade" id="modalAtualizarNotasDocumentoSefaz" tabindex="-1" aria-labelledby="modalAtualizarNotasDocumentoSefazLabel" aria-hidden="true">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="modalAtualizarNotasDocumentoSefazLabel">Atualizar notas fiscais (SEFAZ)</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Fechar"></button>
+            </div>
+            <form id="formAtualizarNotasDocumentoSefaz">
+                <input type="hidden" name="csrf_token" value="{{ csrf_token() }}">
+                <div class="modal-body">
+                    <div class="alert alert-info mb-3">
+                        <i class="fas fa-info-circle"></i>
+                        Lê os XML em <strong>documentos_sefaz</strong> (tipos NF-e e CT-e completos),
+                        converte para <strong>NotaFiscal</strong> quando ainda não importados e marca o documento como inserido.
+                    </div>
+                    <div class="mb-3">
+                        <label for="limite_importacao_sefaz" class="form-label">Limite opcional por execução</label>
+                        <input type="number" min="1" step="1" class="form-control" id="limite_importacao_sefaz"
+                               name="limite" placeholder="Vazio = processar todos os pendentes">
+                        <div class="form-text">Útil para não sobrecarregar em um único clique.</div>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+                    <button type="submit" id="btnSubmitAtualizarNotasSefaz" class="btn btn-primary">
+                        <i class="fas fa-sync-alt"></i> Atualizar
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    var btnAbrir = document.querySelector('.btn-atualizar-notas-documento-sefaz');
+    if (btnAbrir) {
+        btnAbrir.addEventListener('click', function(e) {
+            e.preventDefault();
+            var elLim = document.getElementById('limite_importacao_sefaz');
+            if (elLim) elLim.value = '';
+            var m = document.getElementById('modalAtualizarNotasDocumentoSefaz');
+            if (m && typeof bootstrap !== 'undefined') new bootstrap.Modal(m).show();
+        });
+    }
+    var form = document.getElementById('formAtualizarNotasDocumentoSefaz');
+    if (!form) return;
+    form.addEventListener('submit', function(e) {
+        e.preventDefault();
+        var limiteRaw = document.getElementById('limite_importacao_sefaz');
+        var limVal = limiteRaw && limiteRaw.value.trim() !== '' ? limiteRaw.value.trim() : '';
+
+        function executarFetch() {
+            var fd = new FormData(form);
+            if (limVal === '') {
+                fd.delete('limite');
+            } else {
+                fd.set('limite', limVal);
+            }
+
+            if (typeof Swal !== 'undefined') {
+                Swal.fire({
+                    title: 'Aguarde',
+                    text: 'Atualizando notas a partir dos documentos SEFAZ...',
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    showConfirmButton: false,
+                    willOpen: function() { Swal.showLoading(); }
+                });
+            }
+
+            fetch('/notas-fiscais/atualizar-notas-documento-sefaz', {
+                method: 'POST',
+                body: fd
+            })
+                .then(function(r) {
+                    return r.json().then(function(j) {
+                        return { ok: r.ok, status: r.status, json: j };
+                    });
+                })
+                .then(function(bundle) {
+                    if (typeof Swal !== 'undefined') Swal.close();
+                    var d = bundle.json;
+                    if (!bundle.ok || !d.success) {
+                        if (typeof mostrarAlerta === 'function') {
+                            mostrarAlerta('Erro', d.message || 'Falha na atualização.', 'error');
+                        } else if (typeof Swal !== 'undefined') {
+                            Swal.fire('Erro', d.message || 'Falha na atualização.', 'error');
+                        } else {
+                            alert(d.message || 'Falha na atualização.');
+                        }
+                        return;
+                    }
+                    var mEl = document.getElementById('modalAtualizarNotasDocumentoSefaz');
+                    if (mEl && typeof bootstrap !== 'undefined') {
+                        var inst = bootstrap.Modal.getInstance(mEl);
+                        if (inst) inst.hide();
+                    }
+                    var detalhes = d.message || 'Concluído.';
+                    if (d.resumo && d.resumo.erros && d.resumo.erros.length) {
+                        detalhes += ' Primeiros erros: ' + d.resumo.erros.slice(0, 5).join(' | ');
+                    }
+                    if (typeof mostrarAlerta === 'function') {
+                        mostrarAlerta('Sucesso', detalhes, 'success', function() { window.location.reload(); });
+                    } else if (typeof Swal !== 'undefined') {
+                        Swal.fire({ title: 'Sucesso', text: detalhes, icon: 'success', confirmButtonText: 'OK' })
+                            .then(function() { window.location.reload(); });
+                    } else {
+                        alert(detalhes);
+                        window.location.reload();
+                    }
+                })
+                .catch(function(err) {
+                    if (typeof Swal !== 'undefined') Swal.close();
+                    console.error(err);
+                    if (typeof mostrarAlerta === 'function') {
+                        mostrarAlerta('Erro', err.message || 'Erro na requisição.', 'error');
+                    } else alert(err.message || 'Erro na requisição.');
+                });
+        }
+
+        var titulo = 'Confirmar atualização';
+        var texto = 'Processar pendências da tabela documentos_sefaz (NF-e / CT-e) e gravar/atualizar as notas fiscais correspondentes?';
+        if (typeof Swal !== 'undefined') {
+            Swal.fire({
+                title: titulo,
+                text: texto,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Sim, atualizar',
+                cancelButtonText: 'Cancelar'
+            }).then(function(r) { if (r.isConfirmed) executarFetch(); });
+        } else if (confirm(texto)) {
+            executarFetch();
+        }
+    });
+});
+</script>

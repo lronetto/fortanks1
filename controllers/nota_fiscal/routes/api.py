@@ -52,7 +52,7 @@ def api_visualizar(id):
         "cnpj_destinatario": nota_fiscal.cnpj_destinatario,
         "nome_destinatario": nota_fiscal.nome_destinatario,
         "status_processamento": nota_fiscal.status_processamento,
-        "xml_data": nota_fiscal.xml_data,
+        "xml_data": nota_fiscal.get_xml_data(),
         "data_importacao": nota_fiscal.data_importacao.strftime("%d/%m/%Y %H:%M:%S") if nota_fiscal.data_importacao else None,
         "data_atualizacao": nota_fiscal.data_atualizacao.strftime("%d/%m/%Y %H:%M:%S") if nota_fiscal.data_atualizacao else None,
         "itens": itens,
@@ -64,7 +64,10 @@ def api_visualizar(id):
 @login_required
 def gerar_xml(id):
     nota = NotaFiscal.query.get_or_404(id)
-    return jsonify({"xml": base64.b64decode(nota.xml_data).decode("utf-8")})
+    xd = nota.get_xml_data()
+    if not xd:
+        return jsonify({"error": "XML não encontrado no armazenamento"}), 404
+    return jsonify({"xml": base64.b64decode(xd).decode("utf-8")})
 
 
 @nota_fiscal_bp.route("/total-notas", methods=["GET"])

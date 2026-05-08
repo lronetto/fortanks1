@@ -4,6 +4,9 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# Referência ao `Upload` do XML principal da nota (`Upload.tipo == TIPO_UPLOAD_XML_NOTA_FISCAL`).
+DA_XML_UPLOAD_ID = "xml_upload_id"
+
 # ── Credenciais Arquivei ────────────────────────────────────────────────────
 # Fonte única: todos os módulos devem importar daqui, não reler os envvars.
 ARQUIVEI_API_ID  = os.getenv('ARQUIVEI_API_ID')

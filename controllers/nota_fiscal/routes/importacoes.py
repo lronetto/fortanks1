@@ -83,6 +83,55 @@ def importar_arquivei():
         return jsonify({"success": False, "message": f"Erro ao importar notas fiscais: {str(e)}"}), 500
 
 
+@nota_fiscal_bp.route("/atualizar-notas-documento-sefaz", methods=["POST"])
+@login_required
+def atualizar_notas_documento_sefaz():
+    """
+    Promove XMLs já persistidos em `documentos_sefaz` para `NotaFiscal`
+    (ver `executar_importacao_desde_documento_sefaz`).
+    """
+    try:
+        csrf_token = request.form.get("csrf_token")
+        if not csrf_token:
+            return jsonify({"success": False, "message": "Token CSRF não fornecido."}), 400
+
+        limite_raw = (request.form.get("limite") or "").strip()
+        limite = None
+        if limite_raw:
+            try:
+                limite = int(limite_raw)
+            except ValueError:
+                return jsonify({"success": False, "message": "Limite inválido."}), 400
+            if limite < 1:
+                return jsonify({"success": False, "message": "Limite deve ser ≥ 1 ou deixar em branco."}), 400
+
+        from models.nota_fiscal.services import executar_importacao_desde_documento_sefaz
+
+        resumo = executar_importacao_desde_documento_sefaz(limite=limite)
+        Logs(
+            local="atualizar_notas_documento_sefaz",
+            data=datetime.now(),
+            texto=json_dumps_safe(resumo),
+        )
+        n_err = len(resumo.get("erros") or [])
+        msg_parts = [
+            f"XMLs processados nesta rodada: {resumo.get('processados', 0)}.",
+            f"Marcados como inseridos no SEFAZ: {resumo.get('marcados_inserido', 0)}.",
+        ]
+        if n_err:
+            msg_parts.append(f"Avisos/erros: {n_err}.")
+        mensagem = " ".join(msg_parts)
+        return jsonify({"success": True, "message": mensagem, "resumo": resumo}), 200
+    except Exception as e:
+        logger.exception("Erro ao atualizar notas a partir de documento_sefaz: %s", e)
+        return (
+            jsonify(
+                {"success": False, "message": f"Erro ao atualizar notas: {str(e)}"}
+            ),
+            500,
+        )
+
+
 @nota_fiscal_bp.route("/importar-xml", methods=["POST"])
 @login_required
 def importar_xml():

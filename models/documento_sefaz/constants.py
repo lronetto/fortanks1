@@ -10,3 +10,8 @@ DA_SCHEMA = "schema"
 DA_CNPJ_EMITENTE = "cnpj_emitente"
 DA_CNPJ_DESTINATARIO = "cnpj_destinatario"
 DA_TP_EVENTO = "tpEvento"
+# 1 = XML já promovido para `NotaFiscal` com sucesso (ver nota_fiscal.services).
+DA_INSERIDO = "inserido"
+
+# Documento completo (XML no `upload_id`); distinto de resumo/evento.
+TIPOS_DOCUMENTO_XML_COMPLETO = ("nfe", "cte", "nfse")

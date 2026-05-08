@@ -56,7 +56,9 @@ def _conectar_client():
     return Minio(endpoint=endpoint, access_key=access, secret_key=secret, secure=secure)
 
 
-def _bucket_default() -> str:
+def obter_cliente():
+    """Cliente MinIO único por fluxo para vários PUTs sequenciais (ex.: ingestão em lote)."""
+    return _conectar_client()
     return (os.getenv("MINIO_BUCKET_UPLOADS") or "sfortanks").strip()
 
 

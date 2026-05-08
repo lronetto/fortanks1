@@ -103,7 +103,7 @@ def processar_anexo_pdf_pagina(
                 if "https://nfe.fazenda.sp.gov.br/CTeConsulta" in dec1:
                     dec1 = dec1.split("=")[1]
                     dec1 = dec1.split("&")[0]
-                    tiponf = "57"
+                    tiponf = "cte"
                 elif "https://www.nfse.gov.br/ConsultaPublica" in dec1:
                     dec1 = dec1.split("&")[1]
                     dec1 = dec1.split("=")[1]
@@ -135,6 +135,8 @@ def processar_anexo_pdf_pagina(
                 if tiponf == "57"
                 else "nfse"
                 if tiponf == "nfse"
+                else "cte"
+                if tiponf == "cte"
                 else None
             )
             if tiponfc:

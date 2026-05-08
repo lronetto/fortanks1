@@ -16,22 +16,44 @@ from models.nota_fiscal.parsing.xml_extracao import (
 logger = logging.getLogger(__name__)
 
 
+def _xml_b64(nota):
+    return nota.get_xml_data()
+
+
+def _nfse_entrada_para_b64(nota):
+    """
+    NFSe costuma entrar como XML em texto; o extrator espera base64 como NFe.
+    Mantém comportamento quando o valor já vier em base64.
+    """
+    if getattr(nota, "xml_data", None) is not None and str(nota.xml_data).strip():
+        s = str(nota.xml_data).strip()
+        if s.startswith("\ufeff"):
+            s = s.lstrip("\ufeff")
+        if s.startswith("<"):
+            return base64.b64encode(s.encode("utf-8")).decode("ascii")
+        return s
+    return nota.get_xml_data()
+
+
 def executar_processamento_cte(nota):
     from models.fornecedor import Fornecedor
     from models.nota_fiscal.entities import NotaFiscal
+    from .persistir_xml_upload import migrar_xml_coluna_para_upload
 
     logger.debug("processar_cte inicio")
-    chave_acesso, dados = extrair_dados_xml_cte(nota.xml_data)
+    xd = _xml_b64(nota)
+    chave_acesso, dados = extrair_dados_xml_cte(xd) if xd else (None, None)
     if not chave_acesso or not dados:
         try:
-            root = ET.fromstring(base64.b64decode(nota.xml_data).decode("utf-8"))
-            tag = root.tag if hasattr(root, "tag") else ""
-            if "nfeProc" in tag or (
-                root.find(".//{http://www.portalfiscal.inf.br/nfe}infNFe") is not None
-            ) or (root.find(".//infNFe") is not None):
-                logger.info("Documento importado como CTe é na verdade NFe; processando como NFe.")
-                nota.tipo = "nfe"
-                return executar_processamento_nfe(nota)
+            if xd:
+                root = ET.fromstring(base64.b64decode(xd).decode("utf-8"))
+                tag = root.tag if hasattr(root, "tag") else ""
+                if "nfeProc" in tag or (
+                    root.find(".//{http://www.portalfiscal.inf.br/nfe}infNFe") is not None
+                ) or (root.find(".//infNFe") is not None):
+                    logger.info("Documento importado como CTe é na verdade NFe; processando como NFe.")
+                    nota.tipo = "nfe"
+                    return executar_processamento_nfe(nota)
         except Exception as e:
             logger.debug("Verificação de redirecionamento NFe/CTe: %s", e)
         nota.logs["erro"].append("XML não é um CTe válido (infCte não encontrado).")
@@ -60,10 +82,12 @@ def executar_processamento_cte(nota):
                 dados.get("dados_adicionais") or {}, ensure_ascii=False
             )
             existente.save()
+        migrar_xml_coluna_para_upload(existente)
         return existente
     try:
         nota.tipo = 2
-        nota.xml_data = nota.data.get("xml", None)
+        if not xd and nota.data:
+            nota.xml_data = nota.data.get("xml", None)
         nota.numero_nf = dados.get("numero_cte")
         nota.chave_acesso = dados.get("chave_acesso")
         nota.data_emissao = dados.get("data_emissao")
@@ -79,6 +103,7 @@ def executar_processamento_cte(nota):
         db.session.commit()
         nota.logs["inserido"] += 1
         nota.logs["inseridos"].append(nota.to_dict())
+        migrar_xml_coluna_para_upload(nota)
     except Exception as e:
         logger.error("Erro ao processar CT-e: %s", str(e))
         nota.logs["erro"] = str(e)
@@ -89,9 +114,11 @@ def executar_processamento_cte(nota):
 def executar_processamento_nfse(nota):
     from models.fornecedor import Fornecedor
     from models.nota_fiscal.entities import NotaFiscal
+    from .persistir_xml_upload import migrar_xml_coluna_para_upload
 
     logger.debug("processar_nfse inicio")
-    chave_acesso, dados = extrair_dados_xml_nfse(nota.xml_data)
+    xd_nfse = _nfse_entrada_para_b64(nota)
+    chave_acesso, dados = extrair_dados_xml_nfse(xd_nfse) if xd_nfse else (None, None)
     logger.debug("chave_acesso nfse: %s", chave_acesso)
     if not chave_acesso or not dados:
         logger.warning("processar_nfse: extração retornou chave ou dados vazios")
@@ -108,6 +135,7 @@ def executar_processamento_nfse(nota):
                     dados.get("dados_adicionais") or {}, ensure_ascii=False
                 )
                 existente.save()
+            migrar_xml_coluna_para_upload(existente)
             return existente
     except Exception:
         return False
@@ -119,7 +147,7 @@ def executar_processamento_nfse(nota):
         else:
             nota.status_processamento = "importado"
         nota.tipo = 3
-        nota.xml_data = base64.b64encode(nota.xml_data.encode("utf-8")).decode("utf-8")
+        nota.xml_data = xd_nfse
         nota.numero_nf = dados.get("Numero")
         nota.chave_acesso = chave_acesso
         nota.data_emissao = dados.get("DataEmissao")
@@ -141,21 +169,22 @@ def executar_processamento_nfse(nota):
         logger.error("processar_nfse [save/refresh]: %s", e, exc_info=True)
         return False
 
-    try:
-        pass
-    except Exception as e:
-        logger.error("processar_nfse [to_dict/inserido]: %s", e, exc_info=True)
-        return False
+    migrar_xml_coluna_para_upload(nota)
     return None
 
 
 def executar_processamento_nfe(nota):
     from models.fornecedor import Fornecedor
     from models.nota_fiscal.entities import NotaFiscal, NotaFiscalItem
+    from .persistir_xml_upload import migrar_xml_coluna_para_upload
 
     logger.debug("processar_nfe inicio")
     try:
-        chave_acesso, dados_nf = extrair_dados_xml_nfe(nota.xml_data)
+        xd = _xml_b64(nota)
+        if not xd and nota.data:
+            nota.xml_data = nota.data.get("xml", None)
+            xd = _xml_b64(nota)
+        chave_acesso, dados_nf = extrair_dados_xml_nfe(xd) if xd else (None, None)
         if not chave_acesso or not dados_nf:
             logger.warning("Não foi possível extrair dados do XML")
             nota.logs["erro"] = "Não foi possível extrair dados do XML"
@@ -185,9 +214,8 @@ def executar_processamento_nfe(nota):
                     dados_nf.get("dados_adicionais"), ensure_ascii=False
                 )
                 nf.save()
+            migrar_xml_coluna_para_upload(nf)
             return nf
-        if not nota.xml_data:
-            nota.xml_data = nota.data.get("xml", None)
         nota.numero_nf = dados_nf.get("numero")
         nota.tipo = dados_nf.get("tipo")
         nota.chave_acesso = chave_acesso
@@ -246,6 +274,7 @@ def executar_processamento_nfe(nota):
             }
         )
         logger.debug("processar_nfe finalizado")
+        migrar_xml_coluna_para_upload(nota)
     except Exception as e:
         logger.error("Erro ao processar nota fiscal: %s", str(e))
         nota.logs["erro"].append(str(e))

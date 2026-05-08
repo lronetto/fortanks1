@@ -110,7 +110,8 @@ def exportar_zip():
             nota = getattr(row, "NotaFiscal", None) or row[0]
             pagamento = getattr(row, "pagamento", None) or row[1]
             tipo = "NFe" if nota.tipo in [0, 1] else ("CTe" if nota.tipo == 2 else "NFSe")
-            xml_bytes = base64.b64decode(nota.xml_data) if nota.xml_data else b""
+            xd = nota.get_xml_data()
+            xml_bytes = base64.b64decode(xd) if xd else b""
             data_emissao = nota.data_emissao.strftime("%d_%m_%Y") if nota.data_emissao else ""
             zipf.writestr(f"{tipo} {data_emissao}_{nota.nome_emitente}_{nota.numero_nf}.xml", xml_bytes)
             upload = Upload.query.filter_by(pai="NotaFiscal", pai_id=nota.id).order_by(Upload.tipo).all()
