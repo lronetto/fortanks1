@@ -167,7 +167,8 @@ class Upload(db.Model):
             "sha256": hashlib.sha256(dados_bytes).hexdigest(),
             "migrado_em": datetime.utcnow().isoformat(),
         }
-        self.dados_adicionais = dados
+        # Coluna é Text — serializa como JSON antes de atribuir.
+        self.dados_adicionais = json.dumps(dados, ensure_ascii=False)
         if self._bool_env("MINIO_CLEAR_BLOB_ON_WRITE", default=True):
             self.blob = None
         return True
